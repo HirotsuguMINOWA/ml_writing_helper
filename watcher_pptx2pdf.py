@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 # TODO: bin(soffice, imagemagick'convert and so on)の存在確認
-
+# TODO: pdfは透過png?が黒くなるためデフォルトはpng
 
 # target_dir = "app_single/_fig_src"
 # output_dir = "app_single/figs"
@@ -104,7 +104,6 @@ class ChangeHandler(FileSystemEventHandler):
     def on_deleted(self, event):
         filepath = event.src_path
         filename = os.path.basename(filepath)
-        # TODO: 該当pdfを要削除
         print('%sを削除しました' % filename)
 
     def main(self):
