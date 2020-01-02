@@ -4,7 +4,7 @@
 # TODO: pdfは透過png?が黒くなるためデフォルトはpng
 
 # target_dir = "app_single/_fig_src"
-# output_dir = "app_single/figs"
+# _p_dest_dir = "app_single/figs"
 
 ###############################################################
 
@@ -17,7 +17,7 @@ from watchdog.observers import Observer
 import os
 import time
 import shlex
-# import subprocess
+import subprocess
 from subprocess import check_output, STDOUT
 import pathlib  # FIXME: 下記に統一
 from pathlib import Path
@@ -34,7 +34,7 @@ class ChangeHandler(FileSystemEventHandler):
         
         Arguments:
             monitoring_dir {[type]} -- [description]
-            output_dir {str} -- [description]
+            _p_dest_dir {str} -- [description]
         
         Keyword Arguments:
             dest_ext_no_period {str} -- [description] (default: {"png"})
@@ -49,7 +49,11 @@ class ChangeHandler(FileSystemEventHandler):
         if not output_dir:
             output_dir = monitoring_dir
         self.target_dir = monitoring_dir
-        self.output_dir = output_dir
+        # self._p_dest_dir = output_dir
+        if Path(output_dir).is_absolute():
+            self._p_dest_dir = Path(output_dir)
+        else:
+            self._p_dest_dir = Path(monitoring_dir).joinpath(output_dir)
         self._ppaths_libreoffice_app = [Path(x) for x in paths_libreoffice_app]
         self.dest_ext_no_period = dest_ext_no_period
 
@@ -62,13 +66,44 @@ class ChangeHandler(FileSystemEventHandler):
         """
         pass
 
-    def _crop_img(self, p_src, p_dest):
+    def _crop_img(self, p_src_img, p_dest: Path):
         """
-        imageをcroppingする
+        image(pdf/png,jpeg?)をcroppingする
         :param p_src:
         :param p_dest:
         :return:
         """
+        """ Calc path of Dest """
+        # path_dest = pathlib.Path(dir_dest) / plib_pdf_convd.name
+        # path_dest = pathlib.Path(dir_dest) / plib_src.with_suffix("." + self.dest_ext_no_period).name
+        if not p_src_img.exists():
+            print("[Error] %s not found")
+            return
+        if p_dest.is_dir():
+            p_dest = p_dest.joinpath(p_src_img.name)  # if the path is dir, set filename converted
+
+        """ crop white space """
+        if self.dest_ext_no_period == "pdf":
+            cmd_name = "pdfcrop"
+            cmd = "{cmd_name} {path_in} {path_out}".format(cmd_name=cmd_name, path_in=p_src_img, path_out=p_dest)
+        elif self.dest_ext_no_period in ["png", "jpeg", "jpg"]:
+            cmd_name = "convert"
+            # p_conv = Path("/usr/local/bin/convert")
+            # if not p_conv.exists():
+            #     raise Exception("%s not found" % p_conv)
+            cmd = "{cmd_name} {path_in} -trim {path_out} ".format(cmd_name=cmd_name,
+                                                                  path_in=p_src_img,
+                                                                  path_out=p_dest)
+        else:
+            # new_path = shutil.move(plib_pdf_convd.as_posix(), dir_dest)
+            raise Exception("対応していないFormatをcroppingしようとして停止")
+
+        if shutil.which(cmd_name) is None:
+            print("[Warning] cmd(%s) is not in path " % cmd)
+        print("[Debug] Cropping CMD: " + cmd)
+        tokens = shlex.split(cmd)
+        subprocess.run(tokens)
+        # output = check_output(tokens, stderr=STDOUT).decode("utf8")
 
     def conv_ppt2pdf(self, path_src, dir_dest):  # , dest_ext_no_period="pdf"):
         """
@@ -78,76 +113,47 @@ class ChangeHandler(FileSystemEventHandler):
         plib_src = Path(path_src)  # pathlibのインスタンス
         p_dest = plib_src.parent.joinpath(dir_dest)
         os.chdir(p_dest.parent)  # important!
-        if plib_src.suffix in (".ppt", ".pptx") and not plib_src.name.startswith("~"):
-            # file_tmp="tmp_"+pathlib.Path(path_src).name
-            # file_tmp=pathlib.Path(file_tmp).with_suffix(".pdf")
-            # path_tmp=pathlib.Path(path_src).parent.joinpath(file_tmp).as_posix()
-            # print("path_tmp:"+path_tmp)
-            # out_dir = plib_src.parent.as_posix()
-            # path_tmp="tmp_"+os.path.basename(path_src)
-            print("[Debug] p_dest: %s" % p_dest)
-            print("[Debug] CWD:%s" % os.getcwd())
-            for p in self._ppaths_libreoffice_app:  # type: Path
-                if p.exists():
-                    cmd = "'{path_libreoffice}/Contents/MacOS/soffice' --headless --convert-to {dest_ext} --outdir {out_dir} {path_src}".format(
-                        path_libreoffice=p
-                        , dest_ext=self.dest_ext_no_period
-                        # , out_dir=dir_dest
-                        , out_dir=p_dest.name
-                        , path_src=path_src)
-                    break
-            print("[Debug] CMD(ppt2pdf):" + cmd)
-            tokens = shlex.split(cmd)
-            # subprocess.run(tokens)
-            output = check_output(tokens, stderr=STDOUT).decode("utf8")
-            print("Output: %s" % output)
-            if output == "Error: source file could not be loaded":
-                """なぜかLO Vanillaで出現？"""
-                # raise Exception("")
-                print("[ERROR] なぜかLO Vanillaで出現？")
+        if plib_src.suffix not in (".ppt", ".pptx") and not plib_src.name.startswith("~"):
+            print("[Info] Powerpointファイルでないので変換せず")
+            return
+        # file_tmp="tmp_"+pathlib.Path(path_src).name
+        # file_tmp=pathlib.Path(file_tmp).with_suffix(".pdf")
+        # path_tmp=pathlib.Path(path_src).parent.joinpath(file_tmp).as_posix()
+        # print("path_tmp:"+path_tmp)
+        # out_dir = plib_src.parent.as_posix()
+        # path_tmp="tmp_"+os.path.basename(path_src)
+        print("[Debug] p_dest: %s" % p_dest)
+        print("[Debug] CWD:%s" % os.getcwd())
+        for p in self._ppaths_libreoffice_app:  # type: Path
+            if p.exists():
+                cmd = "'{path_libreoffice}/Contents/MacOS/soffice' --headless --convert-to {dest_ext} --outdir {out_dir} {path_src}".format(
+                    path_libreoffice=p
+                    , dest_ext=self.dest_ext_no_period
+                    # , out_dir=dir_dest
+                    , out_dir=p_dest.name
+                    , path_src=path_src)
+                break
+        print("[Debug] CMD(ppt2pdf):" + cmd)
+        tokens = shlex.split(cmd)
+        # subprocess.run(tokens)
+        output = check_output(tokens, stderr=STDOUT).decode("utf8")
+        print("Output: %s" % output)
+        if output == "Error: source file could not be loaded":
+            """なぜかLO Vanillaで出現？"""
+            # raise Exception("")
+            print("[ERROR] なぜかLO Vanillaで出現？")
 
-            """ Add head "tmp_" to converted filename """
-
-            plib_pdf_convd = p_dest.joinpath(plib_src.name).with_suffix("." + self.dest_ext_no_period)
-            plib_pdf_convd_tmp = plib_pdf_convd.with_name("tmp_" + plib_pdf_convd.name)
-            # plib_pdf_convd.rename(plib_pdf_convd.with_name("tmp_"+plib_pdf_convd.name))
-            plib_pdf_convd.rename(plib_pdf_convd_tmp)
-            # plib_pdf_convd.with_name("tmp_"+plib_pdf_convd.name)
-            """ Calc path of Dest """
-            # path_dest = pathlib.Path(dir_dest) / plib_pdf_convd.name
-            path_dest = pathlib.Path(dir_dest) / plib_src.with_suffix("." + self.dest_ext_no_period).name
-
-            """ crop white space """
-            if self.dest_ext_no_period == "pdf":
-                cmd = "pdfcrop"
-                if shutil.which(cmd) is None:
-                    print("[Warning] %s not found" % cmd)
-                    cmd = "pdfcrop {path_in} {path_out}".format(path_in=plib_pdf_convd_tmp, path_out=path_dest)
-            elif self.dest_ext_no_period in ["png", "jpeg", "jpg"]:
-                cmd = "convert"
-                # p_conv = Path("/usr/local/bin/convert")
-                # if not p_conv.exists():
-                #     raise Exception("%s not found" % p_conv)
-                if shutil.which(cmd) is None:
-                    print("[Warning] %s not found" % cmd)
-                cmd = "{cmd} {path_in} -trim {path_out} ".format(cmd=cmd,
-                                                                 path_in=plib_pdf_convd_tmp,
-                                                                 path_out=path_dest)
-            else:
-                # new_path = shutil.move(plib_pdf_convd.as_posix(), dir_dest)
-                raise Exception("対応していないFormatをcroppingしようとして停止")
-
-            print("[Debug] Cropping : " + cmd)
-            tokens = shlex.split(cmd)
-            # subprocess.run(tokens)
-            output = check_output(tokens, stderr=STDOUT).decode("utf8")
-            """ rm tmpfile"""
-            # os.remove(path_tmp)
-            # pathlib.Path(plib_pdf_convd).unlink()
+        """ Add head "tmp_" to converted filename """
+        plib_pdf_convd = p_dest.joinpath(plib_src.name).with_suffix("." + self.dest_ext_no_period)
+        plib_pdf_convd_tmp = plib_pdf_convd.with_name("tmp_" + plib_pdf_convd.name)
+        # plib_pdf_convd.rename(plib_pdf_convd.with_name("tmp_"+plib_pdf_convd.name))
+        # plib_pdf_convd.rename(plib_pdf_convd_tmp)
+        # plib_pdf_convd.with_name("tmp_"+plib_pdf_convd.name)
+        self._crop_img(p_src_img=plib_pdf_convd, p_dest=self._p_dest_dir)
+        """ rm tmpfile"""
+        if plib_pdf_convd_tmp.exists():
             pathlib.Path(plib_pdf_convd_tmp).unlink()
             print("Converted")
-        else:
-            print("対象外だったので変換せず")
 
     #
     # def conv2pnt(self, path_src, dir_dest):
@@ -164,7 +170,7 @@ class ChangeHandler(FileSystemEventHandler):
         filepath = event.src_path
         filename = os.path.basename(filepath)
         print('%sができました' % filename)
-        self.conv_ppt2pdf(path_src=event.src_path, dir_dest=self.output_dir)  # , dest_ext_no_period="png")
+        self.conv_ppt2pdf(path_src=event.src_path, dir_dest=self._p_dest_dir)  # , dest_ext_no_period="png")
 
     def on_modified(self, event):
         filepath = event.src_path
