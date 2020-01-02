@@ -8,7 +8,7 @@
 
 ###############################################################
 
-import ftplib
+# import ftplib
 
 from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
@@ -22,12 +22,36 @@ import pathlib
 
 class ChangeHandler(FileSystemEventHandler):
 
-    def __init__(self, monitoring_dir, output_dir, dest_ext_no_period="png"):
+    def __init__(self, monitoring_dir, output_dir=None, dest_ext_no_period="png"):
+        """[summary]
+        
+        Arguments:
+            monitoring_dir {[type]} -- [description]
+            output_dir {str} -- [description]
+        
+        Keyword Arguments:
+            dest_ext_no_period {str} -- [description] (default: {"png"})
+        """
+        """[注意]
+        本プログラムのScriptが存在するPATHをwcdへ移動とする
+        """
+        os.chdir(os.path.dirname(os.path.abspath(__file__)))
+        # p=pathlib.Path.parent
+        # p.as_posix()
+        # os.chdir(pathlib.Path.parent.as_posix()) # Change directory into dir of this script
+        if not output_dir:
+          output_dir=monitoring_dir
         self.target_dir = monitoring_dir
         self.output_dir = output_dir
         self.dest_ext_no_period = dest_ext_no_period
 
-    def __ppt2pdf(self, src: pathlib, dest: pathlib):
+    def __ppt2pdf(self, src: pathlib.Path, dest: pathlib.Path):
+        """[summary]
+        
+        Arguments:
+            src {pathlib.Path} -- [description]
+            dest {pathlib.Path} -- [description]
+        """      
         pass
 
     def conv_ppt2pdf(self, path_src, dir_dest):  # , dest_ext_no_period="pdf"):
@@ -106,19 +130,22 @@ class ChangeHandler(FileSystemEventHandler):
         filename = os.path.basename(filepath)
         print('%sを削除しました' % filename)
 
-    def main(self):
-        while 1:
-            #event_handler = ChangeHandler()
-            event_handler = self
-            observer = Observer()
-            observer.schedule(event_handler, self.target_dir, recursive=True)
-            observer.start()
-            try:
-                while True:
-                    time.sleep(0.1)
-            except KeyboardInterrupt:
-                observer.stop()
-            observer.join()
+    def start(self):
+        try:
+          while 1:
+              #event_handler = ChangeHandler()
+              event_handler = self
+              observer = Observer()
+              observer.schedule(event_handler, self.target_dir, recursive=True)
+              observer.start()
+              try:
+                  while True:
+                      time.sleep(0.1)
+              except KeyboardInterrupt:
+                  observer.stop()
+              observer.join()
+        except Exception as e:
+          raise Exception("Current path: %s"%pathlib.Path.cwd())
 
 
 if __name__ in '__main__':
