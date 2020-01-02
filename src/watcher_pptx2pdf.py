@@ -23,13 +23,22 @@ import pathlib  # FIXME: 下記に統一
 from pathlib import Path
 
 
+# from strenum import StrEnum
+
+# class Export(StrEnum)
+#     png=auto()
+#     jpeg=auto()
+#     pdf=auto()
+#     none=auto()
+
 class ChangeHandler(FileSystemEventHandler):
 
     def __init__(self
                  , monitoring_dir
                  , output_dir=None
                  , dest_ext_no_period="png"
-                 , paths_libreoffice_app=['/Applications/LibreOffice.app', '/Applications/LibreOffice Vanilla.app']):
+                 , paths_libreoffice_app=['/Applications/LibreOffice.app/Contents/MacOS/soffice',
+                                          '/Applications/LibreOffice Vanilla.app/Contents/MacOS/soffice']):
         """[summary]
         
         Arguments:
@@ -54,7 +63,7 @@ class ChangeHandler(FileSystemEventHandler):
             self._p_dest_dir = Path(output_dir)
         else:
             self._p_dest_dir = Path(monitoring_dir).joinpath(output_dir)
-        self._ppaths_libreoffice_app = [Path(x) for x in paths_libreoffice_app]
+        self._ppaths_soffice = [Path(x) for x in paths_libreoffice_app]
         self.dest_ext_no_period = dest_ext_no_period
 
     def __ppt2pdf(self, src: pathlib.Path, dest: pathlib.Path):
@@ -124,10 +133,11 @@ class ChangeHandler(FileSystemEventHandler):
         # path_tmp="tmp_"+os.path.basename(path_src)
         print("[Debug] p_dest: %s" % p_dest)
         print("[Debug] CWD:%s" % os.getcwd())
-        for p in self._ppaths_libreoffice_app:  # type: Path
-            if p.exists():
-                cmd = "'{path_libreoffice}/Contents/MacOS/soffice' --headless --convert-to {dest_ext} --outdir {out_dir} {path_src}".format(
-                    path_libreoffice=p
+        found_libreoffice = False
+        for p_soffice in self._ppaths_soffice:  # type: Path
+            if p_soffice.exists():
+                cmd = "'{path_soffice}' --headless --convert-to {dest_ext} --outdir {out_dir} {path_src}".format(
+                    path_soffice=p_soffice
                     , dest_ext=self.dest_ext_no_period
                     # , out_dir=dir_dest
                     , out_dir=p_dest.name
