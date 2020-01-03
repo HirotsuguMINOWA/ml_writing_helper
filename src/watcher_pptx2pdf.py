@@ -86,10 +86,7 @@ class ChangeHandler(FileSystemEventHandler):
             p_dest = p_dest.joinpath(p_src_img.name)  # if the path is dir, set filename converted
 
         """ crop white space """
-        if img_fmt == "pdf":
-            cmd_name = "pdfcrop"
-            cmd = "{cmd_name} {path_in} {path_out}".format(cmd_name=cmd_name, path_in=p_src_img, path_out=p_dest)
-        elif img_fmt in ["png", "jpeg", "jpg"]:
+        if img_fmt in ["png", "jpeg", "jpg"]: # pdfのcropはできない
             cmd_name = "convert"
             # p_conv = Path("/usr/local/bin/convert")
             # if not p_conv.exists():
@@ -97,6 +94,9 @@ class ChangeHandler(FileSystemEventHandler):
             cmd = "{cmd_name} {path_in} -trim {path_out} ".format(cmd_name=cmd_name,
                                                                   path_in=p_src_img,
                                                                   path_out=p_dest)
+        elif img_fmt == "pdf":
+            cmd_name = "pdfcrop"
+            cmd = "{cmd_name} {path_in} {path_out}".format(cmd_name=cmd_name, path_in=p_src_img, path_out=p_dest)
         else:
             # new_path = shutil.move(plib_pdf_convd.as_posix(), dir_dest)
             raise Exception("対応していないFormatをcroppingしようとして停止")
@@ -173,7 +173,7 @@ class ChangeHandler(FileSystemEventHandler):
             self._crop_img(p_src_img=plib_pdf_convd, p_dest=self._p_dest_dir, img_fmt=tmp_img_fmt)
         """ pdf 2 eps """
         if img_fmt == "eps":
-            print("[Info] Convert pdf to pes")
+            print("[Info] Convert pdf to eps")
             cmd = "{cmd_conv} {p_src} {p_dest}".format(
                 cmd_conv="convert"
                 , p_src=plib_pdf_convd
