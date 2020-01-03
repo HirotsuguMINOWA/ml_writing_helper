@@ -68,15 +68,6 @@ class ChangeHandler(FileSystemEventHandler):
         self._ppaths_soffice = [Path(x) for x in paths_libreoffice_app]
         self.dest_ext_no_period = dest_ext_no_period
 
-    def _conv_ppt(self, src: pathlib.Path, dest: pathlib.Path):
-        """[summary]
-        
-        Arguments:
-            src {pathlib.Path} -- [description]
-            dest {pathlib.Path} -- [description]
-        """
-        pass
-
     def _crop_img(self, p_src_img, p_dest: Path):
         """
         image(pdf/png,jpeg?)をcroppingする
@@ -116,7 +107,7 @@ class ChangeHandler(FileSystemEventHandler):
         subprocess.run(tokens)
         # output = check_output(tokens, stderr=STDOUT).decode("utf8")
 
-    def conv_ppt2pdf(self, path_src, dir_dest):  # , dest_ext_no_period="pdf"):
+    def conv_ppt(self, path_src, dir_dest):  # , dest_ext_no_period="pdf"):
         """
         ppt->pdf->cropping
         :param dest_ext: without period!!
@@ -182,7 +173,7 @@ class ChangeHandler(FileSystemEventHandler):
         filepath = event.src_path
         filename = os.path.basename(filepath)
         print('%sができました' % filename)
-        self.conv_ppt2pdf(path_src=event.src_path, dir_dest=self._p_dest_dir)  # , dest_ext_no_period="png")
+        self.conv_ppt(path_src=event.src_path, dir_dest=self._p_dest_dir)  # , dest_ext_no_period="png")
 
     def on_modified(self, event):
         filepath = event.src_path
