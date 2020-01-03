@@ -38,8 +38,8 @@ class ChangeHandler(FileSystemEventHandler):
                  , output_dir=None
                  , dest_ext_no_period="png"
                  , export_fmts=["png", "eps", "pdf"]
-                 , paths_libreoffice_app=['/Applications/LibreOffice.app/Contents/MacOS/soffice',
-                                          '/Applications/LibreOffice Vanilla.app/Contents/MacOS/soffice']):
+                 , paths_soffice=['/Applications/LibreOffice.app/Contents/MacOS/soffice',
+                                  '/Applications/LibreOffice Vanilla.app/Contents/MacOS/soffice']):
         """[summary]
         
         Arguments:
@@ -65,7 +65,7 @@ class ChangeHandler(FileSystemEventHandler):
             self._p_dest_dir = Path(output_dir)
         else:
             self._p_dest_dir = Path(monitoring_dir).joinpath(output_dir)
-        self._ppaths_soffice = [Path(x) for x in paths_libreoffice_app]
+        self._ppaths_soffice = [Path(x) for x in paths_soffice]
         self.dest_ext_no_period = dest_ext_no_period
 
     @staticmethod
