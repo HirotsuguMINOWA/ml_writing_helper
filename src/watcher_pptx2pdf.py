@@ -68,7 +68,8 @@ class ChangeHandler(FileSystemEventHandler):
         self._ppaths_soffice = [Path(x) for x in paths_libreoffice_app]
         self.dest_ext_no_period = dest_ext_no_period
 
-    def _crop_img(self, p_src_img, p_dest: Path):
+    @staticmethod
+    def _crop_img(p_src_img, p_dest: Path, img_fmt):
         """
         image(pdf/png,jpeg?)をcroppingする
         :param p_src:
@@ -85,10 +86,10 @@ class ChangeHandler(FileSystemEventHandler):
             p_dest = p_dest.joinpath(p_src_img.name)  # if the path is dir, set filename converted
 
         """ crop white space """
-        if self.dest_ext_no_period == "pdf":
+        if img_fmt == "pdf":
             cmd_name = "pdfcrop"
             cmd = "{cmd_name} {path_in} {path_out}".format(cmd_name=cmd_name, path_in=p_src_img, path_out=p_dest)
-        elif self.dest_ext_no_period in ["png", "jpeg", "jpg"]:
+        elif img_fmt in ["png", "jpeg", "jpg"]:
             cmd_name = "convert"
             # p_conv = Path("/usr/local/bin/convert")
             # if not p_conv.exists():
@@ -107,15 +108,31 @@ class ChangeHandler(FileSystemEventHandler):
         subprocess.run(tokens)
         # output = check_output(tokens, stderr=STDOUT).decode("utf8")
 
-    def conv_ppt(self, path_src, dir_dest):  # , dest_ext_no_period="pdf"):
+    def conv_ppt(self):
+        self._conv_ppt(
+            path_src=self.target_dir
+            , dir_dest=self._p_dest_dir.name
+            , img_fmt=self.dest_ext_no_period
+        )
+
+    def _conv_ppt(self, path_src, dir_dest, img_fmt="png", is_crop=True):  # , dest_ext_no_period="pdf"):
         """
         ppt->pdf->cropping
         :param dest_ext: without period!!
         """
-        plib_src = Path(path_src)  # pathlibのインスタンス
-        p_dest = plib_src.parent.joinpath(dir_dest)
-        os.chdir(p_dest.parent)  # important!
-        if plib_src.suffix not in (".ppt", ".pptx") and not plib_src.name.startswith("~"):
+        pl_src = Path(path_src)  # pathlibのインスタンス
+        pl_dest = pl_src.parent.joinpath(dir_dest)
+        os.chdir(pl_dest.parent)  # important!
+
+        """
+        一時的にepsは
+        """
+        if img_fmt == "eps":
+            tmp_img_fmt = "pdf"
+        else:
+            tmp_img_fmt = img_fmt
+
+        if pl_src.suffix not in (".ppt", ".pptx") and not pl_src.name.startswith("~"):
             print("[Info] Powerpointファイルでないので変換せず")
             return
         # file_tmp="tmp_"+pathlib.Path(path_src).name
@@ -124,16 +141,16 @@ class ChangeHandler(FileSystemEventHandler):
         # print("path_tmp:"+path_tmp)
         # out_dir = plib_src.parent.as_posix()
         # path_tmp="tmp_"+os.path.basename(path_src)
-        print("[Debug] p_dest: %s" % p_dest)
+        print("[Debug] pl_dest: %s" % pl_dest)
         print("[Debug] CWD:%s" % os.getcwd())
         found_libreoffice = False
         for p_soffice in self._ppaths_soffice:  # type: Path
             if p_soffice.exists():
                 cmd = "'{path_soffice}' --headless --convert-to {dest_ext} --outdir {out_dir} {path_src}".format(
                     path_soffice=p_soffice
-                    , dest_ext=self.dest_ext_no_period
+                    , dest_ext=tmp_img_fmt
                     # , out_dir=dir_dest
-                    , out_dir=p_dest.name
+                    , out_dir=pl_dest.name
                     , path_src=path_src)
                 break
         print("[Debug] CMD(ppt2pdf):" + cmd)
@@ -147,12 +164,26 @@ class ChangeHandler(FileSystemEventHandler):
             print("[ERROR] なぜかLO Vanillaで出現？")
 
         """ Add head "tmp_" to converted filename """
-        plib_pdf_convd = p_dest.joinpath(plib_src.name).with_suffix("." + self.dest_ext_no_period)
+        plib_pdf_convd = pl_dest.joinpath(pl_src.name).with_suffix("." + tmp_img_fmt)
         plib_pdf_convd_tmp = plib_pdf_convd.with_name("tmp_" + plib_pdf_convd.name)
         # plib_pdf_convd.rename(plib_pdf_convd.with_name("tmp_"+plib_pdf_convd.name))
         # plib_pdf_convd.rename(plib_pdf_convd_tmp)
         # plib_pdf_convd.with_name("tmp_"+plib_pdf_convd.name)
-        self._crop_img(p_src_img=plib_pdf_convd, p_dest=self._p_dest_dir)
+        if is_crop:
+            self._crop_img(p_src_img=plib_pdf_convd, p_dest=self._p_dest_dir, img_fmt=tmp_img_fmt)
+        """ pdf 2 eps """
+        if img_fmt == "eps":
+            print("[Info] Convert pdf to pes")
+            cmd = "{cmd_conv} {p_src} {p_dest}".format(
+                cmd_conv="convert"
+                , p_src=plib_pdf_convd
+                , p_dest=pl_dest.joinpath(plib_pdf_convd.name).with_suffix(".eps")
+            )
+            print("[Debug] CMD(convert): %s" % cmd)
+            tokens = shlex.split(cmd)
+            # subprocess.run(tokens)
+            output = check_output(tokens, stderr=STDOUT).decode("utf8")
+            print("Output: %s" % output)
         """ rm tmpfile"""
         if plib_pdf_convd_tmp.exists():
             pathlib.Path(plib_pdf_convd_tmp).unlink()
@@ -173,7 +204,7 @@ class ChangeHandler(FileSystemEventHandler):
         filepath = event.src_path
         filename = os.path.basename(filepath)
         print('%sができました' % filename)
-        self.conv_ppt(path_src=event.src_path, dir_dest=self._p_dest_dir)  # , dest_ext_no_period="png")
+        self._conv_ppt(path_src=event.src_path, dir_dest=self._p_dest_dir)  # , dest_ext_no_period="png")
 
     def on_modified(self, event):
         filepath = event.src_path
