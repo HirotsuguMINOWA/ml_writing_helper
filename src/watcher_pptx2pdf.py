@@ -204,7 +204,8 @@ class ChangeHandler(FileSystemEventHandler):
         filepath = event.src_path
         filename = os.path.basename(filepath)
         print('%sができました' % filename)
-        self._conv_ppt(path_src=event.src_path, dir_dest=self._p_dest_dir)  # , dest_ext_no_period="png")
+        self._conv_ppt(path_src=event.src_path, dir_dest=self._p_dest_dir,
+                       img_fmt=self.dest_ext_no_period)  # , dest_ext_no_period="png")
 
     def on_modified(self, event):
         filepath = event.src_path
