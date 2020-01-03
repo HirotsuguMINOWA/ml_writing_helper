@@ -37,6 +37,7 @@ class ChangeHandler(FileSystemEventHandler):
                  , monitoring_dir
                  , output_dir=None
                  , dest_ext_no_period="png"
+                 , export_fmts=["png", "eps", "pdf"]
                  , paths_libreoffice_app=['/Applications/LibreOffice.app/Contents/MacOS/soffice',
                                           '/Applications/LibreOffice Vanilla.app/Contents/MacOS/soffice']):
         """[summary]
@@ -44,6 +45,7 @@ class ChangeHandler(FileSystemEventHandler):
         Arguments:
             monitoring_dir {[type]} -- [description]
             _p_dest_dir {str} -- [description]
+            export_fmts {list} -- 出力フォーマット。複数指定すると、その全てのフォーマットに出力。
         
         Keyword Arguments:
             dest_ext_no_period {str} -- [description] (default: {"png"})
@@ -66,7 +68,7 @@ class ChangeHandler(FileSystemEventHandler):
         self._ppaths_soffice = [Path(x) for x in paths_libreoffice_app]
         self.dest_ext_no_period = dest_ext_no_period
 
-    def __ppt2pdf(self, src: pathlib.Path, dest: pathlib.Path):
+    def _conv_ppt(self, src: pathlib.Path, dest: pathlib.Path):
         """[summary]
         
         Arguments:
