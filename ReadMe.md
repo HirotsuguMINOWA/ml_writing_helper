@@ -1,8 +1,17 @@
+# Writing Supporter
+
+## 注意
+
+- LaTeXには`.eps`がよい
+- Markdownには`.png`へ変換がよい
+
+
 # 未整理
 
 - epsへの変換はpdfからする事
   - pngからepsへ変換するとboudingbox取得失敗する？みたい
-  ## LaTeXにはpdfよりeps
+
+## LaTeXにはpdfよりeps
 - 理由: 適切なサイズで表示される
   - pdfでは、`\linewidth`で正しく幅(複数列)に収まらない,pdfのサイズが正しく取得できていないためと思われる。
     - pngに比べbouindingboxの指定が不要bouindingboxは単なるサイズ指定ではないので、epsか.xbbを使う方が楽。
