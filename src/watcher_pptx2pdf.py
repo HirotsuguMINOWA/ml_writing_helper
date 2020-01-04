@@ -50,6 +50,7 @@ class ChangeHandler(FileSystemEventHandler):
         Keyword Arguments:
             dest_ext_no_period {str} -- [description] (default: {"png"})
         """
+        # TODO: 各コマンドのPATHのチェック。OSのPATHに登録されている事前提、加えてデフォルトのPATHチェック。それで見つからなければWarningだけだす。
         """[注意]
         本プログラムのScriptが存在するPATHをwcdへ移動とする
         """
@@ -86,7 +87,7 @@ class ChangeHandler(FileSystemEventHandler):
             p_dest = p_dest.joinpath(p_src_img.name)  # if the path is dir, set filename converted
 
         """ crop white space """
-        if img_fmt in ["png", "jpeg", "jpg"]: # pdfのcropはできない
+        if img_fmt in ["png", "jpeg", "jpg"]:  # pdfのcropはできない
             cmd_name = "convert"
             # p_conv = Path("/usr/local/bin/convert")
             # if not p_conv.exists():
@@ -124,6 +125,7 @@ class ChangeHandler(FileSystemEventHandler):
         pl_dest = pl_src.parent.joinpath(dir_dest)
         os.chdir(pl_dest.parent)  # important!
 
+        # TODO: odp?に要対応.LibreOffice
         """
         一時的にepsは
         """
@@ -132,7 +134,7 @@ class ChangeHandler(FileSystemEventHandler):
         else:
             tmp_img_fmt = img_fmt
 
-        if pl_src.suffix not in (".ppt", ".pptx") and not pl_src.name.startswith("~"):
+        if pl_src.suffix not in (".ppt", ".pptx") or not pl_src.name.startswith("~"):
             print("[Info] Powerpointファイルでないので変換せず")
             return
         # file_tmp="tmp_"+pathlib.Path(path_src).name
