@@ -109,14 +109,14 @@ class ChangeHandler(FileSystemEventHandler):
         subprocess.run(tokens)
         # output = check_output(tokens, stderr=STDOUT).decode("utf8")
 
-    def conv_ppt(self):
-        self._conv_ppt(
+    def conv_slide(self):
+        self._conv_slide(
             path_src=self.target_dir
             , dir_dest=self._p_dest_dir.name
             , img_fmt=self.dest_ext_no_period
         )
 
-    def _conv_ppt(self, path_src, dir_dest, img_fmt="png", is_crop=True):  # , dest_ext_no_period="pdf"):
+    def _conv_slide(self, path_src, dir_dest, img_fmt="png", is_crop=True):  # , dest_ext_no_period="pdf"):
         """
         ppt->pdf->cropping
         :param dest_ext: without period!!
@@ -134,8 +134,8 @@ class ChangeHandler(FileSystemEventHandler):
         else:
             tmp_img_fmt = img_fmt
 
-        if pl_src.suffix not in (".ppt", ".pptx") or not pl_src.name.startswith("~"):
-            print("[Info] Powerpointファイルでないので変換せず")
+        if pl_src.suffix not in (".ppt", ".pptx", ".odp") and not pl_src.name.startswith("~"):
+            print("[Info] Powerpoint / LibreOffice以外は変換せず")
             return
         # file_tmp="tmp_"+pathlib.Path(path_src).name
         # file_tmp=pathlib.Path(file_tmp).with_suffix(".pdf")
@@ -166,8 +166,15 @@ class ChangeHandler(FileSystemEventHandler):
             print("[ERROR] なぜかLO Vanillaで出現？")
 
         """ Add head "tmp_" to converted filename """
+
         plib_pdf_convd = pl_dest.joinpath(pl_src.name).with_suffix("." + tmp_img_fmt)
         plib_pdf_convd_tmp = plib_pdf_convd.with_name("tmp_" + plib_pdf_convd.name)
+
+        cmd_cp = "cp -f %s %s" % (plib_pdf_convd, plib_pdf_convd.with_name("pre-crop_" + plib_pdf_convd.name))
+        tokens = shlex.split(cmd_cp)
+        output = check_output(tokens, stderr=STDOUT).decode("utf8")
+        print("Output: %s" % output)
+
         # plib_pdf_convd.rename(plib_pdf_convd.with_name("tmp_"+plib_pdf_convd.name))
         # plib_pdf_convd.rename(plib_pdf_convd_tmp)
         # plib_pdf_convd.with_name("tmp_"+plib_pdf_convd.name)
@@ -206,8 +213,8 @@ class ChangeHandler(FileSystemEventHandler):
         filepath = event.src_path
         filename = os.path.basename(filepath)
         print('%sができました' % filename)
-        self._conv_ppt(path_src=event.src_path, dir_dest=self._p_dest_dir,
-                       img_fmt=self.dest_ext_no_period)  # , dest_ext_no_period="png")
+        self._conv_slide(path_src=event.src_path, dir_dest=self._p_dest_dir,
+                         img_fmt=self.dest_ext_no_period)  # , dest_ext_no_period="png")
 
     def on_modified(self, event):
         filepath = event.src_path
