@@ -10,5 +10,5 @@ conv = ChangeHandler(
 conv._conv_slide(
     path_src='fig_src/test.odp',
     dir_dest=p_dest.as_posix(),
-    img_fmt="eps"
+    to_fmt="eps"
 )

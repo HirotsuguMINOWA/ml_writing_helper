@@ -113,10 +113,10 @@ class ChangeHandler(FileSystemEventHandler):
         self._conv_slide(
             path_src=self.target_dir
             , dir_dest=self._p_dest_dir.name
-            , img_fmt=self.dest_ext_no_period
+            , to_fmt=self.dest_ext_no_period
         )
 
-    def _conv_slide(self, path_src, dir_dest, img_fmt="png", is_crop=True):  # , dest_ext_no_period="pdf"):
+    def _conv_slide(self, path_src, dir_dest, to_fmt="png", is_crop=True):  # , dest_ext_no_period="pdf"):
         """
         ppt->pdf->cropping
         :param dest_ext: without period!!
@@ -129,10 +129,10 @@ class ChangeHandler(FileSystemEventHandler):
         """
         一時的にepsは
         """
-        if img_fmt == "eps":
+        if to_fmt == "eps":
             tmp_img_fmt = "pdf"
         else:
-            tmp_img_fmt = img_fmt
+            tmp_img_fmt = to_fmt
 
         if pl_src.suffix not in (".ppt", ".pptx", ".odp") and not pl_src.name.startswith("~"):
             print("[Info] Powerpoint / LibreOffice以外は変換せず")
@@ -181,7 +181,7 @@ class ChangeHandler(FileSystemEventHandler):
         if is_crop:
             self._crop_img(p_src_img=plib_pdf_convd, p_dest=self._p_dest_dir, img_fmt=tmp_img_fmt)
         """ pdf 2 eps """
-        if img_fmt == "eps":
+        if to_fmt == "eps":
             print("[Info] Convert pdf to eps")
             cmd = "{cmd_conv} {p_src} {p_dest}".format(
                 cmd_conv="convert"
@@ -214,7 +214,7 @@ class ChangeHandler(FileSystemEventHandler):
         filename = os.path.basename(filepath)
         print('%sができました' % filename)
         self._conv_slide(path_src=event.src_path, dir_dest=self._p_dest_dir,
-                         img_fmt=self.dest_ext_no_period)  # , dest_ext_no_period="png")
+                         to_fmt=self.dest_ext_no_period)  # , dest_ext_no_period="png")
 
     def on_modified(self, event):
         filepath = event.src_path
