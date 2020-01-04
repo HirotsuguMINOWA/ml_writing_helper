@@ -70,12 +70,13 @@ class ChangeHandler(FileSystemEventHandler):
         self.dest_ext_no_period = dest_ext_no_period
 
     @staticmethod
-    def _crop_img(p_src_img, p_dest: Path, img_fmt):
+    def _crop_img(p_src_img, p_dest: Path, to_img_fmt):
         """
         image(pdf/png,jpeg?)をcroppingする
         :param p_src:
         :param p_dest:
-        :return:
+        :return: 変換後のpath名
+        :rtype: pathlib.Path
         """
         """ Calc path of Dest """
         # path_dest = pathlib.Path(dir_dest) / plib_pdf_convd.name
@@ -87,7 +88,7 @@ class ChangeHandler(FileSystemEventHandler):
             p_dest = p_dest.joinpath(p_src_img.name)  # if the path is dir, set filename converted
 
         """ crop white space """
-        if img_fmt in ["png", "jpeg", "jpg"]:  # pdfのcropはできない
+        if to_img_fmt in ["png", "jpeg", "jpg"]:  # pdfのcropはできない
             cmd_name = "convert"
             # p_conv = Path("/usr/local/bin/convert")
             # if not p_conv.exists():
@@ -95,7 +96,7 @@ class ChangeHandler(FileSystemEventHandler):
             cmd = "{cmd_name} {path_in} -trim {path_out} ".format(cmd_name=cmd_name,
                                                                   path_in=p_src_img,
                                                                   path_out=p_dest)
-        elif img_fmt == "pdf":
+        elif to_img_fmt == "pdf":
             cmd_name = "pdfcrop"
             cmd = "{cmd_name} {path_in} {path_out}".format(cmd_name=cmd_name, path_in=p_src_img, path_out=p_dest)
         else:
@@ -108,6 +109,21 @@ class ChangeHandler(FileSystemEventHandler):
         tokens = shlex.split(cmd)
         subprocess.run(tokens)
         # output = check_output(tokens, stderr=STDOUT).decode("utf8")
+        return Path(p_dest.with_name(p_src_img.name).with_suffix(".%s" % to_img_fmt))
+
+    def __run_cmd(self, cmd: str, is_print=True):
+        """
+        コマンド(CLI)の実行
+        :param cmd:
+        :param is_print:
+        :return:
+        """
+        tokens = shlex.split(cmd)
+        # subprocess.run(tokens)
+        output = check_output(tokens, stderr=STDOUT).decode("utf8")
+        if is_print:
+            print("Output: %s" % output)
+        return output
 
     def conv_slide(self):
         self._conv_slide(
@@ -126,17 +142,37 @@ class ChangeHandler(FileSystemEventHandler):
         os.chdir(pl_dest.parent)  # important!
 
         # TODO: odp?に要対応.LibreOffice
-        """
-        一時的にepsは
-        """
-        if to_fmt == "eps":
-            tmp_img_fmt = "pdf"
-        else:
-            tmp_img_fmt = to_fmt
 
         if pl_src.suffix not in (".ppt", ".pptx", ".odp") and not pl_src.name.startswith("~"):
             print("[Info] Powerpoint / LibreOffice以外は変換せず")
             return
+        """
+        一時的にepsは
+        """
+        if pl_src.suffix == ".odp" and to_fmt in ["pdf", "eps"]:
+            """
+            .odp formatはpdfに変換するとpdfcropで失敗する。
+            よって、png形式で変換する
+            """
+            warn = """
+            [Warning]
+            [Warning].odpを.pdf/.epsへの変換はCropで失敗します!!!
+            [Warning]
+            """
+            print(warn)
+            cur_to_fmt = "pdf"
+        # elif pl_src.suffix == ".odp" and to_fmt in ["pdf", "eps"]:
+        #     """
+        #     .odp formatはpdfに変換するとpdfcropで失敗する。
+        #     よって、png形式で変換する
+        #     """
+        #     cur_to_fmt = "png"
+        else:
+            if to_fmt == "eps":
+                cur_to_fmt = "pdf"
+            else:
+                cur_to_fmt = to_fmt
+
         # file_tmp="tmp_"+pathlib.Path(path_src).name
         # file_tmp=pathlib.Path(file_tmp).with_suffix(".pdf")
         # path_tmp=pathlib.Path(path_src).parent.joinpath(file_tmp).as_posix()
@@ -146,16 +182,17 @@ class ChangeHandler(FileSystemEventHandler):
         print("[Debug] pl_dest: %s" % pl_dest)
         print("[Debug] CWD:%s" % os.getcwd())
         found_libreoffice = False
+
         for p_soffice in self._ppaths_soffice:  # type: Path
             if p_soffice.exists():
                 cmd = "'{path_soffice}' --headless --convert-to {dest_ext} --outdir {out_dir} {path_src}".format(
                     path_soffice=p_soffice
-                    , dest_ext=tmp_img_fmt
+                    , dest_ext=cur_to_fmt
                     # , out_dir=dir_dest
                     , out_dir=pl_dest.name
-                    , path_src=path_src)
+                    , path_src=pl_src)
                 break
-        print("[Debug] CMD(ppt2pdf):" + cmd)
+        print("[Debug] CMD(slide2img):" + cmd)
         tokens = shlex.split(cmd)
         # subprocess.run(tokens)
         output = check_output(tokens, stderr=STDOUT).decode("utf8")
@@ -167,7 +204,7 @@ class ChangeHandler(FileSystemEventHandler):
 
         """ Add head "tmp_" to converted filename """
 
-        plib_pdf_convd = pl_dest.joinpath(pl_src.name).with_suffix("." + tmp_img_fmt)
+        plib_pdf_convd = pl_dest.joinpath(pl_src.name).with_suffix("." + cur_to_fmt)
         plib_pdf_convd_tmp = plib_pdf_convd.with_name("tmp_" + plib_pdf_convd.name)
 
         cmd_cp = "cp -f %s %s" % (plib_pdf_convd, plib_pdf_convd.with_name("pre-crop_" + plib_pdf_convd.name))
@@ -179,7 +216,7 @@ class ChangeHandler(FileSystemEventHandler):
         # plib_pdf_convd.rename(plib_pdf_convd_tmp)
         # plib_pdf_convd.with_name("tmp_"+plib_pdf_convd.name)
         if is_crop:
-            self._crop_img(p_src_img=plib_pdf_convd, p_dest=self._p_dest_dir, img_fmt=tmp_img_fmt)
+            self._crop_img(p_src_img=plib_pdf_convd, p_dest=self._p_dest_dir, to_img_fmt=cur_to_fmt)
         """ pdf 2 eps """
         if to_fmt == "eps":
             print("[Info] Convert pdf to eps")
@@ -193,6 +230,13 @@ class ChangeHandler(FileSystemEventHandler):
             # subprocess.run(tokens)
             output = check_output(tokens, stderr=STDOUT).decode("utf8")
             print("Output: %s" % output)
+        # elif to_fmt == "pdf" and pl_src.suffix == ".odp":
+        #     ### conv png to pdf
+        #     cmd = "convert %s %s" % (
+        #         plib_pdf_convd.with_suffix(".png")
+        #         , pl_dest.joinpath(plib_pdf_convd.name).with_suffix(".pdf")
+        #     )
+        #     self.__run_cmd(cmd)
         """ rm tmpfile"""
         if plib_pdf_convd_tmp.exists():
             pathlib.Path(plib_pdf_convd_tmp).unlink()
