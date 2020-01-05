@@ -24,21 +24,21 @@ def run_cmd(cmd: str, is_print=True):
 
 
 p_src = Path(__file__).resolve().parent.joinpath("fig_src")
-p_dest = Path(__file__).resolve().parent.joinpath("fig_tmp")
+p_dst = Path(__file__).resolve().parent.joinpath("fig_tmp")
 
 p_target = p_src.joinpath(test_img)
 if p_target.exists():
     run_cmd("rm %s" % p_target)
 
-tmp = p_dest.joinpath(test_img)
+tmp = p_dst.joinpath(test_img)
 if tmp.exists():
     run_cmd("rm %s" % tmp)
 
-print("テスト用画像(%s)ファイルを手動で%sへコピーしろ" % (test_img, p_dest.name))
+print("テスト用画像(%s)ファイルを手動で%sへコピーしろ" % (test_img, p_dst.name))
 
 ChangeHandler(
-    monitoring_dir=p_src.as_posix(), output_dir=p_dest.as_posix()
-    , dest_ext_no_period=""
+    monitoring_dir=p_src.as_posix(), output_dir=p_dst.as_posix()
+    , dst_ext_no_period=""
 ).start()
 
 # FIXME: 上記で制御が戻ってこないので、下記実行されず

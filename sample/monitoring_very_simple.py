@@ -3,5 +3,5 @@ from pathlib import Path
 
 ChangeHandler(
     monitoring_dir="fig_src", output_dir="fig_gen"
-    , dest_ext_no_period="eps"
+    , dst_ext_no_period="eps"
 ).start()
