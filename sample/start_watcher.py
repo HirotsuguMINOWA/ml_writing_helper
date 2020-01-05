@@ -1,4 +1,4 @@
-from src.watcher_pptx2pdf import ChangeHandler
+from ml_writing_helper.__init__ import ChangeHandler
 from pathlib import Path
 
 cwd = Path("Manuscript")

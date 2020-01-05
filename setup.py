@@ -17,7 +17,7 @@ setup(
     #
     # entry_points={
     #     "console_scripts": [
-    #         "conv_luxuary=src.watcher_pptx2pdf:main",
+    #         "conv_luxuary=ml_writing_helper.watcher_pptx2pdf:main",
     #     ]
     # },
     classifiers=[

@@ -1,7 +1,7 @@
 test_img = "test.jpg"
 
 from pathlib import Path
-from src.watcher_pptx2pdf import ChangeHandler
+from ml_writing_helper.__init__ import ChangeHandler
 from subprocess import check_output, STDOUT
 import shlex
 
