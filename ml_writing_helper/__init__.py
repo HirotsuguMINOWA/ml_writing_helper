@@ -3,6 +3,7 @@
 # TODO: bin(soffice, imagemagick'convert and so on)の存在確認
 # TODO: pdfは透過png?が黒くなるためデフォルトはpng
 # TODO: dstとsrcフォルダの生成、実行時に。
+# TODO: LibreOffice Vanilla.appは変換失敗するので、注意を促す
 # target_dir = "app_single/_fig_src"
 # _p_dst_dir = "app_single/figs"
 
@@ -21,17 +22,21 @@ import subprocess
 from subprocess import check_output, STDOUT
 import pathlib  # FIXME: 下記に統一
 from pathlib import Path
+from enum import auto
+from strenum import StrEnum
 
 
 # from strenum import StrEnum
 
-# class Export(StrEnum)
-#     png=auto()
-#     jpeg=auto()
-#     pdf=auto()
-#     none=auto()
+class FormatInput(StrEnum):
+    png = ".png"
+    jpeg = ".jpeg"
+    pdf = ".pdf"
+    none = "none"
+
 
 # 出力がepsの場合、監視folderにpngなど画像ファイルが書き込まれたらepsへ変換するコードをかけ
+
 
 class ChangeHandler(FileSystemEventHandler):
 
@@ -40,10 +45,12 @@ class ChangeHandler(FileSystemEventHandler):
                  , output_dir=None
                  , dst_ext_no_period="png"
                  , export_fmts=["png", "eps", "pdf"]
-                 , paths_soffice=['/Applications/LibreOffice.app/Contents/MacOS/soffice',
-                                  '/Applications/LibreOffice Vanilla.app/Contents/MacOS/soffice']):
+                 , paths_soffice=['soffice',  # pathが通っている前提の場合
+                                  '/Applications/LibreOffice.app/Contents/MacOS/soffice',
+                                  # '/Applications/LibreOffice Vanilla.app/Contents/MacOS/soffice' # srcがないと言われる
+                                  ]):
         """[summary]
-        
+
         Arguments:
             monitoring_dir {[type]} -- [description]
             _p_dst_dir {str} -- [description]
@@ -83,6 +90,7 @@ class ChangeHandler(FileSystemEventHandler):
             self.dst_ext_no_period = "." + dst_ext_no_period
         else:
             self.dst_ext_no_period = dst_ext_no_period
+        # TODO: 入力フォーマットか否か要チェック
 
     @staticmethod
     def _crop_img(p_src_img, p_dst: Path, to_img_fmt):
@@ -97,7 +105,7 @@ class ChangeHandler(FileSystemEventHandler):
         # path_dst = pathlib.Path(dir_dst) / pl_src.name
         # path_dst = pathlib.Path(dir_dst) / plib_src.with_suffix("." + self.dst_ext_no_period).name
         if not p_src_img.exists():
-            print("[Error] %s not found")
+            print("[Error] %s not found" % p_src_img)
             return
         if p_dst.is_dir():
             p_dst = p_dst.joinpath(p_src_img.name)  # if the path is dir, set filename converted
@@ -134,6 +142,8 @@ class ChangeHandler(FileSystemEventHandler):
         :param is_print:
         :return:
         """
+        if is_print:
+            print("CMD:%s" % cmd)
         tokens = shlex.split(cmd)
         # subprocess.run(tokens)
         output = check_output(tokens, stderr=STDOUT).decode("utf8")
@@ -142,15 +152,31 @@ class ChangeHandler(FileSystemEventHandler):
         return output
 
     @staticmethod
-    def _conv2eps(pl_src: Path, pl_dst: Path):
+    def _conv2eps(pl_src: Path, pl_dst_dir: Path, del_src=True):
+        """
+
+        :param pl_src:
+        :param pl_dst_dir: directoryのみ
+        :return:
+        """
         # TODO: srcファイルを削除するargを設ける事
         if pl_src.suffix not in (".jpeg", ".jpg", ".png", ".pdf"):
             return
         print("[Info] Convert to eps")
+
+        if pl_dst_dir.is_dir():
+            pl_dst_dir = pl_dst_dir.joinpath(pl_src.stem + ".eps")
+        # else:
+        #     raise Exception("ディレクトリ指定して下さい。")
+        elif pl_dst_dir.suffix != ".eps":
+            # raise Exception("出力ファイルの拡張子も.epsにして下さい")
+            print("出力拡張子を.epsに変えました")
+            pl_dst_dir = pl_dst_dir.with_suffix(".eps")
+
         cmd = "{cmd_conv} {p_src} {p_dst}".format(
             cmd_conv="convert"
             , p_src=pl_src
-            , p_dst=pl_dst
+            , p_dst=pl_dst_dir
         )
         print("[Debug] CMD(convert): %s" % cmd)
         tokens = shlex.split(cmd)
@@ -161,18 +187,94 @@ class ChangeHandler(FileSystemEventHandler):
         #     ### conv png to pdf
         #     cmd = "convert %s %s" % (
         #         pl_src.with_suffix(".png")
-        #         , pl_dst.joinpath(pl_src.name).with_suffix(".pdf")
+        #         , pl_dst_dir.joinpath(pl_src.name).with_suffix(".pdf")
         #     )
         #     self._run_cmd(cmd)
+        if del_src:
+            pl_src.unlink()
 
-    def _conv(self, pl_src, pl_dst, to_fmt=".png"):
+    def _conv_slide(self, pl_src: Path, pl_dst: Path, to_fmt=".png"):
         """
-        総合converter, ここから各subモジュールへ振り分ける
+
         :param pl_src:
-        :param pl_dst:
+        :param pl_dst: ファイル/folderまでのPATH.場合分けが必要
         :param to_fmt:
         :return:
         """
+
+        # file_tmp="tmp_"+pathlib.Path(path_src).name
+        # file_tmp=pathlib.Path(file_tmp).with_suffix(".pdf")
+        # path_tmp=pathlib.Path(path_src).parent.joinpath(file_tmp).as_posix()
+        # print("path_tmp:"+path_tmp)
+        # out_dir = plib_src.parent.as_posix()
+        # path_tmp="tmp_"+os.path.basename(path_src)
+        if pl_dst.is_dir():
+            pl_dst_dir = pl_dst
+        else:
+            pl_dst_dir = pl_dst.parent
+        print("[Debug] pl_dst_dir: %s" % pl_dst)
+        print("[Debug] CWD:%s" % os.getcwd())
+        found_libreoffice = False
+
+        for p_soffice in self._ppaths_soffice:  # type: Path
+            if p_soffice.exists():
+                cmd = "'{path_soffice}' --headless --convert-to {dst_ext} --outdir '{out_dir}' '{path_src}'".format(
+                    # cmd = "'{path_soffice}' --headless --convert-to {dst_ext} {path_src}".format(
+                    path_soffice=p_soffice
+                    , dst_ext=to_fmt[1:],  # eliminate first "."
+                    # , out_dir=dir_dst
+                    out_dir=pl_dst_dir.as_posix()
+                    , path_src=pl_src)
+                break
+
+        # output = self._run_cmd(cmd)
+        print("[Debug] CMD(slide2img):" + cmd)
+        tokens = shlex.split(cmd)
+        # subprocess.run(tokens)
+        output = check_output(tokens, stderr=STDOUT).decode("utf8")
+        print("Output: %s" % output)
+        if output == "Error: source file could not be loaded\n":
+            """なぜかLO Vanillaで出現？"""
+            # raise Exception("")
+            print("[ERROR] なぜかLO Vanillaで出現？")
+
+        ### 変換成功したはず
+        #
+        # 生成されたファイルPATH
+
+        pl_out = pl_dst_dir.joinpath(pl_src.with_suffix(to_fmt).name)
+        if pl_dst.is_dir():
+            return pl_out
+        else:
+            """
+            出力ファイルPATHが指定されているのでrenameする
+            """
+            # pl_dst_dir = pl_dst_dir.joinpath(pl_out.with_suffix(pl_out.suffix).name)
+            # else:
+            #     pl_out = pl_dst_dir.joinpath(pl_src.name + to_fmt)
+
+            # # 存在していたら削除
+            # if pl_dst_dir.exists():
+            #     pl_dst_dir.unlink()
+
+            # rename
+            pl_out.rename(pl_dst)
+
+            # """ Add head "tmp_" to converted filename """
+            #
+            # plib_pdf_convd = pl_dst_dir.joinpath(pl_src.name).with_suffix(cur_to_fmt)
+            # # plib_pdf_convd_tmp = plib_pdf_convd.with_name("tmp_" + plib_pdf_convd.name)
+            #
+            # cmd_cp = "cp -f %s %s" % (plib_pdf_convd, plib_pdf_convd.with_name("pre-crop_" + plib_pdf_convd.name))
+            # self._run_cmd(cmd)
+            # # tokens = shlex.split(cmd_cp)
+            # # output = check_output(tokens, stderr=STDOUT).decode("utf8")
+            # # print("Output: %s" % output)
+            #
+            # # pl_src.rename(pl_src.with_name("tmp_"+pl_src.name))
+            # # pl_src.rename(plib_pdf_convd_tmp)
+            # # pl_src.with_name("tmp_"+pl_src.name)
+            return pl_dst
 
     def convert(self, path_src, dir_dst, to_fmt=".png", is_crop=True):  # , dst_ext_no_period="pdf"):
         """
@@ -182,7 +284,8 @@ class ChangeHandler(FileSystemEventHandler):
 
         # init1
         pl_src = Path(path_src)  # pathlibのインスタンス
-
+        if not pl_src.is_absolute():
+            raise Exception("path_srcは絶対Pathで指定して下さい")
         #
         # チェック
         #
@@ -198,19 +301,20 @@ class ChangeHandler(FileSystemEventHandler):
         # TODO: odp?に要対応.LibreOffice
         if pl_src.suffix in (".png", ".jpg", ".jpeg") and not pl_src.name.startswith("~"):
             """
-            files entered in src_folder, converted into pl_dst wich cropping. and conv to eps
+            files entered in src_folder, converted into pl_dst_dir wich cropping. and conv to eps
             """
             print("[Info] Image->croppingしてdst pathへコピーします")
-            pl_src2 = self._crop_img(pl_src, pl_dst.joinpath("tmp_" + pl_src.name).with_suffix(pl_src.suffix),
+            pl_src2 = self._crop_img(pl_src, pl_dst.joinpath(pl_src.stem + pl_src.suffix),
                                      to_img_fmt=pl_src.suffix)
-            self._conv2eps(pl_src=pl_src2, pl_dst=pl_dst.joinpath(pl_src.with_suffix(to_fmt).name))
+            if to_fmt==".eps":
+                self._conv2eps(pl_src=pl_src2, pl_dst_dir=pl_dst.joinpath(pl_src.stem + pl_src.suffix))
             return
 
         if pl_src.suffix not in (".ppt", ".pptx", ".odp") and not pl_src.name.startswith("~"):
             print("[Info] Powerpoint / LibreOffice以外は変換せず")
             return
         """
-        一時的にepsは
+        スライドの変換
         """
         if pl_src.suffix == ".odp" and to_fmt in [".pdf", ".eps"]:
             """
@@ -218,74 +322,32 @@ class ChangeHandler(FileSystemEventHandler):
             よって、png形式で変換する
             """
             warn = """
-            [Warning]
-            [Warning].odpを.pdf/.epsへの変換はCropで失敗します!!!
-            [Warning] LibreOfficeではPowerPoint形式(.pptx)に変換して使ってください。
-            [Warning]
-            """
+              [Warning]
+              [Warning].odpを.pdf/.epsへの変換はCropで失敗します!!!
+              [Warning] LibreOfficeではPowerPoint形式(.pptx)に変換して使ってください。
+              [Warning]
+              """
             print(warn)
             cur_to_fmt = ".pdf"
-        # elif pl_src.suffix == ".odp" and to_fmt in ["pdf", "eps"]:
-        #     """
-        #     .odp formatはpdfに変換するとpdfcropで失敗する。
-        #     よって、png形式で変換する
-        #     """
-        #     cur_to_fmt = "png"
+            # elif pl_src.suffix == ".odp" and to_fmt in ["pdf", "eps"]:
+            #     """
+            #     .odp formatはpdfに変換するとpdfcropで失敗する。
+            #     よって、png形式で変換する
+            #     """
+            #     cur_to_fmt = "png"
         elif to_fmt == ".eps":
             cur_to_fmt = ".pdf"
         else:
             cur_to_fmt = to_fmt
-
-        # file_tmp="tmp_"+pathlib.Path(path_src).name
-        # file_tmp=pathlib.Path(file_tmp).with_suffix(".pdf")
-        # path_tmp=pathlib.Path(path_src).parent.joinpath(file_tmp).as_posix()
-        # print("path_tmp:"+path_tmp)
-        # out_dir = plib_src.parent.as_posix()
-        # path_tmp="tmp_"+os.path.basename(path_src)
-        print("[Debug] pl_dst: %s" % pl_dst)
-        print("[Debug] CWD:%s" % os.getcwd())
-        found_libreoffice = False
-
-        for p_soffice in self._ppaths_soffice:  # type: Path
-            if p_soffice.exists():
-                cmd = "'{path_soffice}' --headless --convert-to {dst_ext} --outdir {out_dir} {path_src}".format(
-                    path_soffice=p_soffice
-                    , dst_ext=cur_to_fmt[1:],  # eliminate first "."
-                    # , out_dir=dir_dst
-                    out_dir=pl_dst.name
-                    , path_src=pl_src)
-                break
-        print("[Debug] CMD(slide2img):" + cmd)
-        tokens = shlex.split(cmd)
-        # subprocess.run(tokens)
-        output = check_output(tokens, stderr=STDOUT).decode("utf8")
-        print("Output: %s" % output)
-        if output == "Error: source file could not be loaded":
-            """なぜかLO Vanillaで出現？"""
-            # raise Exception("")
-            print("[ERROR] なぜかLO Vanillaで出現？")
-
-        """ Add head "tmp_" to converted filename """
-
-        plib_pdf_convd = pl_dst.joinpath(pl_src.name).with_suffix(cur_to_fmt)
-        plib_pdf_convd_tmp = plib_pdf_convd.with_name("tmp_" + plib_pdf_convd.name)
-
-        cmd_cp = "cp -f %s %s" % (plib_pdf_convd, plib_pdf_convd.with_name("pre-crop_" + plib_pdf_convd.name))
-        tokens = shlex.split(cmd_cp)
-        output = check_output(tokens, stderr=STDOUT).decode("utf8")
-        print("Output: %s" % output)
-
-        # pl_src.rename(pl_src.with_name("tmp_"+pl_src.name))
-        # pl_src.rename(plib_pdf_convd_tmp)
-        # pl_src.with_name("tmp_"+pl_src.name)
+        pl_src2 = self._conv_slide(pl_src=pl_src, pl_dst=pl_dst, to_fmt=cur_to_fmt)
         if is_crop:
-            p_src_cropped = self._crop_img(p_src_img=plib_pdf_convd, p_dst=self._p_dst_dir, to_img_fmt=cur_to_fmt)
+            p_src_cropped = self._crop_img(p_src_img=pl_src2, p_dst=pl_dst, to_img_fmt=cur_to_fmt)
         """ pdf 2 eps """
-        if to_fmt == "eps":
-            self._conv2eps(pl_src=p_src_cropped, pl_dst=self._p_dst_dir)
+        if to_fmt == ".eps":
+            self._conv2eps(pl_src=p_src_cropped, pl_dst_dir=self._p_dst_dir)
         """ rm tmpfile"""
-        if plib_pdf_convd_tmp.exists():
-            pathlib.Path(plib_pdf_convd_tmp).unlink()
+        # if plib_pdf_convd_tmp.exists():
+        #     pathlib.Path(plib_pdf_convd_tmp).unlink()
         print("Converted")
 
     #

@@ -42,4 +42,4 @@ ChangeHandler(
 ).start()
 
 # FIXME: 上記で制御が戻ってこないので、下記実行されず
-run_cmd("cp %s %s" % (p_target, p_src.joinpath(test_img)))
+# run_cmd("cp %s %s" % (p_target, p_src.joinpath(test_img)))

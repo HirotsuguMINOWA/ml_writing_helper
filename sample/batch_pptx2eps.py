@@ -15,7 +15,7 @@ conv = ChangeHandler(
     , dst_ext_no_period="png"
 )
 conv.convert(
-    path_src='fig_src/test.pptx',
+    path_src=p_src.joinpath("test.pptx"),
     dir_dst=p_dst.as_posix(),
     to_fmt="eps"
 )

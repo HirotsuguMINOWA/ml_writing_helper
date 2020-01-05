@@ -8,7 +8,7 @@ conv = ChangeHandler(
     , dst_ext_no_period=""
 )
 conv.convert(
-    path_src='fig_src/test.odp',
+    path_src=p_src.joinpath("test.pptx"),
     dir_dst=p_dst.as_posix(),
     to_fmt="pdf"
 )
