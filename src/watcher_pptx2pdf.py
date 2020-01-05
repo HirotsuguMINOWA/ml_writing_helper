@@ -3,7 +3,6 @@
 # TODO: bin(soffice, imagemagick'convert and so on)の存在確認
 # TODO: pdfは透過png?が黒くなるためデフォルトはpng
 # TODO: __init__.pyへ移せ2020,4月前に
-# TODO: _conv_slideなるメソッドをconvメソッドへ
 # TODO: dest->dstへ要修正
 # FIXME: croppingした結果をsrc pathに保存しているのではなく, dst pathに保存しろ
 # TODO: dstとsrcフォルダの生成、実行時に。
@@ -178,7 +177,7 @@ class ChangeHandler(FileSystemEventHandler):
         :return:
         """
 
-    def _conv_slide(self, path_src, dir_dest, to_fmt=".png", is_crop=True):  # , dest_ext_no_period="pdf"):
+    def convert(self, path_src, dir_dest, to_fmt=".png", is_crop=True):  # , dest_ext_no_period="pdf"):
         """
         ppt->pdf->cropping
         :param dest_ext: without period!!
@@ -307,8 +306,8 @@ class ChangeHandler(FileSystemEventHandler):
         filepath = event.src_path
         filename = os.path.basename(filepath)
         print('%sができました' % filename)
-        self._conv_slide(path_src=event.src_path, dir_dest=self._p_dest_dir,
-                         to_fmt=self.dest_ext_no_period)  # , dest_ext_no_period="png")
+        self.convert(path_src=event.src_path, dir_dest=self._p_dest_dir,
+                     to_fmt=self.dest_ext_no_period)  # , dest_ext_no_period="png")
 
     def on_modified(self, event):
         filepath = event.src_path
