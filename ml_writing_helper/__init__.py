@@ -2,7 +2,6 @@
 
 # TODO: bin(soffice, imagemagick'convert and so on)の存在確認
 # TODO: pdfは透過png?が黒くなるためデフォルトはpng
-# FIXME: croppingした結果をsrc pathに保存しているのではなく, dst pathに保存しろ
 # TODO: dstとsrcフォルダの生成、実行時に。
 # target_dir = "app_single/_fig_src"
 # _p_dst_dir = "app_single/figs"
