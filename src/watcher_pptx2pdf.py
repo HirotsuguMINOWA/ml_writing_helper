@@ -31,6 +31,8 @@ from pathlib import Path
 #     pdf=auto()
 #     none=auto()
 
+# 出力がepsの場合、監視folderにpngなど画像ファイルが書き込まれたらepsへ変換するコードをかけ
+
 class ChangeHandler(FileSystemEventHandler):
 
     def __init__(self
@@ -50,10 +52,12 @@ class ChangeHandler(FileSystemEventHandler):
         Keyword Arguments:
             dest_ext_no_period {str} -- [description] (default: {"png"})
         """
+        # TODO: startメソッドへmonitoring_dirやoutput_dirを移せ
         # TODO: 各コマンドのPATHのチェック。OSのPATHに登録されている事前提、加えてデフォルトのPATHチェック。それで見つからなければWarningだけだす。
         """[注意]
         本プログラムのScriptが存在するPATHをwcdへ移動とする
         """
+        # print("Abs PATH:%s" % __file__)
         os.chdir(os.path.dirname(os.path.abspath(__file__)))
         # p=pathlib.Path.parent
         # p.as_posix()
@@ -157,6 +161,7 @@ class ChangeHandler(FileSystemEventHandler):
             warn = """
             [Warning]
             [Warning].odpを.pdf/.epsへの変換はCropで失敗します!!!
+            [Warning] PowerPointを使え
             [Warning]
             """
             print(warn)
