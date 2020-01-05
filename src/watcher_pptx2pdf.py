@@ -115,7 +115,7 @@ class ChangeHandler(FileSystemEventHandler):
         # output = check_output(tokens, stderr=STDOUT).decode("utf8")
         return Path(p_dest.with_name(p_src_img.name).with_suffix(".%s" % to_img_fmt))
 
-    def __run_cmd(self, cmd: str, is_print=True):
+    def _run_cmd(self, cmd: str, is_print=True):
         """
         コマンド(CLI)の実行
         :param cmd:
@@ -241,7 +241,7 @@ class ChangeHandler(FileSystemEventHandler):
         #         plib_pdf_convd.with_suffix(".png")
         #         , pl_dest.joinpath(plib_pdf_convd.name).with_suffix(".pdf")
         #     )
-        #     self.__run_cmd(cmd)
+        #     self._run_cmd(cmd)
         """ rm tmpfile"""
         if plib_pdf_convd_tmp.exists():
             pathlib.Path(plib_pdf_convd_tmp).unlink()
