@@ -135,7 +135,8 @@ class ChangeHandler(FileSystemEventHandler):
         # return Path(p_dst.with_name(p_src_img.name).with_suffix("%s" % to_img_fmt))
         return p_dst
 
-    def _run_cmd(self, cmd: str, is_print=True):
+    @staticmethod
+    def _run_cmd(cmd: str, short_msg="", is_print=True):
         """
         コマンド(CLI)の実行
         :param cmd:
@@ -143,12 +144,11 @@ class ChangeHandler(FileSystemEventHandler):
         :return:
         """
         if is_print:
-            print("CMD:%s" % cmd)
+            print("[Debug] CMD(%s):%s" % (short_msg, cmd))
         tokens = shlex.split(cmd)
-        # subprocess.run(tokens)
         output = check_output(tokens, stderr=STDOUT).decode("utf8")
         if is_print:
-            print("Output: %s" % output)
+            print("Output(%s):%s" % (short_msg, cmd))
         return output
 
     @staticmethod
@@ -279,7 +279,10 @@ class ChangeHandler(FileSystemEventHandler):
     def convert(self, path_src, dir_dst, to_fmt=".png", is_crop=True):  # , dst_ext_no_period="pdf"):
         """
         ppt->pdf->cropping
-        :param dst_ext: without period!!
+        :param path_src:
+        :param dir_dst: Indicating dir path not file path
+        :param to_fmt: format type converted
+        :param is_crop: Whether crop or not
         """
 
         # init1
