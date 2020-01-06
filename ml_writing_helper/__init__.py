@@ -306,7 +306,7 @@ class ChangeHandler(FileSystemEventHandler):
             print("[Info] Image->croppingしてdst pathへコピーします")
             pl_src2 = self._crop_img(pl_src, pl_dst.joinpath(pl_src.stem + pl_src.suffix),
                                      to_img_fmt=pl_src.suffix)
-            if to_fmt==".eps":
+            if to_fmt == ".eps":
                 self._conv2eps(pl_src=pl_src2, pl_dst_dir=pl_dst.joinpath(pl_src.stem + pl_src.suffix))
             return
 
