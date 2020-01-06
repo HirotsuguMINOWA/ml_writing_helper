@@ -157,9 +157,9 @@ class ChangeHandler(FileSystemEventHandler):
 
         :param pl_src:
         :param pl_dst_dir: directoryのみ
+        :param del_src: del src of as tmp
         :return:
         """
-        # TODO: srcファイルを削除するargを設ける事
         if pl_src.suffix not in (".jpeg", ".jpg", ".png", ".pdf"):
             return
         print("[Info] Convert to eps")
@@ -173,10 +173,10 @@ class ChangeHandler(FileSystemEventHandler):
             print("出力拡張子を.epsに変えました")
             pl_dst_dir = pl_dst_dir.with_suffix(".eps")
 
-        cmd = "{cmd_conv} {p_src} {p_dst}".format(
+        cmd = "{cmd_conv} {src} {dst}".format(
             cmd_conv="convert"
-            , p_src=pl_src
-            , p_dst=pl_dst_dir
+            , src=pl_src
+            , dst=pl_dst_dir
         )
         print("[Debug] CMD(convert): %s" % cmd)
         tokens = shlex.split(cmd)

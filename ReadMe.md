@@ -1,6 +1,15 @@
 # Writing Supporter
 
-## 注意
+## Usage
+
+## Caution
+
+## 複数の連番ファイル(file-0.eps,file-1.eps,...)で出力される
+- 解決方法: 1頁目以外非表示にする(@powerpointで確認)
+  - スライド(PowerPoint/odp too?)もLibreOffice 6.3.4?から1頁目以外も変換後pdfに含まれるようになってしまったので、
+  - .epsによく起こりがち？
+
+## 注意@Design
 
 - LaTeXには`.eps`がよい
 - Markdownには`.png`へ変換がよい
