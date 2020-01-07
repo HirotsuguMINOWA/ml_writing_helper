@@ -284,48 +284,50 @@ class ChangeHandler(FileSystemEventHandler):
             return pl_dst
 
     @classmethod
-    def convert(cls, path_src, dir_dst, to_fmt=".png", is_crop=True):  # , dst_ext_no_period="pdf"):
+    def convert(cls, src_file_path, dst_dir, to_fmt=".png", is_crop=True):  # , dst_ext_no_period="pdf"):
         """
         ppt->pdf->cropping
-        :param path_src:
-        :param dir_dst: Indicating dir path not file path
+        :param src_file_path:
+        :param dst_dir: Indicating dir path. NOT file path
         :param to_fmt: format type converted
         :param is_crop: Whether crop or not
         """
 
         # init1
-        pl_src = Path(path_src)  # pathlibのインスタンス
-        if not pl_src.is_absolute():
+        src_pl = Path(src_file_path)  # pathlibのインスタンス
+        if not src_pl.is_absolute():
             raise Exception("path_srcは絶対Pathで指定して下さい")
         #
         # チェック
         #
         if to_fmt == "":
-            to_fmt = pl_src.suffix
+            to_fmt = src_pl.suffix
         elif to_fmt[0] != ".":
             to_fmt = "." + to_fmt
 
         # init2
-        pl_dst = Path(dir_dst)
-        os.chdir(pl_dst.parent)  # important!
+        dst_pl = Path(dst_dir)
+        if not dst_dir.is_dir():
+            raise Exception("dst_dir(2nd arg)は、ファイルではなく、フォルダのPATHを指定して下さい")
+        os.chdir(dst_pl.parent)  # important!
 
         # TODO: odp?に要対応.LibreOffice
-        if pl_src.suffix in (".png", ".jpg", ".jpeg") and not pl_src.name.startswith("~"):
+        if src_pl.suffix in (".png", ".jpg", ".jpeg") and not src_pl.name.startswith("~"):
             """
             files entered in src_folder, converted into pl_dst_dir wich cropping. and conv to eps
             """
             print("[Info] Image->croppingしてdst pathへコピーします")
-            pl_src2 = cls._crop_img(pl_src, pl_dst.joinpath(pl_src.stem + pl_src.suffix),
-                                    to_img_fmt=pl_src.suffix)
+            pl_src2 = cls._crop_img(src_pl, dst_pl.joinpath(src_pl.stem + src_pl.suffix),
+                                    to_img_fmt=src_pl.suffix)
             if to_fmt == ".eps":
-                cls._conv2eps(pl_src=pl_src2, pl_dst_dir=pl_dst.joinpath(pl_src.stem + pl_src.suffix))
+                cls._conv2eps(pl_src=pl_src2, pl_dst_dir=dst_pl.joinpath(src_pl.stem + src_pl.suffix))
             return
 
-        elif pl_src.suffix in (".ppt", ".pptx", ".odp") and not pl_src.name.startswith("~"):
+        elif src_pl.suffix in (".ppt", ".pptx", ".odp") and not src_pl.name.startswith("~"):
             """
             スライドの変換
             """
-            if pl_src.suffix == ".odp" and to_fmt in [".pdf", ".eps"]:
+            if src_pl.suffix == ".odp" and to_fmt in [".pdf", ".eps"]:
                 """
                 .odp formatはpdfに変換するとpdfcropで失敗する。
                 よって、png形式で変換する
@@ -348,9 +350,9 @@ class ChangeHandler(FileSystemEventHandler):
                 cur_to_fmt = ".pdf"
             else:
                 cur_to_fmt = to_fmt
-            pl_src2 = cls._conv_slide(pl_src=pl_src, pl_dst=pl_dst, to_fmt=cur_to_fmt)
+            pl_src2 = cls._conv_slide(pl_src=src_pl, pl_dst=dst_pl, to_fmt=cur_to_fmt)
             if is_crop:
-                p_src_cropped = cls._crop_img(p_src_img=pl_src2, p_dst=pl_dst, to_img_fmt=cur_to_fmt)
+                p_src_cropped = cls._crop_img(p_src_img=pl_src2, p_dst=dst_pl, to_img_fmt=cur_to_fmt)
             """ pdf 2 eps """
             if to_fmt == ".eps":
                 cls._conv2eps(pl_src=p_src_cropped, pl_dst_dir=cls._p_dst_dir)
@@ -359,7 +361,7 @@ class ChangeHandler(FileSystemEventHandler):
             #     pathlib.Path(plib_pdf_convd_tmp).unlink()
             print("Converted")
         else:
-            print("非該当ファイル:%s" % path_src)
+            print("非該当ファイル:%s" % src_file_path)
 
     #
     # def conv2pnt(self, path_src, dir_dst):
@@ -376,7 +378,7 @@ class ChangeHandler(FileSystemEventHandler):
         filepath = event.src_path
         filename = os.path.basename(filepath)
         print('%sができました' % filename)
-        self.convert(path_src=event.src_path, dir_dst=self._p_dst_dir,
+        self.convert(src_file_path=event.src_path, dst_dir=self._p_dst_dir,
                      to_fmt=self.dst_ext_no_period)  # , dst_ext_no_period="png")
 
     def on_modified(self, event):
@@ -423,7 +425,7 @@ def convert():
     if not src_pl.is_absolute():
         src_pl = Path(os.getcwd()).joinpath(sys.argv[1])
     print("src_pl:%s" % src_pl)
-    ChangeHandler.convert(path_src=src_pl.as_posix(), dir_dst=sys.argv[2], to_fmt=sys.argv[3])  # , is_crop=sys.argv[4])
+    ChangeHandler.convert(src_file_path=src_pl.as_posix(), dst_dir=sys.argv[2], to_fmt=sys.argv[3])  # , is_crop=sys.argv[4])
     print("END-END-END")
     # if len(sys.argv) == 5:
     #     print("[Debug] sys.argv:%s" % sys.argv)

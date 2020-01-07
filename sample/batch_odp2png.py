@@ -8,7 +8,7 @@ conv = ChangeHandler(
     , dst_ext_no_period=""
 )
 conv.convert(
-    path_src=p_src.joinpath("test.odp"),
-    dir_dst=p_dst.as_posix(),
+    src_file_path=p_src.joinpath("test.odp"),
+    dst_dir=p_dst.as_posix(),
     to_fmt="png"
 )
