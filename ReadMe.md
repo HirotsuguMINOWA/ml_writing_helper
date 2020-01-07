@@ -1,4 +1,8 @@
-# Writing Supporter
+# ML Writing Helper
+
+## CLI
+- 書式: `convert4ml(src_path,dst_dir,to_fmt,is_crop)`
+
 
 ## Usage
 

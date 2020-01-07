@@ -11,6 +11,7 @@
 
 # import ftplib
 import shutil
+import sys
 
 from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
@@ -39,16 +40,21 @@ class FormatInput(StrEnum):
 
 
 class ChangeHandler(FileSystemEventHandler):
+    # FIXME: 下記２つのsofficeのlistは要整理
+    paths_soffice = ['soffice',  # pathが通っている前提の場合
+                     '/Applications/LibreOffice.app/Contents/MacOS/soffice',
+                     # '/Applications/LibreOffice Vanilla.app/Contents/MacOS/soffice' # srcがないと言われる
+                     ]
+    _ppaths_soffice = [
+        Path('soffice'),
+        Path('/Applications/LibreOffice.app/Contents/MacOS/soffice')
+    ]
 
     def __init__(self
                  , monitoring_dir
                  , output_dir=None
                  , dst_ext_no_period="png"
-                 , export_fmts=["png", "eps", "pdf"]
-                 , paths_soffice=['soffice',  # pathが通っている前提の場合
-                                  '/Applications/LibreOffice.app/Contents/MacOS/soffice',
-                                  # '/Applications/LibreOffice Vanilla.app/Contents/MacOS/soffice' # srcがないと言われる
-                                  ]):
+                 , export_fmts=["png", "eps", "pdf"]):
         """[summary]
 
         Arguments:
@@ -80,7 +86,7 @@ class ChangeHandler(FileSystemEventHandler):
             self._p_dst_dir = Path(output_dir)
         else:
             self._p_dst_dir = Path(monitoring_dir).joinpath(output_dir)
-        self._ppaths_soffice = [Path(x) for x in paths_soffice]
+        self._ppaths_soffice = [Path(x) for x in self.paths_soffice]
         #
         # 拡張子チェック
         #
@@ -193,7 +199,8 @@ class ChangeHandler(FileSystemEventHandler):
         if del_src:
             pl_src.unlink()
 
-    def _conv_slide(self, pl_src: Path, pl_dst: Path, to_fmt=".png"):
+    @classmethod
+    def _conv_slide(cls, pl_src: Path, pl_dst: Path, to_fmt=".png"):
         """
 
         :param pl_src:
@@ -216,7 +223,7 @@ class ChangeHandler(FileSystemEventHandler):
         print("[Debug] CWD:%s" % os.getcwd())
         found_libreoffice = False
 
-        for p_soffice in self._ppaths_soffice:  # type: Path
+        for p_soffice in cls._ppaths_soffice:  # type: Path
             if p_soffice.exists():
                 cmd = "'{path_soffice}' --headless --convert-to {dst_ext} --outdir '{out_dir}' '{path_src}'".format(
                     # cmd = "'{path_soffice}' --headless --convert-to {dst_ext} {path_src}".format(
@@ -276,7 +283,8 @@ class ChangeHandler(FileSystemEventHandler):
             # # pl_src.with_name("tmp_"+pl_src.name)
             return pl_dst
 
-    def convert(self, path_src, dir_dst, to_fmt=".png", is_crop=True):  # , dst_ext_no_period="pdf"):
+    @classmethod
+    def convert(cls, path_src, dir_dst, to_fmt=".png", is_crop=True):  # , dst_ext_no_period="pdf"):
         """
         ppt->pdf->cropping
         :param path_src:
@@ -307,51 +315,51 @@ class ChangeHandler(FileSystemEventHandler):
             files entered in src_folder, converted into pl_dst_dir wich cropping. and conv to eps
             """
             print("[Info] Image->croppingしてdst pathへコピーします")
-            pl_src2 = self._crop_img(pl_src, pl_dst.joinpath(pl_src.stem + pl_src.suffix),
-                                     to_img_fmt=pl_src.suffix)
+            pl_src2 = cls._crop_img(pl_src, pl_dst.joinpath(pl_src.stem + pl_src.suffix),
+                                    to_img_fmt=pl_src.suffix)
             if to_fmt == ".eps":
-                self._conv2eps(pl_src=pl_src2, pl_dst_dir=pl_dst.joinpath(pl_src.stem + pl_src.suffix))
+                cls._conv2eps(pl_src=pl_src2, pl_dst_dir=pl_dst.joinpath(pl_src.stem + pl_src.suffix))
             return
 
-        if pl_src.suffix not in (".ppt", ".pptx", ".odp") and not pl_src.name.startswith("~"):
-            print("[Info] Powerpoint / LibreOffice以外は変換せず")
-            return
-        """
-        スライドの変換
-        """
-        if pl_src.suffix == ".odp" and to_fmt in [".pdf", ".eps"]:
+        elif pl_src.suffix in (".ppt", ".pptx", ".odp") and not pl_src.name.startswith("~"):
             """
-            .odp formatはpdfに変換するとpdfcropで失敗する。
-            よって、png形式で変換する
+            スライドの変換
             """
-            warn = """
-              [Warning]
-              [Warning].odpを.pdf/.epsへの変換はCropで失敗します!!!
-              [Warning] LibreOfficeではPowerPoint形式(.pptx)に変換して使ってください。
-              [Warning]
-              """
-            print(warn)
-            cur_to_fmt = ".pdf"
-            # elif pl_src.suffix == ".odp" and to_fmt in ["pdf", "eps"]:
-            #     """
-            #     .odp formatはpdfに変換するとpdfcropで失敗する。
-            #     よって、png形式で変換する
-            #     """
-            #     cur_to_fmt = "png"
-        elif to_fmt == ".eps":
-            cur_to_fmt = ".pdf"
+            if pl_src.suffix == ".odp" and to_fmt in [".pdf", ".eps"]:
+                """
+                .odp formatはpdfに変換するとpdfcropで失敗する。
+                よって、png形式で変換する
+                """
+                warn = """
+                  [Warning]
+                  [Warning].odpを.pdf/.epsへの変換はCropで失敗します!!!
+                  [Warning] LibreOfficeではPowerPoint形式(.pptx)に変換して使ってください。
+                  [Warning]
+                  """
+                print(warn)
+                cur_to_fmt = ".pdf"
+                # elif pl_src.suffix == ".odp" and to_fmt in ["pdf", "eps"]:
+                #     """
+                #     .odp formatはpdfに変換するとpdfcropで失敗する。
+                #     よって、png形式で変換する
+                #     """
+                #     cur_to_fmt = "png"
+            elif to_fmt == ".eps":
+                cur_to_fmt = ".pdf"
+            else:
+                cur_to_fmt = to_fmt
+            pl_src2 = cls._conv_slide(pl_src=pl_src, pl_dst=pl_dst, to_fmt=cur_to_fmt)
+            if is_crop:
+                p_src_cropped = cls._crop_img(p_src_img=pl_src2, p_dst=pl_dst, to_img_fmt=cur_to_fmt)
+            """ pdf 2 eps """
+            if to_fmt == ".eps":
+                cls._conv2eps(pl_src=p_src_cropped, pl_dst_dir=cls._p_dst_dir)
+            """ rm tmpfile"""
+            # if plib_pdf_convd_tmp.exists():
+            #     pathlib.Path(plib_pdf_convd_tmp).unlink()
+            print("Converted")
         else:
-            cur_to_fmt = to_fmt
-        pl_src2 = self._conv_slide(pl_src=pl_src, pl_dst=pl_dst, to_fmt=cur_to_fmt)
-        if is_crop:
-            p_src_cropped = self._crop_img(p_src_img=pl_src2, p_dst=pl_dst, to_img_fmt=cur_to_fmt)
-        """ pdf 2 eps """
-        if to_fmt == ".eps":
-            self._conv2eps(pl_src=p_src_cropped, pl_dst_dir=self._p_dst_dir)
-        """ rm tmpfile"""
-        # if plib_pdf_convd_tmp.exists():
-        #     pathlib.Path(plib_pdf_convd_tmp).unlink()
-        print("Converted")
+            print("非該当ファイル:%s" % path_src)
 
     #
     # def conv2pnt(self, path_src, dir_dst):
@@ -399,6 +407,32 @@ class ChangeHandler(FileSystemEventHandler):
             raise Exception("Current path: %s" % pathlib.Path.cwd())
 
 
+def convert():
+    """
+    CLI entry point:
+    :param src_path:
+    :param dst_dir:
+    :param to_fmt:
+    :param is_crop:
+    :return:
+    """
+    # TODO: 下記argparseで書き直せ
+    # TODO: [Debug]ラインを消せ、if debugなら。
+    print("[Debug] sys.argv:%s" % sys.argv)
+    src_pl = Path(sys.argv[1])
+    if not src_pl.is_absolute():
+        src_pl = Path(os.getcwd()).joinpath(sys.argv[1])
+    print("src_pl:%s" % src_pl)
+    ChangeHandler.convert(path_src=src_pl.as_posix(), dir_dst=sys.argv[2], to_fmt=sys.argv[3])  # , is_crop=sys.argv[4])
+    print("END-END-END")
+    # if len(sys.argv) == 5:
+    #     print("[Debug] sys.argv:%s" % sys.argv)
+    #     ChangeHandler.convert(path_src=sys.argv[1], dir_dst=sys.argv[2], to_fmt=sys.argv[3], is_crop=sys.argv[4])
+    # else:
+    #     print('please specify 4 arguments', file=sys.stderr)
+    #     sys.exit(1)
+
+
 if __name__ in '__main__':
     ins = ChangeHandler(monitoring_dir="app_single/_fig_src", output_dir="app_single/figs")
-    ins.main()
+    ins.convert()
