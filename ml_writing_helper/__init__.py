@@ -391,6 +391,7 @@ class ChangeHandler(FileSystemEventHandler):
         filename = os.path.basename(filepath)
         print('%sを削除しました' % filename)
 
+
     def start(self):
         try:
             while 1:
@@ -409,6 +410,18 @@ class ChangeHandler(FileSystemEventHandler):
             raise Exception("Current path: %s" % pathlib.Path.cwd())
 
 
+@classmethod
+def cli_watch():
+    """
+    監視を開始する
+    :param src_path:
+    :param dst_dir:
+    :param to_fmt:
+    :param is_crop:
+    :return:
+    """
+    pass
+
 def convert():
     """
     CLI entry point:
@@ -418,6 +431,19 @@ def convert():
     :param is_crop:
     :return:
     """
+    # import argparse
+    #
+    # parser = argparse.ArgumentParser(description='Markuplanguage(.md, .tex) Helper', epilog="詳しい説明")
+    # parser.add_argument('integers', metavar='N', type=int, nargs='+',
+    #                     help='an integer for the accumulator')
+    # parser.add_argument('--sum', dest='accumulate', action='store_const',
+    #                     const=sum, default=max,
+    #                     help='sum the integers (default: find the max)')
+    # parser.add_argument()
+    #
+    # args = parser.parse_args()
+    # print(args.accumulate(args.integers))
+
     # TODO: 下記argparseで書き直せ
     # TODO: [Debug]ラインを消せ、if debugなら。
     print("[Debug] sys.argv:%s" % sys.argv)
@@ -425,7 +451,8 @@ def convert():
     if not src_pl.is_absolute():
         src_pl = Path(os.getcwd()).joinpath(sys.argv[1])
     print("src_pl:%s" % src_pl)
-    ChangeHandler.convert(src_file_path=src_pl.as_posix(), dst_dir=sys.argv[2], to_fmt=sys.argv[3])  # , is_crop=sys.argv[4])
+    ChangeHandler.convert(src_file_path=src_pl.as_posix(), dst_dir=sys.argv[2],
+                          to_fmt=sys.argv[3])  # , is_crop=sys.argv[4])
     print("END-END-END")
     # if len(sys.argv) == 5:
     #     print("[Debug] sys.argv:%s" % sys.argv)
