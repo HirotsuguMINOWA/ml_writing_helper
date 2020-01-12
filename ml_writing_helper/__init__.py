@@ -29,13 +29,6 @@ from strenum import StrEnum
 
 # from strenum import StrEnum
 
-class FormatInput(StrEnum):
-    png = ".png"
-    jpeg = ".jpeg"
-    pdf = ".pdf"
-    none = "none"
-
-
 # 出力がepsの場合、監視folderにpngなど画像ファイルが書き込まれたらepsへ変換するコードをかけ
 
 
@@ -53,7 +46,7 @@ class ChangeHandler(FileSystemEventHandler):
     def __init__(self
                  , monitoring_dir
                  , output_dir=None
-                 , dst_ext_no_period="png"
+                 , to_fmt="png"
                  , export_fmts=["png", "eps", "pdf"]):
         """[summary]
 
@@ -63,7 +56,7 @@ class ChangeHandler(FileSystemEventHandler):
             export_fmts {list} -- 出力フォーマット。複数指定すると、その全てのフォーマットに出力。
         
         Keyword Arguments:
-            dst_ext_no_period {str} -- [description] (default: {"png"})
+            to_fmt {str} -- [description] (default: {"png"})
         """
         # TODO: startメソッドへmonitoring_dirやoutput_dirを移せ
         # TODO: 各コマンドのPATHのチェック。OSのPATHに登録されている事前提、加えてデフォルトのPATHチェック。それで見つからなければWarningだけだす。
@@ -90,12 +83,12 @@ class ChangeHandler(FileSystemEventHandler):
         #
         # 拡張子チェック
         #
-        if dst_ext_no_period == "":
-            self.dst_ext_no_period = self._p_src.suffix
-        elif dst_ext_no_period[0] != ".":
-            self.dst_ext_no_period = "." + dst_ext_no_period
+        if to_fmt == "":
+            self.to_fmt = self._p_src.suffix
+        elif to_fmt[0] != ".":
+            self.to_fmt = "." + to_fmt
         else:
-            self.dst_ext_no_period = dst_ext_no_period
+            self.to_fmt = to_fmt
         # TODO: 入力フォーマットか否か要チェック
 
     @staticmethod
@@ -109,7 +102,7 @@ class ChangeHandler(FileSystemEventHandler):
         """
         """ Calc path of dst """
         # path_dst = pathlib.Path(dir_dst) / pl_src.name
-        # path_dst = pathlib.Path(dir_dst) / plib_src.with_suffix("." + self.dst_ext_no_period).name
+        # path_dst = pathlib.Path(dir_dst) / plib_src.with_suffix("." + self.to_fmt).name
         if not p_src_img.exists():
             print("[Error] %s not found" % p_src_img)
             return
@@ -200,7 +193,7 @@ class ChangeHandler(FileSystemEventHandler):
             pl_src.unlink()
 
     @classmethod
-    def _conv_slide(cls, pl_src: Path, pl_dst: Path, to_fmt=".png"):
+    def _conv_slide(self, pl_src: Path, pl_dst: Path, to_fmt=".png"):
         """
 
         :param pl_src:
@@ -223,7 +216,7 @@ class ChangeHandler(FileSystemEventHandler):
         print("[Debug] CWD:%s" % os.getcwd())
         found_libreoffice = False
 
-        for p_soffice in cls._ppaths_soffice:  # type: Path
+        for p_soffice in self._ppaths_soffice:  # type: Path
             if p_soffice.exists():
                 cmd = "'{path_soffice}' --headless --convert-to {dst_ext} --outdir '{out_dir}' '{path_src}'".format(
                     # cmd = "'{path_soffice}' --headless --convert-to {dst_ext} {path_src}".format(
@@ -283,8 +276,7 @@ class ChangeHandler(FileSystemEventHandler):
             # # pl_src.with_name("tmp_"+pl_src.name)
             return pl_dst
 
-    @classmethod
-    def convert(cls, src_file_path, dst_dir, to_fmt=".png", is_crop=True):  # , dst_ext_no_period="pdf"):
+    def convert(self, src_file_path, dst_dir, to_fmt=".png", is_crop=True):  # , to_fmt="pdf"):
         """
         ppt->pdf->cropping
         :param src_file_path:
@@ -305,10 +297,14 @@ class ChangeHandler(FileSystemEventHandler):
         elif to_fmt[0] != ".":
             to_fmt = "." + to_fmt
 
+        if not src_pl.exists():
+            raise Exception("src path(1st-arg:%s)が見つかりません、訂正して下さい" % src_pl.as_posix())
         # init2
         dst_pl = Path(dst_dir)
+        if not dst_dir.exists():
+            dst_dir.mkdir()
         if not dst_dir.is_dir():
-            raise Exception("dst_dir(2nd arg)は、ファイルではなく、フォルダのPATHを指定して下さい")
+            raise Exception("dst_dir(2nd-arg:%s)は、ファイルではなく、フォルダのPATHを指定して下さい" % dst_dir)
         os.chdir(dst_pl.parent)  # important!
 
         # TODO: odp?に要対応.LibreOffice
@@ -317,10 +313,10 @@ class ChangeHandler(FileSystemEventHandler):
             files entered in src_folder, converted into pl_dst_dir wich cropping. and conv to eps
             """
             print("[Info] Image->croppingしてdst pathへコピーします")
-            pl_src2 = cls._crop_img(src_pl, dst_pl.joinpath(src_pl.stem + src_pl.suffix),
+            pl_src2 = self._crop_img(src_pl, dst_pl.joinpath(src_pl.stem + src_pl.suffix),
                                     to_img_fmt=src_pl.suffix)
             if to_fmt == ".eps":
-                cls._conv2eps(pl_src=pl_src2, pl_dst_dir=dst_pl.joinpath(src_pl.stem + src_pl.suffix))
+                self._conv2eps(pl_src=pl_src2, pl_dst_dir=dst_pl.joinpath(src_pl.stem + src_pl.suffix))
             return
 
         elif src_pl.suffix in (".ppt", ".pptx", ".odp") and not src_pl.name.startswith("~"):
@@ -350,12 +346,12 @@ class ChangeHandler(FileSystemEventHandler):
                 cur_to_fmt = ".pdf"
             else:
                 cur_to_fmt = to_fmt
-            pl_src2 = cls._conv_slide(pl_src=src_pl, pl_dst=dst_pl, to_fmt=cur_to_fmt)
+            pl_src2 = self._conv_slide(pl_src=src_pl, pl_dst=dst_pl, to_fmt=cur_to_fmt)
             if is_crop:
-                p_src_cropped = cls._crop_img(p_src_img=pl_src2, p_dst=dst_pl, to_img_fmt=cur_to_fmt)
+                p_src_cropped = self._crop_img(p_src_img=pl_src2, p_dst=dst_pl, to_img_fmt=cur_to_fmt)
             """ pdf 2 eps """
             if to_fmt == ".eps":
-                cls._conv2eps(pl_src=p_src_cropped, pl_dst_dir=cls._p_dst_dir)
+                self._conv2eps(pl_src=p_src_cropped, pl_dst_dir=self._p_dst_dir)
             """ rm tmpfile"""
             # if plib_pdf_convd_tmp.exists():
             #     pathlib.Path(plib_pdf_convd_tmp).unlink()
@@ -379,7 +375,7 @@ class ChangeHandler(FileSystemEventHandler):
         filename = os.path.basename(filepath)
         print('%sができました' % filename)
         self.convert(src_file_path=event.src_path, dst_dir=self._p_dst_dir,
-                     to_fmt=self.dst_ext_no_period)  # , dst_ext_no_period="png")
+                     to_fmt=self.to_fmt)  # , to_fmt="png")
 
     def on_modified(self, event):
         filepath = event.src_path
@@ -390,7 +386,6 @@ class ChangeHandler(FileSystemEventHandler):
         filepath = event.src_path
         filename = os.path.basename(filepath)
         print('%sを削除しました' % filename)
-
 
     def start(self):
         try:
@@ -421,6 +416,7 @@ def cli_watch():
     :return:
     """
     pass
+
 
 def convert():
     """
