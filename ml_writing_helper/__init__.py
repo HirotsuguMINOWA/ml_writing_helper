@@ -314,7 +314,7 @@ class ChangeHandler(FileSystemEventHandler):
             """
             print("[Info] Image->croppingしてdst pathへコピーします")
             pl_src2 = self._crop_img(src_pl, dst_pl.joinpath(src_pl.stem + src_pl.suffix),
-                                    to_img_fmt=src_pl.suffix)
+                                     to_img_fmt=src_pl.suffix)
             if to_fmt == ".eps":
                 self._conv2eps(pl_src=pl_src2, pl_dst_dir=dst_pl.joinpath(src_pl.stem + src_pl.suffix))
             return
@@ -369,6 +369,17 @@ class ChangeHandler(FileSystemEventHandler):
     #         print("[Debug] CMD: ppt2pdf" + cmd)
     #         tokens = shlex.split(cmd)
     #         subprocess.run(tokens)
+
+    def convert_multi(self, src_dir, dst_dir, to_fmt=".png", is_crop=True):
+        """
+        dir内の複数のファイルをencoding
+        :param src_dir:
+        :param dst_dir:
+        :param to_fmt:
+        :param is_crop:
+        :return:
+        """
+        pass
 
     def on_created(self, event):
         filepath = event.src_path
