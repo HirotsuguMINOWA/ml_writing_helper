@@ -407,8 +407,7 @@ class ChangeHandler(FileSystemEventHandler):
             observer.start()
             while True:
                 try:
-                    while True:
-                        time.sleep(sleep_time)
+                    time.sleep(sleep_time)
                 except KeyboardInterrupt:
                     observer.stop()
                 observer.join()
