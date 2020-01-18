@@ -423,7 +423,7 @@ class ChangeHandler(FileSystemEventHandler):
     @staticmethod
     def _check_path(path: (str, Path), pl_cwd=Path.cwd(), head_comment=""):
         """
-
+        src and dst pathの読み込みを代理
         :param path:
         :type path:str | Path
         :return:
