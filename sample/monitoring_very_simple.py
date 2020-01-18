@@ -1,7 +1,6 @@
-from ml_writing_helper.__init__ import ChangeHandler
-from pathlib import Path
-
-ChangeHandler(
-    monitoring_dir="fig_src", output_dir="fig_gen"
-    , dst_ext_no_period="eps"
-).start()
+from src.core import ChangeHandler
+ChangeHandler().monitor(
+    src_dir="fig_src"
+    , dst_dir="fig_gen"
+    , to_fmt="eps"
+)

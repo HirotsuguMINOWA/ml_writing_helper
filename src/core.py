@@ -43,11 +43,12 @@ class ChangeHandler(FileSystemEventHandler):
         Path('/Applications/LibreOffice.app/Contents/MacOS/soffice')
     ]
 
-    def __init__(self
-                 , monitoring_dir
-                 , output_dir=None
-                 , to_fmt="png"
-                 , export_fmts=["png", "eps", "pdf"]):
+    # def __init__(self
+    #              , monitoring_dir
+    #              , output_dir=None
+    #              , to_fmt="png"
+    #              , export_fmts=["png", "eps", "pdf"]):
+    def __init__(self):
         """[summary]
 
         Arguments:
@@ -63,32 +64,34 @@ class ChangeHandler(FileSystemEventHandler):
         """[注意]
         本プログラムのScriptが存在するPATHをwcdへ移動とする
         """
-        # print("Abs PATH:%s" % __file__)
-        os.chdir(os.path.dirname(os.path.abspath(__file__)))
-        # p=pathlib.Path.parent
-        # p.as_posix()
-        # os.chdir(pathlib.Path.parent.as_posix()) # Change directory into dir of this script
-        #
+        # # print("Abs PATH:%s" % __file__)
+        # os.chdir(os.path.dirname(os.path.abspath(__file__)))
+        # # p=pathlib.Path.parent
+        # # p.as_posix()
+        # # os.chdir(pathlib.Path.parent.as_posix()) # Change directory into dir of this script
+        # #
 
-        if not output_dir:
-            output_dir = monitoring_dir
-        self.target_dir = monitoring_dir
-        self._p_src = Path(monitoring_dir)
-        # self._p_dst_dir = output_dir
-        if Path(output_dir).is_absolute():
-            self._p_dst_dir = Path(output_dir)
-        else:
-            self._p_dst_dir = Path(monitoring_dir).joinpath(output_dir)
+        # if not output_dir:
+        #     output_dir = monitoring_dir
+        # self.target_dir = monitoring_dir
+        # self._p_src = Path(monitoring_dir)
+        # # self._p_dst_dir = output_dir
+        # if Path(output_dir).is_absolute():
+        #     self._p_dst_dir = Path(output_dir)
+        # else:
+        #     self._p_dst_dir = Path(monitoring_dir).joinpath(output_dir)
+        self._src_pl = None
+        self._dst_pl = None
         self._ppaths_soffice = [Path(x) for x in self.paths_soffice]
-        #
-        # 拡張子チェック
-        #
-        if to_fmt == "":
-            self.to_fmt = self._p_src.suffix
-        elif to_fmt[0] != ".":
-            self.to_fmt = "." + to_fmt
-        else:
-            self.to_fmt = to_fmt
+        # #
+        # # 拡張子チェック
+        # #
+        # if to_fmt == "":
+        #     self.to_fmt = self._p_src.suffix
+        # elif to_fmt[0] != ".":
+        #     self.to_fmt = "." + to_fmt
+        # else:
+        #     self.to_fmt = to_fmt
         # TODO: 入力フォーマットか否か要チェック
 
     @staticmethod
@@ -351,11 +354,14 @@ class ChangeHandler(FileSystemEventHandler):
                 p_src_cropped = self._crop_img(p_src_img=pl_src2, p_dst=dst_pl, to_img_fmt=cur_to_fmt)
             """ pdf 2 eps """
             if to_fmt == ".eps":
-                self._conv2eps(pl_src=p_src_cropped, pl_dst_dir=self._p_dst_dir)
+                self._conv2eps(pl_src=p_src_cropped, pl_dst_dir=self._dst_pl)
             """ rm tmpfile"""
             # if plib_pdf_convd_tmp.exists():
             #     pathlib.Path(plib_pdf_convd_tmp).unlink()
             print("Converted")
+        elif src_pl.suffix in ".bib" and not src_pl.name.startswith("~"):
+            print("[Debug] copied %s to %s" % (src_pl, dst_pl))
+            new_path = shutil.copy(src_pl.as_posix(), dst_pl)
         else:
             print("非該当ファイル:%s" % src_file_path)
 
@@ -385,7 +391,7 @@ class ChangeHandler(FileSystemEventHandler):
         filepath = event.src_path
         filename = os.path.basename(filepath)
         print('%sができました' % filename)
-        self.convert(src_file_path=event.src_path, dst_dir=self._p_dst_dir,
+        self.convert(src_file_path=event.src_path, dst_dir=self._dst_pl,
                      to_fmt=self.to_fmt)  # , to_fmt="png")
 
     def on_modified(self, event):
@@ -403,6 +409,59 @@ class ChangeHandler(FileSystemEventHandler):
             event_handler = self
             observer = Observer()
             observer.schedule(event_handler, self.target_dir, recursive=True)
+            # event_handler = ChangeHandler()
+            observer.start()
+            while True:
+                try:
+                    time.sleep(sleep_time)
+                except KeyboardInterrupt:
+                    observer.stop()
+                observer.join()
+        except Exception as e:
+            raise Exception("Current path: %s" % pathlib.Path.cwd())
+
+    @staticmethod
+    def _check_path(path: (str, Path), pl_cwd=Path.cwd(), head_comment=""):
+        """
+
+        :param path:
+        :type path:str | Path
+        :return:
+        """
+        if isinstance(path, str):
+            path_pl = Path(path)
+        elif isinstance(path, Path):
+            path_pl = path
+        else:
+            raise Exception("%s %s is not type str or Path(pathlib)" % (head_comment, path))
+
+        if not path_pl.is_absolute():
+            # if relative path, convert into absolute
+            path_pl = pl_cwd.joinpath(path)
+        return path_pl
+
+    def monitor(self, src_dir, dst_dir
+                , to_fmt="png"
+                , export_fmts=["png", "eps", "pdf"]
+                , sleep_time=0.5
+                ):
+
+        self._src_pl = self._check_path(src_dir)
+        self._dst_pl = self._check_path(dst_dir)
+
+        #
+        # 拡張子チェック
+        #
+        if to_fmt == "":
+            self.to_fmt = self._p_src.suffix
+        elif to_fmt[0] != ".":
+            self.to_fmt = "." + to_fmt
+        else:
+            self.to_fmt = to_fmt
+        try:
+            event_handler = self
+            observer = Observer()
+            observer.schedule(event_handler, self._src_pl.as_posix(), recursive=True)
             # event_handler = ChangeHandler()
             observer.start()
             while True:
