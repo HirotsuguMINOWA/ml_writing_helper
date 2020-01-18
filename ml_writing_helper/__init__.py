@@ -398,17 +398,17 @@ class ChangeHandler(FileSystemEventHandler):
         filename = os.path.basename(filepath)
         print('%sを削除しました' % filename)
 
-    def start(self):
+    def start(self, sleep_time=0.5):
         try:
-            while 1:
-                # event_handler = ChangeHandler()
-                event_handler = self
-                observer = Observer()
-                observer.schedule(event_handler, self.target_dir, recursive=True)
-                observer.start()
+            event_handler = self
+            observer = Observer()
+            observer.schedule(event_handler, self.target_dir, recursive=True)
+            # event_handler = ChangeHandler()
+            observer.start()
+            while True:
                 try:
                     while True:
-                        time.sleep(0.1)
+                        time.sleep(sleep_time)
                 except KeyboardInterrupt:
                     observer.stop()
                 observer.join()
