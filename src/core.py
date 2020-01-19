@@ -368,7 +368,7 @@ class ChangeHandler(FileSystemEventHandler):
             """
             tmp_src = src_pl  # .with_suffix("")
             tmp_dst = dst_pl.joinpath(src_pl.name)  # .with_suffix(".bib")
-            new_path = shutil.copy(tmp_src, tmp_dst)
+            new_path = shutil.copyfile(tmp_src, tmp_dst)
             print("[Info] copied %s to %s" % (tmp_src, tmp_dst))
         else:
             print("[Info] 未処理ファイル:%s" % src_pl)
