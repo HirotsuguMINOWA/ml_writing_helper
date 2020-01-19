@@ -10,6 +10,7 @@
 ###############################################################
 
 # import ftplib
+import asyncio
 import shutil
 import sys
 
@@ -46,7 +47,7 @@ class ChangeHandler(FileSystemEventHandler):
     # def __init__(self
     #              , monitoring_dir
     #              , output_dir=None
-    #              , to_fmt="png"
+    #              , _to_fmt="png"
     #              , export_fmts=["png", "eps", "pdf"]):
     def __init__(self):
         """[summary]
@@ -57,7 +58,7 @@ class ChangeHandler(FileSystemEventHandler):
             export_fmts {list} -- 出力フォーマット。複数指定すると、その全てのフォーマットに出力。
         
         Keyword Arguments:
-            to_fmt {str} -- [description] (default: {"png"})
+            _to_fmt {str} -- [description] (default: {"png"})
         """
         # TODO: startメソッドへmonitoring_dirやoutput_dirを移せ
         # TODO: 各コマンドのPATHのチェック。OSのPATHに登録されている事前提、加えてデフォルトのPATHチェック。それで見つからなければWarningだけだす。
@@ -82,16 +83,18 @@ class ChangeHandler(FileSystemEventHandler):
         #     self._p_dst_dir = Path(monitoring_dir).joinpath(output_dir)
         self._src_pl = None
         self._dst_pl = None
+        self._to_fmt = None
+        self._monitors = {}
         self._ppaths_soffice = [Path(x) for x in self.paths_soffice]
         # #
         # # 拡張子チェック
         # #
-        # if to_fmt == "":
-        #     self.to_fmt = self._p_src.suffix
-        # elif to_fmt[0] != ".":
-        #     self.to_fmt = "." + to_fmt
+        # if _to_fmt == "":
+        #     self._to_fmt = self._p_src.suffix
+        # elif _to_fmt[0] != ".":
+        #     self._to_fmt = "." + _to_fmt
         # else:
-        #     self.to_fmt = to_fmt
+        #     self._to_fmt = _to_fmt
         # TODO: 入力フォーマットか否か要チェック
 
     @staticmethod
@@ -105,7 +108,7 @@ class ChangeHandler(FileSystemEventHandler):
         """
         """ Calc path of dst """
         # path_dst = pathlib.Path(dir_dst) / pl_src.name
-        # path_dst = pathlib.Path(dir_dst) / plib_src.with_suffix("." + self.to_fmt).name
+        # path_dst = pathlib.Path(dir_dst) / plib_src.with_suffix("." + self._to_fmt).name
         if not p_src_img.exists():
             print("[Error] %s not found" % p_src_img)
             return
@@ -185,7 +188,7 @@ class ChangeHandler(FileSystemEventHandler):
         # subprocess.run(tokens)
         output = check_output(tokens, stderr=STDOUT).decode("utf8")
         print("Output: %s" % output)
-        # elif to_fmt == "pdf" and pl_src.suffix == ".odp":
+        # elif _to_fmt == "pdf" and pl_src.suffix == ".odp":
         #     ### conv png to pdf
         #     cmd = "convert %s %s" % (
         #         pl_src.with_suffix(".png")
@@ -254,7 +257,7 @@ class ChangeHandler(FileSystemEventHandler):
             """
             # pl_dst_dir = pl_dst_dir.joinpath(pl_out.with_suffix(pl_out.suffix).name)
             # else:
-            #     pl_out = pl_dst_dir.joinpath(pl_src.name + to_fmt)
+            #     pl_out = pl_dst_dir.joinpath(pl_src.name + _to_fmt)
 
             # # 存在していたら削除
             # if pl_dst_dir.exists():
@@ -279,35 +282,34 @@ class ChangeHandler(FileSystemEventHandler):
             # # pl_src.with_name("tmp_"+pl_src.name)
             return pl_dst
 
-    def convert(self, src_file_path, dst_dir, to_fmt=".png", is_crop=True):  # , to_fmt="pdf"):
+    def convert(self, src_file_apath, dst_dir_apath, to_fmt=".png", is_crop=True):  # , _to_fmt="pdf"):
         """
         ppt->pdf->cropping
-        :param src_file_path:
-        :param dst_dir: Indicating dir path. NOT file path
+        :param src_file_apath:
+        :param dst_dir_apath: Indicating dir path. NOT file path
         :param to_fmt: format type converted
         :param is_crop: Whether crop or not
         """
 
         # init1
-        src_pl = Path(src_file_path)  # pathlibのインスタンス
+        # FIXME: Pathしか受け付けないように要修正
+        src_pl = Path(src_file_apath)  # pathlibのインスタンス
         if not src_pl.is_absolute():
-            raise Exception("path_srcは絶対Pathで指定して下さい")
-        #
-        # チェック
-        #
-        if to_fmt == "":
-            to_fmt = src_pl.suffix
-        elif to_fmt[0] != ".":
-            to_fmt = "." + to_fmt
+            raise Exception("path_srcは絶対Pathで指定して下さい。src_path:%s" % src_pl)
+        src_file_apath = None  # 誤って参照しないように
 
-        if not src_pl.exists():
+        # チェック
+        to_fmt = self._validated_fmt(to_fmt=to_fmt, src_pl=src_pl)
+
+        if not src_pl.exists() and not to_fmt == ".bib":
             raise Exception("src path(1st-arg:%s)が見つかりません、訂正して下さい" % src_pl.as_posix())
         # init2
-        dst_pl = Path(dst_dir)
-        if not dst_dir.exists():
-            dst_dir.mkdir()
-        if not dst_dir.is_dir():
-            raise Exception("dst_dir(2nd-arg:%s)は、ファイルではなく、フォルダのPATHを指定して下さい" % dst_dir)
+        # FIXME: Pathしか受け付けないように要修正
+        dst_pl = Path(dst_dir_apath)
+        if not dst_dir_apath.exists():
+            dst_dir_apath.mkdir()
+        if not dst_dir_apath.is_dir():
+            raise Exception("dst_dir_apath(2nd-arg:%s)は、ファイルではなく、フォルダのPATHを指定して下さい" % dst_dir_apath)
         os.chdir(dst_pl.parent)  # important!
 
         # TODO: odp?に要対応.LibreOffice
@@ -339,7 +341,7 @@ class ChangeHandler(FileSystemEventHandler):
                   """
                 print(warn)
                 cur_to_fmt = ".pdf"
-                # elif pl_src.suffix == ".odp" and to_fmt in ["pdf", "eps"]:
+                # elif pl_src.suffix == ".odp" and _to_fmt in ["pdf", "eps"]:
                 #     """
                 #     .odp formatはpdfに変換するとpdfcropで失敗する。
                 #     よって、png形式で変換する
@@ -359,11 +361,17 @@ class ChangeHandler(FileSystemEventHandler):
             # if plib_pdf_convd_tmp.exists():
             #     pathlib.Path(plib_pdf_convd_tmp).unlink()
             print("Converted")
-        elif src_pl.suffix in ".bib" and not src_pl.name.startswith("~"):
-            print("[Debug] copied %s to %s" % (src_pl, dst_pl))
-            new_path = shutil.copy(src_pl.as_posix(), dst_pl)
+        elif src_pl.suffix == ".bib":  # and to_fmt == ".bib":
+            """
+            .bibファイルのコピー
+            注意).bib.partが生成されるが、瞬間的に.bibになる。それを捉えて該当フォルダへコピーしている
+            """
+            tmp_src = src_pl  # .with_suffix("")
+            tmp_dst = dst_pl.joinpath(src_pl.name)  # .with_suffix(".bib")
+            new_path = shutil.copy(tmp_src, tmp_dst)
+            print("[Debug] copied %s to %s" % (tmp_src, tmp_dst))
         else:
-            print("非該当ファイル:%s" % src_file_path)
+            print("非該当ファイル:%s" % src_pl)
 
     #
     # def conv2pnt(self, path_src, dir_dst):
@@ -376,33 +384,53 @@ class ChangeHandler(FileSystemEventHandler):
     #         tokens = shlex.split(cmd)
     #         subprocess.run(tokens)
 
-    def convert_multi(self, src_dir, dst_dir, to_fmt=".png", is_crop=True):
-        """
-        dir内の複数のファイルをencoding
-        :param src_dir:
-        :param dst_dir:
-        :param to_fmt:
-        :param is_crop:
-        :return:
-        """
-        pass
+    def _road_balancer(self, event):
+        if self._monitors and not event.is_directory:
+            for key_path, closure in self._monitors.items():
+                if key_path in event.src_path:
+                    if event.event_type == "moved":
+                        src_path = event.dest_path
+                    else:
+                        src_path = event.src_path
+                    closure(src_path)  # run
 
     def on_created(self, event):
+        """
+
+        :param event:
+        :return:
+        """
         filepath = event.src_path
         filename = os.path.basename(filepath)
-        print('%sができました' % filename)
-        self.convert(src_file_path=event.src_path, dst_dir=self._dst_pl,
-                     to_fmt=self.to_fmt)  # , to_fmt="png")
+        print('%sが生成された' % filename)
+        # self.convert(src_file_apath=event.src_path, dst_dir_apath=self._dst_pl, to_fmt=self._to_fmt)  # , _to_fmt="png")
+        self._road_balancer(event=event)
 
     def on_modified(self, event):
         filepath = event.src_path
         filename = os.path.basename(filepath)
-        print('%sを変更しました' % filename)
+        print('%sが変更されました' % filename)
+        self._road_balancer(event=event)
 
     def on_deleted(self, event):
         filepath = event.src_path
         filename = os.path.basename(filepath)
         print('%sを削除しました' % filename)
+        self._road_balancer(event=event)
+
+    def on_moved(self, event):
+        """
+        ファイル移動時のイベント
+        - Medeneley変換では、event.dest_pathが移動後のPATHを示し、それを変換に使えないかと思う
+        :param event:
+        :type event: FileMovedEvent | DirMovedEvent
+        :return:
+        """
+        filepath = event.src_path
+        filename = os.path.basename(filepath)
+        print('%s moved' % filename)
+        # self.convert(src_file_apath=event.dest_path, dst_dir_apath=self._dst_pl,to_fmt=self._to_fmt)  # , _to_fmt="png")
+        self._road_balancer(event=event)
 
     def start(self, sleep_time=0.5):
         try:
@@ -421,7 +449,22 @@ class ChangeHandler(FileSystemEventHandler):
             raise Exception("Current path: %s" % pathlib.Path.cwd())
 
     @staticmethod
-    def _check_path(path: (str, Path), pl_cwd=Path.cwd(), head_comment=""):
+    def _validated_fmt(to_fmt, src_pl: Path):
+        """
+        変換用フォーマットのvalue check
+        :param to_fmt:
+        :param src_pl:
+        :return:
+        """
+        if to_fmt == "":
+            return src_pl.suffix
+        elif to_fmt[0] != ".":
+            return "." + to_fmt
+        else:
+            return to_fmt
+
+    @staticmethod
+    def _get_internal_deal_path(path: (str, Path), pl_cwd=Path.cwd(), head_comment=""):
         """
         src and dst pathの読み込みを代理
         :param path:
@@ -434,7 +477,7 @@ class ChangeHandler(FileSystemEventHandler):
             path_pl = path
         else:
             raise Exception("%s %s is not type str or Path(pathlib)" % (head_comment, path))
-
+        """convert to absolute path"""
         if not path_pl.is_absolute():
             # if relative path, convert into absolute
             path_pl = pl_cwd.joinpath(path)
@@ -446,27 +489,77 @@ class ChangeHandler(FileSystemEventHandler):
                 , sleep_time=0.5
                 ):
 
-        self._src_pl = self._check_path(src_dir)
-        self._dst_pl = self._check_path(dst_dir)
+        self._src_pl = self._get_internal_deal_path(src_dir)
+        self._dst_pl = self._get_internal_deal_path(dst_dir)
 
-        #
         # 拡張子チェック
-        #
-        if to_fmt == "":
-            self.to_fmt = self._p_src.suffix
-        elif to_fmt[0] != ".":
-            self.to_fmt = "." + to_fmt
-        else:
-            self.to_fmt = to_fmt
+        self._to_fmt = self._validated_fmt(to_fmt=to_fmt, src_pl=self._src_pl)
         try:
             event_handler = self
             observer = Observer()
             observer.schedule(event_handler, self._src_pl.as_posix(), recursive=True)
             # event_handler = ChangeHandler()
             observer.start()
+            print("[Info] Start monitoring:%s" % self._src_pl)
             while True:
                 try:
                     time.sleep(sleep_time)
+                except KeyboardInterrupt:
+                    observer.stop()
+                observer.join()
+        except Exception as e:
+            raise Exception("Current path: %s" % pathlib.Path.cwd())
+
+    def _get_monitor_func(self
+                          , src_pl
+                          , dst_pl
+                          , to_fmt_in
+                          , is_crop=True
+                          ):
+        """
+        closure type func return
+        :param src_pl:
+        :param dst_pl:
+        :param to_fmt:
+        :param is_crop:
+        :return:
+        """
+
+        # async def moniko(self
+        def moniko(path_updated_file):
+            self.convert(src_file_apath=path_updated_file, dst_dir_apath=dst_pl, to_fmt=to_fmt_in, is_crop=is_crop)
+            # loop = asyncio.get_event_loop()
+            # print(f'start:  {sec}秒待つよ')
+            # await loop.run_in_executor(None, time.sleep, sec)
+            # print(f'finish: {sec}秒待つよ')
+
+        # return moniko(src_pl=src_pl, dst_dir_apath=dst_dir_apath, to_fmt=to_fmt, is_crop=is_crop)
+        return moniko
+
+    def _set_monitor(self
+                     , src_dir
+                     , dst_dir
+                     , to_fmt
+                     , is_crop=True):
+        src_pl = self._get_internal_deal_path(path=src_dir)
+        dst_pl = self._get_internal_deal_path(path=dst_dir)
+        to_fmt_in = self._validated_fmt(to_fmt=to_fmt, src_pl=src_pl)
+        self._monitors[src_pl.as_posix()] = self._get_monitor_func(src_pl=src_pl, dst_pl=dst_pl, to_fmt_in=to_fmt_in,
+                                                                   is_crop=is_crop)
+
+    def start_monitors(self
+                       , sleep_sec=1):
+        try:
+            event_handler = self
+            observer = Observer()
+            for src_path in self._monitors.keys():
+                observer.schedule(event_handler, src_path, recursive=True)
+                print("[Info] Set monitoring Path:%s" % src_path)
+            # event_handler = ChangeHandler()
+            observer.start()
+            while True:
+                try:
+                    time.sleep(sleep_sec)
                 except KeyboardInterrupt:
                     observer.stop()
                 observer.join()
@@ -479,8 +572,8 @@ def cli_watch():
     """
     監視を開始する
     :param src_path:
-    :param dst_dir:
-    :param to_fmt:
+    :param dst_dir_apath:
+    :param _to_fmt:
     :param is_crop:
     :return:
     """
@@ -491,8 +584,8 @@ def convert():
     """
     CLI entry point:
     :param src_path:
-    :param dst_dir:
-    :param to_fmt:
+    :param dst_dir_apath:
+    :param _to_fmt:
     :param is_crop:
     :return:
     """
@@ -516,12 +609,12 @@ def convert():
     if not src_pl.is_absolute():
         src_pl = Path(os.getcwd()).joinpath(sys.argv[1])
     print("src_pl:%s" % src_pl)
-    ChangeHandler.convert(src_file_path=src_pl.as_posix(), dst_dir=sys.argv[2],
+    ChangeHandler.convert(src_file_apath=src_pl.as_posix(), dst_dir_apath=sys.argv[2],
                           to_fmt=sys.argv[3])  # , is_crop=sys.argv[4])
     print("END-END-END")
     # if len(sys.argv) == 5:
     #     print("[Debug] sys.argv:%s" % sys.argv)
-    #     ChangeHandler.convert(path_src=sys.argv[1], dir_dst=sys.argv[2], to_fmt=sys.argv[3], is_crop=sys.argv[4])
+    #     ChangeHandler.convert(path_src=sys.argv[1], dir_dst=sys.argv[2], _to_fmt=sys.argv[3], is_crop=sys.argv[4])
     # else:
     #     print('please specify 4 arguments', file=sys.stderr)
     #     sys.exit(1)
