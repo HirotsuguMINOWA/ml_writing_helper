@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+# TODO: 出力時の日時datetimeを併記
 # TODO: bin(soffice, imagemagick'convert and so on)の存在確認
 # TODO: pdfは透過png?が黒くなるためデフォルトはpng
 # TODO: dstとsrcフォルダの生成、実行時に。
