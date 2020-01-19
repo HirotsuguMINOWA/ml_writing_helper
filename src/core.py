@@ -175,7 +175,7 @@ class ChangeHandler(FileSystemEventHandler):
         #     raise Exception("ディレクトリ指定して下さい。")
         elif pl_dst_dir.suffix != ".eps":
             # raise Exception("出力ファイルの拡張子も.epsにして下さい")
-            print("出力拡張子を.epsに変えました")
+            print("[Warning]出力拡張子を.epsに変えました")
             pl_dst_dir = pl_dst_dir.with_suffix(".eps")
 
         cmd = "{cmd_conv} {src} {dst}".format(
@@ -356,7 +356,7 @@ class ChangeHandler(FileSystemEventHandler):
                 p_src_cropped = self._crop_img(p_src_img=pl_src2, p_dst=dst_pl, to_img_fmt=cur_to_fmt)
             """ pdf 2 eps """
             if to_fmt == ".eps":
-                self._conv2eps(pl_src=p_src_cropped, pl_dst_dir=self._dst_pl)
+                self._conv2eps(pl_src=p_src_cropped, pl_dst_dir=dst_pl)
             """ rm tmpfile"""
             # if plib_pdf_convd_tmp.exists():
             #     pathlib.Path(plib_pdf_convd_tmp).unlink()
@@ -369,9 +369,9 @@ class ChangeHandler(FileSystemEventHandler):
             tmp_src = src_pl  # .with_suffix("")
             tmp_dst = dst_pl.joinpath(src_pl.name)  # .with_suffix(".bib")
             new_path = shutil.copy(tmp_src, tmp_dst)
-            print("[Debug] copied %s to %s" % (tmp_src, tmp_dst))
+            print("[Info] copied %s to %s" % (tmp_src, tmp_dst))
         else:
-            print("非該当ファイル:%s" % src_pl)
+            print("[Info] 未処理ファイル:%s" % src_pl)
 
     #
     # def conv2pnt(self, path_src, dir_dst):
@@ -432,21 +432,21 @@ class ChangeHandler(FileSystemEventHandler):
         # self.convert(src_file_apath=event.dest_path, dst_dir_apath=self._dst_pl,to_fmt=self._to_fmt)  # , _to_fmt="png")
         self._road_balancer(event=event)
 
-    def start(self, sleep_time=0.5):
-        try:
-            event_handler = self
-            observer = Observer()
-            observer.schedule(event_handler, self.target_dir, recursive=True)
-            # event_handler = ChangeHandler()
-            observer.start()
-            while True:
-                try:
-                    time.sleep(sleep_time)
-                except KeyboardInterrupt:
-                    observer.stop()
-                observer.join()
-        except Exception as e:
-            raise Exception("Current path: %s" % pathlib.Path.cwd())
+    # def start(self, sleep_time=0.5):
+    #     try:
+    #         event_handler = self
+    #         observer = Observer()
+    #         observer.schedule(event_handler, self.target_dir, recursive=True)
+    #         # event_handler = ChangeHandler()
+    #         observer.start()
+    #         while True:
+    #             try:
+    #                 time.sleep(sleep_time)
+    #             except KeyboardInterrupt:
+    #                 observer.stop()
+    #             observer.join()
+    #     except Exception as e:
+    #         raise Exception("Current path: %s" % pathlib.Path.cwd())
 
     @staticmethod
     def _validated_fmt(to_fmt, src_pl: Path):
@@ -483,32 +483,32 @@ class ChangeHandler(FileSystemEventHandler):
             path_pl = pl_cwd.joinpath(path)
         return path_pl
 
-    def monitor(self, src_dir, dst_dir
-                , to_fmt="png"
-                , export_fmts=["png", "eps", "pdf"]
-                , sleep_time=0.5
-                ):
-
-        self._src_pl = self._get_internal_deal_path(src_dir)
-        self._dst_pl = self._get_internal_deal_path(dst_dir)
-
-        # 拡張子チェック
-        self._to_fmt = self._validated_fmt(to_fmt=to_fmt, src_pl=self._src_pl)
-        try:
-            event_handler = self
-            observer = Observer()
-            observer.schedule(event_handler, self._src_pl.as_posix(), recursive=True)
-            # event_handler = ChangeHandler()
-            observer.start()
-            print("[Info] Start monitoring:%s" % self._src_pl)
-            while True:
-                try:
-                    time.sleep(sleep_time)
-                except KeyboardInterrupt:
-                    observer.stop()
-                observer.join()
-        except Exception as e:
-            raise Exception("Current path: %s" % pathlib.Path.cwd())
+    # def monitor(self, src_dir, dst_dir
+    #             , to_fmt="png"
+    #             , export_fmts=["png", "eps", "pdf"]
+    #             , sleep_time=0.5
+    #             ):
+    #
+    #     self._src_pl = self._get_internal_deal_path(src_dir)
+    #     self._dst_pl = self._get_internal_deal_path(dst_dir)
+    #
+    #     # 拡張子チェック
+    #     self._to_fmt = self._validated_fmt(to_fmt=to_fmt, src_pl=self._src_pl)
+    #     try:
+    #         event_handler = self
+    #         observer = Observer()
+    #         observer.schedule(event_handler, self._src_pl.as_posix(), recursive=True)
+    #         # event_handler = ChangeHandler()
+    #         observer.start()
+    #         print("[Info] Start monitoring:%s" % self._src_pl)
+    #         while True:
+    #             try:
+    #                 time.sleep(sleep_time)
+    #             except KeyboardInterrupt:
+    #                 observer.stop()
+    #             observer.join()
+    #     except Exception as e:
+    #         raise Exception("Current path: %s" % pathlib.Path.cwd())
 
     def _get_monitor_func(self
                           , src_pl
@@ -536,11 +536,11 @@ class ChangeHandler(FileSystemEventHandler):
         # return moniko(src_pl=src_pl, dst_dir_apath=dst_dir_apath, to_fmt=to_fmt, is_crop=is_crop)
         return moniko
 
-    def _set_monitor(self
-                     , src_dir
-                     , dst_dir
-                     , to_fmt
-                     , is_crop=True):
+    def set_monitor(self
+                    , src_dir
+                    , dst_dir
+                    , to_fmt
+                    , is_crop=True):
         src_pl = self._get_internal_deal_path(path=src_dir)
         dst_pl = self._get_internal_deal_path(path=dst_dir)
         to_fmt_in = self._validated_fmt(to_fmt=to_fmt, src_pl=src_pl)
@@ -557,6 +557,7 @@ class ChangeHandler(FileSystemEventHandler):
                 print("[Info] Set monitoring Path:%s" % src_path)
             # event_handler = ChangeHandler()
             observer.start()
+            print("[Info] Start Monitoring")
             while True:
                 try:
                     time.sleep(sleep_sec)
