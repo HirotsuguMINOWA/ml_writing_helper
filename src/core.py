@@ -23,7 +23,6 @@ import time
 import shlex
 import subprocess
 from subprocess import check_output, STDOUT
-import pathlib  # FIXME: 下記に統一
 from pathlib import Path
 from enum import auto
 from strenum import StrEnum
@@ -362,11 +361,12 @@ class ChangeHandler(FileSystemEventHandler):
             # if plib_pdf_convd_tmp.exists():
             #     pathlib.Path(plib_pdf_convd_tmp).unlink()
             print("Converted")
-        elif src_pl.suffix == ".bib":  # and to_fmt == ".bib":
+        elif src_pl.suffix == ".bib" or src_pl.suffix == to_fmt:  # and to_fmt == ".bib":
             """
             .bibファイルのコピー
             注意).bib.partが生成されるが、瞬間的に.bibになる。それを捉えて該当フォルダへコピーしている
             """
+            # FIXME: 上記if、条件が重複しているので注
             tmp_src = src_pl  # .with_suffix("")
             tmp_dst = dst_pl.joinpath(src_pl.name)  # .with_suffix(".bib")
             new_path = shutil.copyfile(tmp_src, tmp_dst)
@@ -550,6 +550,11 @@ class ChangeHandler(FileSystemEventHandler):
 
     def start_monitors(self
                        , sleep_sec=1):
+        """
+        Start monitoring change on FS according to set
+        :param sleep_sec:
+        :return:
+        """
         try:
             event_handler = self
             observer = Observer()
@@ -566,7 +571,7 @@ class ChangeHandler(FileSystemEventHandler):
                     observer.stop()
                 observer.join()
         except Exception as e:
-            raise Exception("Current path: %s" % pathlib.Path.cwd())
+            raise Exception("Current path: %s" % Path.cwd())
 
 
 @classmethod
