@@ -43,6 +43,7 @@ class ChangeHandler(FileSystemEventHandler):
         Path('soffice'),
         Path('/Applications/LibreOffice.app/Contents/MacOS/soffice')
     ]
+    _ext_pluntuml = [".pu", ".puml"]
 
     # def __init__(self
     #              , monitoring_dir
@@ -107,7 +108,7 @@ class ChangeHandler(FileSystemEventHandler):
         :rtype: pathlib.Path
         """
         """ Calc path of dst """
-        # path_dst = pathlib.Path(dir_dst) / pl_src.name
+        # path_dst = pathlib.Path(dir_dst) / src_pl.name
         # path_dst = pathlib.Path(dir_dst) / plib_src.with_suffix("." + self._to_fmt).name
         if not p_src_img.exists():
             print("[Error] %s not found" % p_src_img)
@@ -128,7 +129,7 @@ class ChangeHandler(FileSystemEventHandler):
             cmd_name = "pdfcrop"
             cmd = "{cmd_name} {path_in} {path_out}".format(cmd_name=cmd_name, path_in=p_src_img, path_out=p_dst)
         else:
-            # new_path = shutil.move(pl_src.as_posix(), dir_dst)
+            # new_path = shutil.move(src_pl.as_posix(), dir_dst)
             raise Exception("対応していないFormatをcroppingしようとして停止.%s:%s" % ("to_img_fmt", to_img_fmt))
 
         if shutil.which(cmd_name) is None:
@@ -188,22 +189,41 @@ class ChangeHandler(FileSystemEventHandler):
         # subprocess.run(tokens)
         output = check_output(tokens, stderr=STDOUT).decode("utf8")
         print("Output: %s" % output)
-        # elif _to_fmt == "pdf" and pl_src.suffix == ".odp":
+        # elif _to_fmt == "pdf" and src_pl.suffix == ".odp":
         #     ### conv png to pdf
         #     cmd = "convert %s %s" % (
-        #         pl_src.with_suffix(".png")
-        #         , pl_dst_dir.joinpath(pl_src.name).with_suffix(".pdf")
+        #         src_pl.with_suffix(".png")
+        #         , pl_dst_dir.joinpath(src_pl.name).with_suffix(".pdf")
         #     )
         #     self._run_cmd(cmd)
         if del_src:
             pl_src.unlink()
 
     @classmethod
-    def _conv_slide(self, pl_src: Path, pl_dst: Path, to_fmt=".png"):
+    def _conv_plantuml(cls, src_pl: Path, dst_pl: Path, to_fmt=".png"):
+        cls._cmd_plantuml = "plantuml"
+        if shutil.which(cls._cmd_plantuml) is None:
+            print("[ERROR] %s not found" % cls._cmd_plantuml)
+            return
+        # todo: plantuml conv.
+        if to_fmt not in (".png", ".pdf", ".eps"):
+            print("[ERROR] Indicated Formatは未対応 in coverting with plantuml")
+            return
+        cmd = "{cmd_pu} -o {dst} -t{fmt} {src}".format(
+            cmd_pu=cls._cmd_plantuml,
+            src=src_pl.as_posix(),
+            dst=dst_pl.as_posix(),
+            fmt=to_fmt[1:]
+        )
+        res = cls._run_cmd(cmd=cmd, short_msg="Converting with %s" % cls._cmd_plantuml)
+        print("Result:%s" % res)
+
+    @classmethod
+    def _conv_slide(self, src_pl: Path, dst_pl: Path, to_fmt=".png"):
         """
 
-        :param pl_src:
-        :param pl_dst: ファイル/folderまでのPATH.場合分けが必要
+        :param src_pl:
+        :param dst_pl: ファイル/folderまでのPATH.場合分けが必要
         :param to_fmt:
         :return:
         """
@@ -214,11 +234,11 @@ class ChangeHandler(FileSystemEventHandler):
         # print("path_tmp:"+path_tmp)
         # out_dir = plib_src.parent.as_posix()
         # path_tmp="tmp_"+os.path.basename(path_src)
-        if pl_dst.is_dir():
-            pl_dst_dir = pl_dst
+        if dst_pl.is_dir():
+            pl_dst_dir = dst_pl
         else:
-            pl_dst_dir = pl_dst.parent
-        print("[Debug] pl_dst_dir: %s" % pl_dst)
+            pl_dst_dir = dst_pl.parent
+        print("[Debug] pl_dst_dir: %s" % dst_pl)
         print("[Debug] CWD:%s" % os.getcwd())
         found_libreoffice = False
 
@@ -230,7 +250,7 @@ class ChangeHandler(FileSystemEventHandler):
                     , dst_ext=to_fmt[1:],  # eliminate first "."
                     # , out_dir=dir_dst
                     out_dir=pl_dst_dir.as_posix()
-                    , path_src=pl_src)
+                    , path_src=src_pl)
                 break
 
         # output = self._run_cmd(cmd)
@@ -248,8 +268,8 @@ class ChangeHandler(FileSystemEventHandler):
         #
         # 生成されたファイルPATH
 
-        pl_out = pl_dst_dir.joinpath(pl_src.with_suffix(to_fmt).name)
-        if pl_dst.is_dir():
+        pl_out = pl_dst_dir.joinpath(src_pl.with_suffix(to_fmt).name)
+        if dst_pl.is_dir():
             return pl_out
         else:
             """
@@ -257,18 +277,18 @@ class ChangeHandler(FileSystemEventHandler):
             """
             # pl_dst_dir = pl_dst_dir.joinpath(pl_out.with_suffix(pl_out.suffix).name)
             # else:
-            #     pl_out = pl_dst_dir.joinpath(pl_src.name + _to_fmt)
+            #     pl_out = pl_dst_dir.joinpath(src_pl.name + _to_fmt)
 
             # # 存在していたら削除
             # if pl_dst_dir.exists():
             #     pl_dst_dir.unlink()
 
             # rename
-            pl_out.rename(pl_dst)
+            pl_out.rename(dst_pl)
 
             # """ Add head "tmp_" to converted filename """
             #
-            # plib_pdf_convd = pl_dst_dir.joinpath(pl_src.name).with_suffix(cur_to_fmt)
+            # plib_pdf_convd = pl_dst_dir.joinpath(src_pl.name).with_suffix(cur_to_fmt)
             # # plib_pdf_convd_tmp = plib_pdf_convd.with_name("tmp_" + plib_pdf_convd.name)
             #
             # cmd_cp = "cp -f %s %s" % (plib_pdf_convd, plib_pdf_convd.with_name("pre-crop_" + plib_pdf_convd.name))
@@ -277,10 +297,10 @@ class ChangeHandler(FileSystemEventHandler):
             # # output = check_output(tokens, stderr=STDOUT).decode("utf8")
             # # print("Output: %s" % output)
             #
-            # # pl_src.rename(pl_src.with_name("tmp_"+pl_src.name))
-            # # pl_src.rename(plib_pdf_convd_tmp)
-            # # pl_src.with_name("tmp_"+pl_src.name)
-            return pl_dst
+            # # src_pl.rename(src_pl.with_name("tmp_"+src_pl.name))
+            # # src_pl.rename(plib_pdf_convd_tmp)
+            # # src_pl.with_name("tmp_"+src_pl.name)
+            return dst_pl
 
     def convert(self, src_file_apath, dst_dir_apath, to_fmt=".png", is_crop=True):  # , _to_fmt="pdf"):
         """
@@ -341,7 +361,7 @@ class ChangeHandler(FileSystemEventHandler):
                   """
                 print(warn)
                 cur_to_fmt = ".pdf"
-                # elif pl_src.suffix == ".odp" and _to_fmt in ["pdf", "eps"]:
+                # elif src_pl.suffix == ".odp" and _to_fmt in ["pdf", "eps"]:
                 #     """
                 #     .odp formatはpdfに変換するとpdfcropで失敗する。
                 #     よって、png形式で変換する
@@ -351,7 +371,7 @@ class ChangeHandler(FileSystemEventHandler):
                 cur_to_fmt = ".pdf"
             else:
                 cur_to_fmt = to_fmt
-            pl_src2 = self._conv_slide(pl_src=src_pl, pl_dst=dst_pl, to_fmt=cur_to_fmt)
+            pl_src2 = self._conv_slide(src_pl=src_pl, dst_pl=dst_pl, to_fmt=cur_to_fmt)
             if is_crop:
                 p_src_cropped = self._crop_img(p_src_img=pl_src2, p_dst=dst_pl, to_img_fmt=cur_to_fmt)
             """ pdf 2 eps """
@@ -371,6 +391,8 @@ class ChangeHandler(FileSystemEventHandler):
             tmp_dst = dst_pl.joinpath(src_pl.name)  # .with_suffix(".bib")
             new_path = shutil.copyfile(tmp_src, tmp_dst)
             print("[Info] copied %s to %s" % (tmp_src, tmp_dst))
+        elif src_pl.suffix in self._ext_pluntuml:
+            self._conv_plantuml(src_pl=src_pl, dst_pl=dst_pl, to_fmt=to_fmt)
         else:
             print("[Info] 未処理ファイル:%s" % src_pl)
 
