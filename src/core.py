@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 # TODO: 出力時の日時datetimeを併記
+# TODO: raise Exceptionを全て排除。エラーでいちいち留めない
 # TODO: bin(soffice, imagemagick'convert and so on)の存在確認
 # TODO: pdfは透過png?が黒くなるためデフォルトはpng
 # TODO: dstとsrcフォルダの生成、実行時に。
@@ -99,7 +100,7 @@ class ChangeHandler(FileSystemEventHandler):
         # TODO: 入力フォーマットか否か要チェック
 
     @staticmethod
-    def _crop_img(p_src_img, p_dst: Path, to_img_fmt):
+    def _crop_img(p_src_img, p_dst: Path, to_img_fmt) -> Path:
         """
         image(pdf/png,jpeg?)をcroppingする
         :param p_src:
@@ -158,13 +159,37 @@ class ChangeHandler(FileSystemEventHandler):
         return output
 
     @staticmethod
-    def _conv2eps(pl_src: Path, pl_dst_dir: Path, del_src=True):
+    def _conv2img(pl_src: Path, pl_dst_or_dir: Path, fmt_if_dst_without_ext: str) -> Path:
+        """
+        Image magicによる変換
+        :param pl_src:
+        :param pl_dst_or_dir:
+        :param fmt_if_dst_without_ext: pl_dst_or_dirがdirの場合、出力先に生成するPATHのファイルの拡張子になる。
+        :return:
+        """
+        if pl_dst_or_dir.is_dir():
+            pl_dst_or_dir = pl_dst_or_dir / pl_src.stem.join(fmt_if_dst_without_ext)
+
+        cmd = "{cmd_conv} {src} {dst}".format(
+            cmd_conv="convert"
+            , src=pl_src
+            , dst=pl_dst_or_dir
+        )
+        print("[Debug] CMD(convert): %s" % cmd)
+        tokens = shlex.split(cmd)
+        # subprocess.run(tokens)
+        output = check_output(tokens, stderr=STDOUT).decode("utf8")
+        print("Output: %s" % output)
+        return pl_dst_or_dir
+
+    @classmethod
+    def _conv2eps(cls, pl_src: Path, pl_dst_dir: Path, del_src=True) -> Path:
         """
 
         :param pl_src:
         :param pl_dst_dir: directoryのみ
         :param del_src: del src of as tmp
-        :return:
+        :return: 変換後のPATH
         """
         if pl_src.suffix not in (".jpeg", ".jpg", ".png", ".pdf"):
             return
@@ -178,26 +203,10 @@ class ChangeHandler(FileSystemEventHandler):
             # raise Exception("出力ファイルの拡張子も.epsにして下さい")
             print("[Warning]出力拡張子を.epsに変えました")
             pl_dst_dir = pl_dst_dir.with_suffix(".eps")
-
-        cmd = "{cmd_conv} {src} {dst}".format(
-            cmd_conv="convert"
-            , src=pl_src
-            , dst=pl_dst_dir
-        )
-        print("[Debug] CMD(convert): %s" % cmd)
-        tokens = shlex.split(cmd)
-        # subprocess.run(tokens)
-        output = check_output(tokens, stderr=STDOUT).decode("utf8")
-        print("Output: %s" % output)
-        # elif _to_fmt == "pdf" and src_pl.suffix == ".odp":
-        #     ### conv png to pdf
-        #     cmd = "convert %s %s" % (
-        #         src_pl.with_suffix(".png")
-        #         , pl_dst_dir.joinpath(src_pl.name).with_suffix(".pdf")
-        #     )
-        #     self._run_cmd(cmd)
+        pl_dst_dir = cls._conv2img(pl_src, pl_dst_dir, fmt_if_dst_without_ext="png")
         if del_src:
             pl_src.unlink()
+        return pl_dst_dir
 
     @classmethod
     def _conv_plantuml(cls, src_pl: Path, dst_pl: Path, to_fmt=".png"):
@@ -238,7 +247,7 @@ class ChangeHandler(FileSystemEventHandler):
             pl_dst_dir = dst_pl
         else:
             pl_dst_dir = dst_pl.parent
-        print("[Debug] pl_dst_dir: %s" % dst_pl)
+        print("[Debug] pl_dst_or_dir: %s" % dst_pl)
         print("[Debug] CWD:%s" % os.getcwd())
         found_libreoffice = False
 
@@ -275,20 +284,20 @@ class ChangeHandler(FileSystemEventHandler):
             """
             出力ファイルPATHが指定されているのでrenameする
             """
-            # pl_dst_dir = pl_dst_dir.joinpath(pl_out.with_suffix(pl_out.suffix).name)
+            # pl_dst_or_dir = pl_dst_or_dir.joinpath(pl_out.with_suffix(pl_out.suffix).name)
             # else:
-            #     pl_out = pl_dst_dir.joinpath(src_pl.name + _to_fmt)
+            #     pl_out = pl_dst_or_dir.joinpath(src_pl.name + _to_fmt)
 
             # # 存在していたら削除
-            # if pl_dst_dir.exists():
-            #     pl_dst_dir.unlink()
+            # if pl_dst_or_dir.exists():
+            #     pl_dst_or_dir.unlink()
 
             # rename
             pl_out.rename(dst_pl)
 
             # """ Add head "tmp_" to converted filename """
             #
-            # plib_pdf_convd = pl_dst_dir.joinpath(src_pl.name).with_suffix(cur_to_fmt)
+            # plib_pdf_convd = pl_dst_or_dir.joinpath(src_pl.name).with_suffix(cur_to_fmt)
             # # plib_pdf_convd_tmp = plib_pdf_convd.with_name("tmp_" + plib_pdf_convd.name)
             #
             # cmd_cp = "cp -f %s %s" % (plib_pdf_convd, plib_pdf_convd.with_name("pre-crop_" + plib_pdf_convd.name))
@@ -301,6 +310,20 @@ class ChangeHandler(FileSystemEventHandler):
             # # src_pl.rename(plib_pdf_convd_tmp)
             # # src_pl.with_name("tmp_"+src_pl.name)
             return dst_pl
+
+    @classmethod
+    def _conv_with_crop(cls, src_pl: Path, dst_pl: Path, to_fmt=".png") -> Path:
+        """
+        イメージをcrop込で変換する
+        :param self:
+        :param src_pl:
+        :param dst_pl:
+        :param to_fmt:
+        :return:
+        """
+        path_dst = cls._conv2img(pl_src=src_pl, pl_dst_or_dir=dst_pl, to_fmt=to_fmt)
+        path_dst = cls._crop_img(p_src_img=src_pl, p_dst=path_dst, to_img_fmt=to_fmt)
+        return path_dst
 
     def convert(self, src_file_apath, dst_dir_apath, to_fmt=".png", is_crop=True):  # , _to_fmt="pdf"):
         """
@@ -335,7 +358,7 @@ class ChangeHandler(FileSystemEventHandler):
         # TODO: odp?に要対応.LibreOffice
         if src_pl.suffix in (".png", ".jpg", ".jpeg") and not src_pl.name.startswith("~"):
             """
-            files entered in src_folder, converted into pl_dst_dir wich cropping. and conv to eps
+            files entered in src_folder, converted into pl_dst_or_dir wich cropping. and conv to eps
             """
             print("[Info] Image->croppingしてdst pathへコピーします")
             pl_src2 = self._crop_img(src_pl, dst_pl.joinpath(src_pl.stem + src_pl.suffix),
@@ -381,7 +404,13 @@ class ChangeHandler(FileSystemEventHandler):
             # if plib_pdf_convd_tmp.exists():
             #     pathlib.Path(plib_pdf_convd_tmp).unlink()
             print("Converted")
-        elif src_pl.suffix == ".bib" or src_pl.suffix == to_fmt:  # and to_fmt == ".bib":
+        elif src_pl.suffix == ".ai":
+            """
+            その他のフォーマット(eg. ai)を画像化してcrop
+            """
+            _ = self._conv_with_crop(src_pl=src_pl, dst_pl=dst_pl, to_fmt=to_fmt)
+
+        elif src_pl.suffix == ".bib" or src_pl.suffix == to_fmt:  # and fmt_if_dst_without_ext == ".bib":
             """
             .bibファイルのコピー
             注意).bib.partが生成されるが、瞬間的に.bibになる。それを捉えて該当フォルダへコピーしている
@@ -426,7 +455,7 @@ class ChangeHandler(FileSystemEventHandler):
         filepath = event.src_path
         filename = os.path.basename(filepath)
         print('%sが生成された' % filename)
-        # self.convert(src_file_apath=event.src_path, dst_dir_apath=self._dst_pl, to_fmt=self._to_fmt)  # , _to_fmt="png")
+        # self.convert(src_file_apath=event.src_path, dst_dir_apath=self._dst_pl, fmt_if_dst_without_ext=self._to_fmt)  # , _to_fmt="png")
         self._road_balancer(event=event)
 
     def on_modified(self, event):
@@ -452,7 +481,7 @@ class ChangeHandler(FileSystemEventHandler):
         filepath = event.src_path
         filename = os.path.basename(filepath)
         print('%s moved' % filename)
-        # self.convert(src_file_apath=event.dest_path, dst_dir_apath=self._dst_pl,to_fmt=self._to_fmt)  # , _to_fmt="png")
+        # self.convert(src_file_apath=event.dest_path, dst_dir_apath=self._dst_pl,fmt_if_dst_without_ext=self._to_fmt)  # , _to_fmt="png")
         self._road_balancer(event=event)
 
     # def start(self, sleep_time=0.5):
@@ -507,7 +536,7 @@ class ChangeHandler(FileSystemEventHandler):
         return path_pl
 
     # def monitor(self, src_dir, dst_dir
-    #             , to_fmt="png"
+    #             , fmt_if_dst_without_ext="png"
     #             , export_fmts=["png", "eps", "pdf"]
     #             , sleep_time=0.5
     #             ):
@@ -516,7 +545,7 @@ class ChangeHandler(FileSystemEventHandler):
     #     self._dst_pl = self._get_internal_deal_path(dst_dir)
     #
     #     # 拡張子チェック
-    #     self._to_fmt = self._validated_fmt(to_fmt=to_fmt, src_pl=self._src_pl)
+    #     self._to_fmt = self._validated_fmt(fmt_if_dst_without_ext=fmt_if_dst_without_ext, src_pl=self._src_pl)
     #     try:
     #         event_handler = self
     #         observer = Observer()
@@ -543,7 +572,7 @@ class ChangeHandler(FileSystemEventHandler):
         closure type func return
         :param src_pl:
         :param dst_pl:
-        :param to_fmt:
+        :param fmt_if_dst_without_ext:
         :param is_crop:
         :return:
         """
@@ -556,7 +585,7 @@ class ChangeHandler(FileSystemEventHandler):
             # await loop.run_in_executor(None, time.sleep, sec)
             # print(f'finish: {sec}秒待つよ')
 
-        # return moniko(src_pl=src_pl, dst_dir_apath=dst_dir_apath, to_fmt=to_fmt, is_crop=is_crop)
+        # return moniko(src_pl=src_pl, dst_dir_apath=dst_dir_apath, fmt_if_dst_without_ext=fmt_if_dst_without_ext, is_crop=is_crop)
         return moniko
 
     def set_monitor(self

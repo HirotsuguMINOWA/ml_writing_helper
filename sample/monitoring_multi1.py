@@ -6,7 +6,7 @@ o = ChangeHandler()
 o.set_monitor(
     src_dir="fig_src"
     , dst_dir="fig_gen"
-    # , to_fmt="png"
+    # , fmt_if_dst_without_ext="png"
     , to_fmt=".eps"
 )
 
