@@ -339,6 +339,12 @@ class ChangeHandler(FileSystemEventHandler):
         # チェック
         to_fmt = self._validated_fmt(to_fmt=to_fmt, src_pl=src_pl)
 
+        # 無視すべき拡張子
+        if src_pl.name.startswith("~"):
+            print("[Info] Nothing to do: %s" % src_pl.stem+src_pl.suffix)
+            return
+
+        # 下記不要？
         if not src_pl.exists() and not to_fmt == ".bib":
             raise Exception("src path(1st-arg:%s)が見つかりません、訂正して下さい" % src_pl.as_posix())
         # init2
@@ -350,8 +356,9 @@ class ChangeHandler(FileSystemEventHandler):
             raise Exception("dst_dir_apath(2nd-arg:%s)は、ファイルではなく、フォルダのPATHを指定して下さい" % dst_dir_apath)
         os.chdir(dst_pl.parent)  # important!
 
+        ####### 拡張子毎に振り分け
         # TODO: odp?に要対応.LibreOffice
-        if src_pl.suffix in (".png", ".jpg", ".jpeg") and not src_pl.name.startswith("~"):
+        if src_pl.suffix in (".png", ".jpg", ".jpeg"):
             """
             files entered in src_folder, converted into pl_dst_or_dir wich cropping. and conv to eps
             """
