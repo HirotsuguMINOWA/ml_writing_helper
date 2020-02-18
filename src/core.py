@@ -473,7 +473,7 @@ class ChangeHandler(FileSystemEventHandler):
         filepath = event.src_path
         filename = os.path.basename(filepath)
         print('%sを削除しました' % filename)
-        self._road_balancer(event=event)
+        # self._road_balancer(event=event)
 
     def on_moved(self, event):
         """
@@ -619,7 +619,7 @@ class ChangeHandler(FileSystemEventHandler):
 
                 # Check src path
                 if not src_pl.exists():
-                    raise Exception("[Error] The path was not exists: %s"%src_pl)
+                    raise Exception("[Error] The path was not exists: %s" % src_pl)
                 print("[Info] Set monitoring Path:%s" % src_pl)
 
                 # Check dst path
