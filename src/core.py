@@ -341,7 +341,7 @@ class ChangeHandler(FileSystemEventHandler):
 
         # 無視すべき拡張子
         if src_pl.name.startswith("~"):
-            print("[Info] Nothing to do: %s" % src_pl.stem+src_pl.suffix)
+            print("[Info] Nothing to do: %s" % src_pl.stem + src_pl.suffix)
             return
 
         # 下記不要？
@@ -350,8 +350,6 @@ class ChangeHandler(FileSystemEventHandler):
         # init2
         # FIXME: Pathしか受け付けないように要修正
         dst_pl = Path(dst_dir_apath)
-        if not dst_dir_apath.exists():
-            dst_dir_apath.mkdir()
         if not dst_dir_apath.is_dir():
             raise Exception("dst_dir_apath(2nd-arg:%s)は、ファイルではなく、フォルダのPATHを指定して下さい" % dst_dir_apath)
         os.chdir(dst_pl.parent)  # important!
@@ -439,9 +437,14 @@ class ChangeHandler(FileSystemEventHandler):
     #         subprocess.run(tokens)
 
     def _road_balancer(self, event):
+        """
+
+        :param event:
+        :return:
+        """
         if self._monitors and not event.is_directory:
-            for key_path, closure in self._monitors.items():
-                if key_path in event.src_path:
+            for key_path, closure in self._monitors.items():  # type:Tuple[Path,Path],function
+                if key_path[0].as_posix() in event.src_path:  # 0: src_path, 1:dst_path
                     if event.event_type == "moved":
                         src_path = event.dest_path
                     else:
@@ -579,7 +582,7 @@ class ChangeHandler(FileSystemEventHandler):
         :return:
         """
 
-        # async def moniko(self
+        # async def moniko(sel
         def moniko(path_updated_file):
             self.convert(src_file_apath=path_updated_file, dst_dir_apath=dst_pl, to_fmt=to_fmt_in, is_crop=is_crop)
             # loop = asyncio.get_event_loop()
@@ -598,8 +601,9 @@ class ChangeHandler(FileSystemEventHandler):
         src_pl = self._get_internal_deal_path(path=src_dir)
         dst_pl = self._get_internal_deal_path(path=dst_dir)
         to_fmt_in = self._validated_fmt(to_fmt=to_fmt, src_pl=src_pl)
-        self._monitors[src_pl.as_posix()] = self._get_monitor_func(src_pl=src_pl, dst_pl=dst_pl, to_fmt_in=to_fmt_in,
-                                                                   is_crop=is_crop)
+        self._monitors[src_pl, dst_pl] = self._get_monitor_func(src_pl=src_pl, dst_pl=dst_pl,
+                                                                to_fmt_in=to_fmt_in,
+                                                                is_crop=is_crop)
 
     def start_monitors(self
                        , sleep_sec=1):
@@ -611,9 +615,27 @@ class ChangeHandler(FileSystemEventHandler):
         try:
             event_handler = self
             observer = Observer()
-            for src_path in self._monitors.keys():
-                observer.schedule(event_handler, src_path, recursive=True)
-                print("[Info] Set monitoring Path:%s" % src_path)
+            for src_pl, dst_pl in self._monitors.keys():  # type: Path,Path
+
+                # Check src path
+                if not src_pl.exists():
+                    raise Exception("[Error] The path was not exists: %s"%src_pl)
+                print("[Info] Set monitoring Path:%s" % src_pl)
+
+                # Check dst path
+                if not dst_pl.exists():
+                    print("[Info] 右記PATH存在しません、作成しますか?:%s" % dst_pl)
+                    res = ""
+                    while res not in ("y", "n", "Y", "N"):
+                        res = input("make dir?(y/n)")
+                    if res in ("y", "Y"):
+                        dst_pl.mkdir()
+                    else:
+                        raise Exception("[Error] dst_pathが存在しないので終了しました")
+                print("[Info] Set exporting Path:%s" % dst_pl)
+
+                # set into scheduling
+                observer.schedule(event_handler, src_pl.as_posix(), recursive=True)
             # event_handler = ChangeHandler()
             observer.start()
             print("[Info] Start Monitoring")
