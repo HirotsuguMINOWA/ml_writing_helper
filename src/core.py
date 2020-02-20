@@ -6,22 +6,58 @@
 
 ###############################################################
 
+import os
+import shlex
 # import ftplib
-import asyncio
 import shutil
+import subprocess
 import sys
+import time
+from pathlib import Path
+from subprocess import check_output, STDOUT
 
+from typing import Tuple
 from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
+# coding:utf-8
 
-import os
-import time
-import shlex
-import subprocess
-from subprocess import check_output, STDOUT
-from pathlib import Path
-from enum import auto
-from strenum import StrEnum
+# ログのライブラリ
+import logging
+from logging import getLogger, StreamHandler, Formatter
+
+# --------------------------------
+# 1.loggerの設定
+# --------------------------------
+# loggerオブジェクトの宣言
+logger = getLogger("LogTest")
+
+# loggerのログレベル設定(ハンドラに渡すエラーメッセージのレベル)
+logger.setLevel(logging.DEBUG)
+
+# --------------------------------
+# 2.handlerの設定
+# --------------------------------
+# handlerの生成
+stream_handler = StreamHandler()
+
+# handlerのログレベル設定(ハンドラが出力するエラーメッセージのレベル)
+stream_handler.setLevel(logging.DEBUG)
+
+# ログ出力フォーマット設定
+handler_format = Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+stream_handler.setFormatter(handler_format)
+
+# --------------------------------
+# 3.loggerにhandlerをセット
+# --------------------------------
+logger.addHandler(stream_handler)
+
+
+# --------------------------------
+# ログ出力テスト
+# --------------------------------
+# logger.debug("Hello World!")
+
 
 # 出力がepsの場合、監視folderにpngなど画像ファイルが書き込まれたらepsへ変換するコードをかけ
 
@@ -92,6 +128,40 @@ class ChangeHandler(FileSystemEventHandler):
         # TODO: 入力フォーマットか否か要チェック
 
     @staticmethod
+    def which(name) -> bool:
+        """
+        which command wrapper on python
+        :param name:
+        :return:
+        """
+        # print(shutil.which('ls'))  # > '/bin/ls'
+        # print(shutil.which('ssss'))  # > None
+        res = shutil.which(name)
+        if res:
+            return True, res
+        else:
+            return False, ""
+
+    @staticmethod
+    def util_update_dst_path(base_pl: Path, name_pl_or_str, to_fmt) -> Path:
+        """
+        destionation path modifier
+        :param base_pl:
+        :param name_pl_or_str:
+        :type name_pl_or_str: Path | str
+        :param to_fmt:
+        :return:
+        """
+        if isinstance(name_pl_or_str, Path):
+            # conv path to str
+            name_pl_or_str = name_pl_or_str.stem
+
+        if base_pl.is_dir():
+            return base_pl.joinpath(name_pl_or_str + to_fmt)
+        else:
+            return base_pl.with_suffix(to_fmt)
+
+    @staticmethod
     def _crop_img(p_src_img, p_dst: Path, to_img_fmt) -> Path:
         """
         image(pdf/png,jpeg?)をcroppingする
@@ -100,17 +170,21 @@ class ChangeHandler(FileSystemEventHandler):
         :return: 変換後のpath名
         :rtype: pathlib.Path
         """
-        """ Calc path of dst """
-        # path_dst = pathlib.Path(dir_dst) / src_pl.name
+        """ Calc path of base_pl """
+        # path_dst = pathlib.Path(dir_dst) / name_pl_or_str.name
         # path_dst = pathlib.Path(dir_dst) / plib_src.with_suffix("." + self._to_fmt).name
         if not p_src_img.exists():
             print("[Error] %s not found" % p_src_img)
             return
         if p_dst.is_dir():
-            p_dst = p_dst.joinpath(p_src_img.name)  # if the path is dir, set filename converted
+            p_dst = p_dst.joinpath(p_src_img.name)  # if the path is dir, set src_filename_stem converted
 
         """ crop white space """
-        if to_img_fmt in [".png", ".jpeg", ".jpg"]:  # pdfのcropはできない
+        if p_src_img.suffix not in [".png", ".jpeg", ".jpeg"]:
+            logging.error("source file is not 対応してないImage magickに。")
+            return Path()
+
+        if to_img_fmt in (".png", ".jpg", ".jpeg"):  # pdfのcropはできない
             cmd_name = "convert"
             # p_conv = Path("/usr/local/bin/convert")
             # if not p_conv.exists():
@@ -122,7 +196,7 @@ class ChangeHandler(FileSystemEventHandler):
             cmd_name = "pdfcrop"
             cmd = "{cmd_name} {path_in} {path_out}".format(cmd_name=cmd_name, path_in=p_src_img, path_out=p_dst)
         else:
-            # new_path = shutil.move(src_pl.as_posix(), dir_dst)
+            # new_path = shutil.move(name_pl_or_str.as_posix(), dir_dst)
             raise Exception("対応していないFormatをcroppingしようとして停止.%s:%s" % ("to_img_fmt", to_img_fmt))
 
         if shutil.which(cmd_name) is None:
@@ -135,12 +209,12 @@ class ChangeHandler(FileSystemEventHandler):
         return p_dst
 
     @staticmethod
-    def _run_cmd(cmd: str, short_msg="", is_print=True):
+    def _run_cmd(cmd: str, short_msg="", is_print=True) -> str:
         """
         コマンド(CLI)の実行
         :param cmd:
         :param is_print:
-        :return:
+        :return: output of rum
         """
         if is_print:
             print("[Debug] CMD(%s):%s" % (short_msg, cmd))
@@ -151,14 +225,16 @@ class ChangeHandler(FileSystemEventHandler):
         return output
 
     @staticmethod
-    def _conv2img(pl_src: Path, pl_dst_or_dir: Path, fmt_if_dst_without_ext: str) -> Path:
+    def _conv2img(pl_src: Path, pl_dst_or_dir: Path, fmt_if_dst_without_ext: str, decode="utf8") -> Path:
         """
-        Image magicによる変換
+        Image magicによる画像変換
         :param pl_src:
         :param pl_dst_or_dir:
         :param fmt_if_dst_without_ext: pl_dst_or_dirがdirの場合、出力先に生成するPATHのファイルの拡張子になる。
         :return:
         """
+        if not pl_src.exists():
+            raise Exception("Input image not exists:%s" % pl_src)
         if pl_dst_or_dir.is_dir():
             pl_dst_or_dir = pl_dst_or_dir / pl_src.stem.join(fmt_if_dst_without_ext)
 
@@ -170,7 +246,7 @@ class ChangeHandler(FileSystemEventHandler):
         print("[Debug] CMD(convert): %s" % cmd)
         tokens = shlex.split(cmd)
         # subprocess.run(tokens)
-        output = check_output(tokens, stderr=STDOUT).decode("utf8")
+        output = check_output(tokens, stderr=STDOUT).decode(decode)
         print("Output: %s" % output)
         return pl_dst_or_dir
 
@@ -278,7 +354,7 @@ class ChangeHandler(FileSystemEventHandler):
             """
             # pl_dst_or_dir = pl_dst_or_dir.joinpath(pl_out.with_suffix(pl_out.suffix).name)
             # else:
-            #     pl_out = pl_dst_or_dir.joinpath(src_pl.name + _to_fmt)
+            #     pl_out = pl_dst_or_dir.joinpath(name_pl_or_str.name + _to_fmt)
 
             # # 存在していたら削除
             # if pl_dst_or_dir.exists():
@@ -287,9 +363,9 @@ class ChangeHandler(FileSystemEventHandler):
             # rename
             pl_out.rename(dst_pl)
 
-            # """ Add head "tmp_" to converted filename """
+            # """ Add head "tmp_" to converted src_filename_stem """
             #
-            # plib_pdf_convd = pl_dst_or_dir.joinpath(src_pl.name).with_suffix(cur_to_fmt)
+            # plib_pdf_convd = pl_dst_or_dir.joinpath(name_pl_or_str.name).with_suffix(cur_to_fmt)
             # # plib_pdf_convd_tmp = plib_pdf_convd.with_name("tmp_" + plib_pdf_convd.name)
             #
             # cmd_cp = "cp -f %s %s" % (plib_pdf_convd, plib_pdf_convd.with_name("pre-crop_" + plib_pdf_convd.name))
@@ -298,9 +374,9 @@ class ChangeHandler(FileSystemEventHandler):
             # # output = check_output(tokens, stderr=STDOUT).decode("utf8")
             # # print("Output: %s" % output)
             #
-            # # src_pl.rename(src_pl.with_name("tmp_"+src_pl.name))
-            # # src_pl.rename(plib_pdf_convd_tmp)
-            # # src_pl.with_name("tmp_"+src_pl.name)
+            # # name_pl_or_str.rename(name_pl_or_str.with_name("tmp_"+name_pl_or_str.name))
+            # # name_pl_or_str.rename(plib_pdf_convd_tmp)
+            # # name_pl_or_str.with_name("tmp_"+name_pl_or_str.name)
             return dst_pl
 
     @classmethod
@@ -313,9 +389,105 @@ class ChangeHandler(FileSystemEventHandler):
         :param to_fmt:
         :return:
         """
-        path_dst = cls._conv2img(pl_src=src_pl, pl_dst_or_dir=dst_pl, to_fmt=to_fmt)
+        path_dst = cls._conv2img(pl_src=src_pl, pl_dst_or_dir=dst_pl, fmt_if_dst_without_ext=to_fmt)
         path_dst = cls._crop_img(p_src_img=src_pl, p_dst=path_dst, to_img_fmt=to_fmt)
         return path_dst
+
+    @classmethod
+    def conv_mermaid(cls, src_pl: Path, dst_pl: Path, to_fmt=".svg") -> Tuple[bool, Path]:
+        """
+        Mermaid(*_mermaid.md) Conversion
+        mermaid markdownを変換
+        - 外部
+        :param src_pl:
+        :param dst_pl:
+        :param to_fmt:
+        :return:
+        """
+        # Check on format
+        if to_fmt not in (".svg", ".png", ".pdf"):
+            logger.error("Cannot conversion file type:%s" % to_fmt)
+            return False, None
+
+        """ Check exists of mermaid-cli """
+        cmd_name_mermaid = "mmdc"
+        res, path = cls.which(cmd_name_mermaid)
+        if not res:
+            msg = """
+                mermaidコマンドに当たるmmdcにpathが通っていません。
+                要PATH通し/インスト（下記参考）
+                npm install -g mermaid
+                npm install -g mermaid.cli
+                """
+            logging.error(msg)
+            return
+
+        """  
+        Usage: mmdc [options]
+
+        Options:
+          -V, --version                                   output the version number
+          -t, --theme [theme]                             Theme of the chart, could be default, forest, dark or neutral. Optional. Default: default (default: "default")
+          -w, --width [width]                             Width of the page. Optional. Default: 800 (default: "800")
+          -H, --height [height]                           Height of the page. Optional. Default: 600 (default: "600")
+          -i, --input <input>                             Input mermaid file. Required.
+          -o, --output [output]                           Output file. It should be either svg, png or pdf. Optional. Default: input + ".svg"
+          -b, --backgroundColor [backgroundColor]         Background color. Example: transparent, red, '#F0F0F0'. Optional. Default: white
+          -c, --configFile [configFile]                   JSON configuration file for mermaid. Optional
+          -C, --cssFile [cssFile]                         CSS file for the page. Optional
+          -p --puppeteerConfigFile [puppeteerConfigFile]  JSON configuration file for puppeteer. Optional
+          -h, --help                                      output usage information
+        """
+
+        dst_pl_full = cls.util_update_dst_path(base_pl=dst_pl, name_pl_or_str=src_pl, to_fmt=to_fmt)
+
+        cmd = "{cmd_mmdc} -i {src_path} -o {dst_filename_only}".format(
+            cmd_mmdc=cmd_name_mermaid,
+            dst_filename_only=dst_pl_full,
+            src_path=src_pl.as_posix()
+        )
+        out_msg = cls._run_cmd(
+            cmd=cmd
+            , short_msg="Converting mermaid file"
+        )
+        if out_msg != "":
+            logging.error("mermaid変換中エラー？:%s" % out_msg)
+            return False, None
+        else:
+            return True, dst_pl_full
+
+    @classmethod
+    def conv_mermaid_with_crop(cls, src_pl: Path, dst_pl: Path, to_fmt=".svg") -> Tuple[bool, Path]:
+        """
+        mermaid markdownを変換 及び 特定のformatへ変換する
+        :param src_pl:
+        :param dst_pl:
+        :param to_fmt:
+        :return: Success?, Output file's path
+        """
+        if to_fmt in ("svg", "png", "pdf"):
+            tmp_fmt = to_fmt
+        else:
+            tmp_fmt = ".png"  # ImageMagickが対応しておりcropが利くフォーマット
+        # base_pl filename
+        # dst_fname = base_pl.stem
+        dst_pl_full = cls.util_update_dst_path(base_pl=dst_pl, name_pl_or_str=src_pl, to_fmt=tmp_fmt)
+        # Conversion
+        res, tmp_dst_pl = cls.conv_mermaid(
+            src_pl=src_pl,
+            dst_pl=dst_pl_full,
+            to_fmt=tmp_fmt)
+        if res:
+            # tmp_dst_pl = name_pl_or_str.with_name("tmp_" + dst_pl_full).with_suffix(tmp_fmt)
+            # tmp_dst_pl = cls.util_update_dst_path(base_pl=src_pl, name_pl_or_str="tmp_" + dst_pl_full.stem,
+            #                                       to_fmt=tmp_fmt)
+            dst_pl = cls._crop_img(p_src_img=tmp_dst_pl, p_dst=dst_pl, to_img_fmt=to_fmt)
+            if dst_pl is not None:
+                return True, dst_pl
+        emsg = "変換に失敗しました"
+        logging.error(emsg)
+        raise Exception(emsg)
+        return False, None  # failed
 
     def convert(self, src_file_apath, dst_dir_apath, to_fmt=".png", is_crop=True):  # , _to_fmt="pdf"):
         """
@@ -336,9 +508,9 @@ class ChangeHandler(FileSystemEventHandler):
         # チェック
         to_fmt = self._validated_fmt(to_fmt=to_fmt, src_pl=src_pl)
 
-        # 無視すべき拡張子
+        """ 無視すべき拡張子 """
         if src_pl.name.startswith("~"):
-            print("[Info] Nothing to do: %s" % src_pl.stem + src_pl.suffix)
+            print("[Info] Ingored: %s" % src_pl.stem + src_pl.suffix)
             return
 
         # 下記不要？
@@ -355,9 +527,10 @@ class ChangeHandler(FileSystemEventHandler):
         # TODO: odp?に要対応.LibreOffice
         if src_pl.suffix in (".png", ".jpg", ".jpeg"):
             """
+            Image Cropping only
             files entered in src_folder, converted into pl_dst_or_dir wich cropping. and conv to eps
             """
-            print("[Info] Image->croppingしてdst pathへコピーします")
+            logger.info("Image->croppingしてdst pathへコピーします")
             pl_src2 = self._crop_img(src_pl, dst_pl.joinpath(src_pl.stem + src_pl.suffix),
                                      to_img_fmt=src_pl.suffix)
             if to_fmt == ".eps":
@@ -381,7 +554,7 @@ class ChangeHandler(FileSystemEventHandler):
                   """
                 print(warn)
                 cur_to_fmt = ".pdf"
-                # elif src_pl.suffix == ".odp" and _to_fmt in ["pdf", "eps"]:
+                # elif name_pl_or_str.suffix == ".odp" and _to_fmt in ["pdf", "eps"]:
                 #     """
                 #     .odp formatはpdfに変換するとpdfcropで失敗する。
                 #     よって、png形式で変換する
@@ -419,6 +592,9 @@ class ChangeHandler(FileSystemEventHandler):
             print("[Info] copied %s to %s" % (tmp_src, tmp_dst))
         elif src_pl.suffix in self._ext_pluntuml:
             self._conv_plantuml(src_pl=src_pl, dst_pl=dst_pl, to_fmt=to_fmt)
+        elif src_pl.name.endswith("_mermaid") and src_pl.suffix == ".md" or src_pl.suffix == ".mmd":
+            print("[Info] Mermaid conversion:%s" % src_pl)
+            res, dst_pl = self.conv_mermaid_with_crop(src_pl=src_pl, dst_pl=dst_pl, to_fmt=to_fmt)
         else:
             print("[Info] 未処理ファイル:%s" % src_pl)
 
@@ -520,7 +696,7 @@ class ChangeHandler(FileSystemEventHandler):
     @staticmethod
     def _get_internal_deal_path(path: (str, Path), pl_cwd=Path.cwd(), head_comment=""):
         """
-        src and dst pathの読み込みを代理
+        src and base_pl pathの読み込みを代理
         :param path:
         :type path:str | Path
         :return:
@@ -547,7 +723,7 @@ class ChangeHandler(FileSystemEventHandler):
     #     self._dst_pl = self._get_internal_deal_path(dst_dir)
     #
     #     # 拡張子チェック
-    #     self._to_fmt = self._validated_fmt(fmt_if_dst_without_ext=fmt_if_dst_without_ext, src_pl=self._src_pl)
+    #     self._to_fmt = self._validated_fmt(fmt_if_dst_without_ext=fmt_if_dst_without_ext, name_pl_or_str=self._src_pl)
     #     try:
     #         event_handler = self
     #         observer = Observer()
@@ -587,7 +763,7 @@ class ChangeHandler(FileSystemEventHandler):
             # await loop.run_in_executor(None, time.sleep, sec)
             # print(f'finish: {sec}秒待つよ')
 
-        # return moniko(src_pl=src_pl, dst_dir_apath=dst_dir_apath, fmt_if_dst_without_ext=fmt_if_dst_without_ext, is_crop=is_crop)
+        # return moniko(name_pl_or_str=name_pl_or_str, dst_dir_apath=dst_dir_apath, fmt_if_dst_without_ext=fmt_if_dst_without_ext, is_crop=is_crop)
         return moniko
 
     def set_monitor(self
@@ -619,7 +795,7 @@ class ChangeHandler(FileSystemEventHandler):
                     raise Exception("[Error] The path was not exists: %s" % src_pl)
                 print("[Info] Set monitoring Path:%s" % src_pl)
 
-                # Check dst path
+                # Check base_pl path
                 if not dst_pl.exists():
                     print("[Info] 右記PATH存在しません、作成しますか?:%s" % dst_pl)
                     res = ""
@@ -687,7 +863,7 @@ def convert():
     src_pl = Path(sys.argv[1])
     if not src_pl.is_absolute():
         src_pl = Path(os.getcwd()).joinpath(sys.argv[1])
-    print("src_pl:%s" % src_pl)
+    print("name_pl_or_str:%s" % src_pl)
     ChangeHandler.convert(src_file_apath=src_pl.as_posix(), dst_dir_apath=sys.argv[2],
                           to_fmt=sys.argv[3])  # , is_crop=sys.argv[4])
     print("END-END-END")
