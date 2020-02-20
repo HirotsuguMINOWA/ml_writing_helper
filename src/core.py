@@ -23,9 +23,6 @@ from pathlib import Path
 from enum import auto
 from strenum import StrEnum
 
-
-# from strenum import StrEnum
-
 # 出力がepsの場合、監視folderにpngなど画像ファイルが書き込まれたらepsへ変換するコードをかけ
 
 
