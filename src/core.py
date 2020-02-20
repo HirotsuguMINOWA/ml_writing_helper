@@ -162,7 +162,7 @@ class ChangeHandler(FileSystemEventHandler):
             return base_pl.with_suffix(to_fmt)
 
     @staticmethod
-    def _crop_img(p_src_img, p_dst: Path, to_img_fmt) -> Path:
+    def _crop_img(p_src_img, p_dst: Path) -> Path:
         """
         image(pdf/png,jpeg?)をcroppingする
         :param p_src:
@@ -180,11 +180,11 @@ class ChangeHandler(FileSystemEventHandler):
             p_dst = p_dst.joinpath(p_src_img.name)  # if the path is dir, set src_filename_stem converted
 
         """ crop white space """
-        if p_src_img.suffix not in [".png", ".jpeg", ".jpeg"]:
-            logging.error("source file is not 対応してないImage magickに。")
-            return Path()
+        # if p_src_img.suffix not in [".png", ".jpeg", ".jpeg"]:
+        #     logging.error("source file is not 対応してないImage magickに。")
+        #     return Path()
 
-        if to_img_fmt in (".png", ".jpg", ".jpeg"):  # pdfのcropはできない
+        if p_src_img.suffix in (".png", ".jpg", ".jpeg", ".eps"):  # pdfのcropはできない
             cmd_name = "convert"
             # p_conv = Path("/usr/local/bin/convert")
             # if not p_conv.exists():
@@ -192,12 +192,12 @@ class ChangeHandler(FileSystemEventHandler):
             cmd = "{cmd_name} {path_in} -trim {path_out} ".format(cmd_name=cmd_name,
                                                                   path_in=p_src_img,
                                                                   path_out=p_dst)
-        elif to_img_fmt == ".pdf":
+        elif p_src_img.suffix == ".pdf":
             cmd_name = "pdfcrop"
             cmd = "{cmd_name} {path_in} {path_out}".format(cmd_name=cmd_name, path_in=p_src_img, path_out=p_dst)
         else:
             # new_path = shutil.move(name_pl_or_str.as_posix(), dir_dst)
-            raise Exception("対応していないFormatをcroppingしようとして停止.%s:%s" % ("to_img_fmt", to_img_fmt))
+            raise Exception("対応していないFormatをcroppingしようとして停止: %s" % p_src_img)
 
         if shutil.which(cmd_name) is None:
             print("[Warning] cmd(%s) is not in path " % cmd)
@@ -224,8 +224,8 @@ class ChangeHandler(FileSystemEventHandler):
             print("Output(%s):%s" % (short_msg, cmd))
         return output
 
-    @staticmethod
-    def _conv2img(pl_src: Path, pl_dst_or_dir: Path, fmt_if_dst_without_ext: str, decode="utf8") -> Path:
+    @classmethod
+    def _conv2img(cls,pl_src: Path, pl_dst_or_dir: Path, fmt_if_dst_without_ext: str, decode="utf8") -> Path:
         """
         Image magicによる画像変換
         :param pl_src:
@@ -235,46 +235,47 @@ class ChangeHandler(FileSystemEventHandler):
         """
         if not pl_src.exists():
             raise Exception("Input image not exists:%s" % pl_src)
-        if pl_dst_or_dir.is_dir():
-            pl_dst_or_dir = pl_dst_or_dir / pl_src.stem.join(fmt_if_dst_without_ext)
+        dst_pl = cls.util_update_dst_path(base_pl=pl_dst_or_dir,name_pl_or_str=pl_src,to_fmt=fmt_if_dst_without_ext)
+        # if pl_dst_or_dir.is_dir():
+        #     pl_dst_or_dir = pl_dst_or_dir / pl_src.stem.join(fmt_if_dst_without_ext)
 
         cmd = "{cmd_conv} {src} {dst}".format(
             cmd_conv="convert"
             , src=pl_src
-            , dst=pl_dst_or_dir
+            , dst=dst_pl
         )
         print("[Debug] CMD(convert): %s" % cmd)
         tokens = shlex.split(cmd)
         # subprocess.run(tokens)
         output = check_output(tokens, stderr=STDOUT).decode(decode)
         print("Output: %s" % output)
-        return pl_dst_or_dir
+        return dst_pl
 
-    @classmethod
-    def _conv2eps(cls, pl_src: Path, pl_dst_dir: Path, del_src=True) -> Path:
-        """
-
-        :param pl_src:
-        :param pl_dst_dir: directoryのみ
-        :param del_src: del src of as tmp
-        :return: 変換後のPATH
-        """
-        if pl_src.suffix not in (".jpeg", ".jpg", ".png", ".pdf"):
-            return
-        print("[Info] Convert to eps")
-
-        if pl_dst_dir.is_dir():
-            pl_dst_dir = pl_dst_dir.joinpath(pl_src.stem + ".eps")
-        # else:
-        #     raise Exception("ディレクトリ指定して下さい。")
-        elif pl_dst_dir.suffix != ".eps":
-            # raise Exception("出力ファイルの拡張子も.epsにして下さい")
-            print("[Warning]出力拡張子を.epsに変えました")
-            pl_dst_dir = pl_dst_dir.with_suffix(".eps")
-        pl_dst_dir = cls._conv2img(pl_src, pl_dst_dir, fmt_if_dst_without_ext="png")
-        if del_src:
-            pl_src.unlink()
-        return pl_dst_dir
+    # @classmethod
+    # def _conv2eps(cls, pl_src: Path, pl_dst_dir: Path, del_src=True) -> Path:
+    #     """
+    #
+    #     :param pl_src:
+    #     :param pl_dst_dir: directoryのみ
+    #     :param del_src: del src of as tmp
+    #     :return: 変換後のPATH
+    #     """
+    #     if pl_src.suffix not in (".jpeg", ".jpg", ".png", ".pdf"):
+    #         return
+    #     print("[Info] Convert to eps")
+    #
+    #     if pl_dst_dir.is_dir():
+    #         pl_dst_dir = pl_dst_dir.joinpath(pl_src.stem + ".eps")
+    #     # else:
+    #     #     raise Exception("ディレクトリ指定して下さい。")
+    #     elif pl_dst_dir.suffix != ".eps":
+    #         # raise Exception("出力ファイルの拡張子も.epsにして下さい")
+    #         print("[Warning]出力拡張子を.epsに変えました")
+    #         pl_dst_dir = pl_dst_dir.with_suffix(".eps")
+    #     pl_dst_dir = cls._conv2img(pl_src, pl_dst_dir, fmt_if_dst_without_ext="png")
+    #     if del_src:
+    #         pl_src.unlink()
+    #     return pl_dst_dir
 
     @classmethod
     def _conv_plantuml(cls, src_pl: Path, dst_pl: Path, to_fmt=".png"):
@@ -477,13 +478,17 @@ class ChangeHandler(FileSystemEventHandler):
             src_pl=src_pl,
             dst_pl=dst_pl_full,
             to_fmt=tmp_fmt)
+
         if res:
             # tmp_dst_pl = name_pl_or_str.with_name("tmp_" + dst_pl_full).with_suffix(tmp_fmt)
             # tmp_dst_pl = cls.util_update_dst_path(base_pl=src_pl, name_pl_or_str="tmp_" + dst_pl_full.stem,
             #                                       to_fmt=tmp_fmt)
-            dst_pl = cls._crop_img(p_src_img=tmp_dst_pl, p_dst=dst_pl, to_img_fmt=to_fmt)
-            if dst_pl is not None:
-                return True, dst_pl
+            tmp_dst_pl = cls._crop_img(p_src_img=tmp_dst_pl, p_dst=dst_pl)
+        if tmp_dst_pl is not None:
+            if src_pl.suffix == to_fmt:
+                return True, tmp_dst_pl
+            else:
+                return cls._conv2img(pl_src=tmp_dst_pl, pl_dst_or_dir=dst_pl, fmt_if_dst_without_ext=to_fmt)
         emsg = "変換に失敗しました"
         logging.error(emsg)
         raise Exception(emsg)
@@ -594,7 +599,7 @@ class ChangeHandler(FileSystemEventHandler):
             self._conv_plantuml(src_pl=src_pl, dst_pl=dst_pl, to_fmt=to_fmt)
         elif src_pl.name.endswith("_mermaid") and src_pl.suffix == ".md" or src_pl.suffix == ".mmd":
             print("[Info] Mermaid conversion:%s" % src_pl)
-            res, dst_pl = self.conv_mermaid_with_crop(src_pl=src_pl, dst_pl=dst_pl, to_fmt=to_fmt)
+            self.conv_mermaid_with_crop(src_pl=src_pl, dst_pl=dst_pl, to_fmt=to_fmt)
         else:
             print("[Info] 未処理ファイル:%s" % src_pl)
 
