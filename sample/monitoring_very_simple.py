@@ -7,6 +7,6 @@ p = ChangeHandler()
 p.set_monitor(
     src_dir="fig_src"
     , dst_dir="fig_gen"
-    , to_fmt="eps"
+    , to_fmt=".eps"
 )
 p.start_monitors()
