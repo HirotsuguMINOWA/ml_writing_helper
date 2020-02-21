@@ -146,12 +146,14 @@ class ChangeHandler(FileSystemEventHandler):
     def util_update_dst_path(base_pl: Path, name_pl_or_str, to_fmt) -> Path:
         """
         destionation path modifier
+
         :param base_pl:
         :param name_pl_or_str:
         :type name_pl_or_str: Path | str
         :param to_fmt:
         :return:
         """
+        base_pl = base_pl.resolve()  # 相対PATH-> abs. path
         if isinstance(name_pl_or_str, Path):
             # conv path to str
             name_pl_or_str = name_pl_or_str.stem
@@ -225,7 +227,7 @@ class ChangeHandler(FileSystemEventHandler):
         return output
 
     @classmethod
-    def _conv2img(cls,pl_src: Path, pl_dst_or_dir: Path, fmt_if_dst_without_ext: str, decode="utf8") -> Path:
+    def _conv2img(cls, pl_src: Path, pl_dst_or_dir: Path, fmt_if_dst_without_ext: str, decode="utf8") -> Path:
         """
         Image magicによる画像変換
         :param pl_src:
@@ -235,7 +237,7 @@ class ChangeHandler(FileSystemEventHandler):
         """
         if not pl_src.exists():
             raise Exception("Input image not exists:%s" % pl_src)
-        dst_pl = cls.util_update_dst_path(base_pl=pl_dst_or_dir,name_pl_or_str=pl_src,to_fmt=fmt_if_dst_without_ext)
+        dst_pl = cls.util_update_dst_path(base_pl=pl_dst_or_dir, name_pl_or_str=pl_src, to_fmt=fmt_if_dst_without_ext)
         # if pl_dst_or_dir.is_dir():
         #     pl_dst_or_dir = pl_dst_or_dir / pl_src.stem.join(fmt_if_dst_without_ext)
 
@@ -452,9 +454,10 @@ class ChangeHandler(FileSystemEventHandler):
             , short_msg="Converting mermaid file"
         )
         if out_msg != "":
-            logging.error("mermaid変換中エラー？:%s" % out_msg)
+            logging.error("Failed conversion into mermaid image:%s" % src_pl)
             return False, None
         else:
+            logging.info("Succeeded conversion due mermaid:%s" % src_pl)
             return True, dst_pl_full
 
     @classmethod
@@ -478,21 +481,24 @@ class ChangeHandler(FileSystemEventHandler):
             src_pl=src_pl,
             dst_pl=dst_pl_full,
             to_fmt=tmp_fmt)
+        """ Conversion: mermaid """
+        if not res:
+            return False, None
+        """ Cropping image """
+        tmp_dst_pl = cls._crop_img(p_src_img=tmp_dst_pl, p_dst=dst_pl)
+        if tmp_dst_pl is None:
+            logging.error("Failed crop: %s" % src_pl)
+            return False, None
 
-        if res:
-            # tmp_dst_pl = name_pl_or_str.with_name("tmp_" + dst_pl_full).with_suffix(tmp_fmt)
-            # tmp_dst_pl = cls.util_update_dst_path(base_pl=src_pl, name_pl_or_str="tmp_" + dst_pl_full.stem,
-            #                                       to_fmt=tmp_fmt)
-            tmp_dst_pl = cls._crop_img(p_src_img=tmp_dst_pl, p_dst=dst_pl)
-        if tmp_dst_pl is not None:
-            if src_pl.suffix == to_fmt:
-                return True, tmp_dst_pl
-            else:
-                return cls._conv2img(pl_src=tmp_dst_pl, pl_dst_or_dir=dst_pl, fmt_if_dst_without_ext=to_fmt)
-        emsg = "変換に失敗しました"
-        logging.error(emsg)
-        raise Exception(emsg)
-        return False, None  # failed
+        if src_pl.suffix == to_fmt:
+            return True, tmp_dst_pl
+
+        """ Image conversion"""
+        tmp_dst_pl = cls._conv2img(pl_src=tmp_dst_pl, pl_dst_or_dir=dst_pl, fmt_if_dst_without_ext=to_fmt)
+        if tmp_dst_pl is None:
+            return False, None
+        else:
+            return True, tmp_dst_pl
 
     def convert(self, src_file_apath, dst_dir_apath, to_fmt=".png", is_crop=True):  # , _to_fmt="pdf"):
         """
