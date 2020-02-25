@@ -578,10 +578,11 @@ class ChangeHandler(FileSystemEventHandler):
                 cur_to_fmt = to_fmt
             pl_src2 = self._conv_slide(src_pl=src_pl, dst_pl=dst_pl, to_fmt=cur_to_fmt)
             if is_crop:
-                p_src_cropped = self._crop_img(p_src_img=pl_src2, p_dst=dst_pl, to_img_fmt=cur_to_fmt)
+                p_src_cropped = self._crop_img(p_src_img=pl_src2, p_dst=dst_pl)
             """ pdf 2 eps """
             if to_fmt == ".eps":
-                self._conv2eps(pl_src=p_src_cropped, pl_dst_dir=dst_pl)
+                # self._conv2eps(pl_src=p_src_cropped, pl_dst_dir=dst_pl)
+                self._conv2img(pl_src=p_src_cropped, pl_dst_or_dir=dst_pl, fmt_if_dst_without_ext=to_fmt)
             """ rm tmpfile"""
             # if plib_pdf_convd_tmp.exists():
             #     pathlib.Path(plib_pdf_convd_tmp).unlink()
