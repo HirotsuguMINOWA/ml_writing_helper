@@ -393,7 +393,7 @@ class ChangeHandler(FileSystemEventHandler):
         :return:
         """
         path_dst = cls._conv2img(pl_src=src_pl, pl_dst_or_dir=dst_pl, fmt_if_dst_without_ext=to_fmt)
-        path_dst = cls._crop_img(p_src_img=src_pl, p_dst=path_dst, to_img_fmt=to_fmt)
+        path_dst = cls._crop_img(p_src_img=src_pl, p_dst=path_dst)
         return path_dst
 
     @classmethod
@@ -536,17 +536,18 @@ class ChangeHandler(FileSystemEventHandler):
 
         ####### 拡張子毎に振り分け
         # TODO: odp?に要対応.LibreOffice
-        if src_pl.suffix in (".png", ".jpg", ".jpeg"):
+        if src_pl.suffix in (".png", ".jpg", ".jpeg", ".ai"):
+            """Image Cropping and Conversion
+            - [条件] ImageMagicが対応しているFOrmatのみ. Only the format which corresponded to ImageMagick
+            - files entered in src_folder, converted into pl_dst_or_dir which cropping. and conv to eps
             """
-            Image Cropping only
-            files entered in src_folder, converted into pl_dst_or_dir wich cropping. and conv to eps
-            """
-            logger.info("Image->croppingしてdst pathへコピーします")
-            pl_src2 = self._crop_img(src_pl, dst_pl.joinpath(src_pl.stem + src_pl.suffix),
-                                     to_img_fmt=src_pl.suffix)
-            if to_fmt == ".eps":
-                self._conv2eps(pl_src=pl_src2, pl_dst_dir=dst_pl.joinpath(src_pl.stem + src_pl.suffix))
-            return
+            logger.info("Image cropping and Conversion")
+            # pl_src2 = self._crop_img(src_pl, dst_pl.joinpath(src_pl.stem + src_pl.suffix),
+            #                          to_img_fmt=src_pl.suffix)
+            # if to_fmt == ".eps":
+            #     self._conv2eps(pl_src=pl_src2, pl_dst_dir=dst_pl.joinpath(src_pl.stem + src_pl.suffix))
+            # return
+            _ = self._conv_with_crop(src_pl=src_pl, dst_pl=dst_pl, to_fmt=to_fmt)
 
         elif src_pl.suffix in (".ppt", ".pptx", ".odp") and not src_pl.name.startswith("~"):
             """
@@ -585,11 +586,12 @@ class ChangeHandler(FileSystemEventHandler):
             # if plib_pdf_convd_tmp.exists():
             #     pathlib.Path(plib_pdf_convd_tmp).unlink()
             print("Converted")
-        elif src_pl.suffix == ".ai":
-            """
-            その他のフォーマット(eg. ai)を画像化してcrop
-            """
-            _ = self._conv_with_crop(src_pl=src_pl, dst_pl=dst_pl, to_fmt=to_fmt)
+        # elif src_pl.suffix == ".ai":
+        #     """
+        #     - Image Conversion and Cropping
+        #     - その他のフォーマット(eg. ai)を画像化してcrop
+        #     """
+        #     _ = self._conv_with_crop(src_pl=src_pl, dst_pl=dst_pl, to_fmt=to_fmt)
 
         elif src_pl.suffix == ".bib" or src_pl.suffix == to_fmt:  # and fmt_if_dst_without_ext == ".bib":
             """
