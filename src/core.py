@@ -586,7 +586,7 @@ class ChangeHandler(FileSystemEventHandler):
             """ rm tmpfile"""
             # if plib_pdf_convd_tmp.exists():
             #     pathlib.Path(plib_pdf_convd_tmp).unlink()
-            print("Converted")
+            logging.info("Converted")
         # elif src_pl.suffix == ".ai":
         #     """
         #     - Image Conversion and Cropping
