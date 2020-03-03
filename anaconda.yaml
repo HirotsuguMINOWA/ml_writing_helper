@@ -7,4 +7,4 @@ dependencies:
 #- numpy
 - pip:
 #  - peewee==2.8.1
-#˝    - strenum
+#    - strenum
