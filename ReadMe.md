@@ -17,7 +17,9 @@
 
 ## 注意@Design
 
-- LaTeXには`.eps`がよい
+- LaTeXには`.eps`
+  - 現在, pdfはcropができてない。cropできるならpdfの方がよいかも。
+  - eps変換は画質劣化が生じる。pdfからの変換
 - Markdownには`.png`へ変換がよい
 
 

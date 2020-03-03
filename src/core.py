@@ -44,7 +44,9 @@ stream_handler = StreamHandler()
 stream_handler.setLevel(logging.DEBUG)
 
 # ログ出力フォーマット設定
-handler_format = Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+# handler_format = Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+# handler_format = Formatter('%(asctime)-15s - %(name)s - %(levelname)s - %(message)s')
+handler_format = Formatter('%(asctime)s[%(levelname)s] %(message)s', datefmt='%H:%M:%S')
 stream_handler.setFormatter(handler_format)
 
 # --------------------------------
@@ -63,6 +65,8 @@ logger.addHandler(stream_handler)
 
 
 class ChangeHandler(FileSystemEventHandler):
+    mermaid_fmt_out = (".svg", ".png", ".pdf")
+    plantuml_fmt_to = (".png", ".svg", ".pdf", ".eps", ".html", ".txt", ".tex")
     # FIXME: 下記２つのsofficeのlistは要整理
     paths_soffice = ['soffice',  # pathが通っている前提の場合
                      '/Applications/LibreOffice.app/Contents/MacOS/soffice',
@@ -127,29 +131,35 @@ class ChangeHandler(FileSystemEventHandler):
         #     self._to_fmt = _to_fmt
         # TODO: 入力フォーマットか否か要チェック
 
-    @staticmethod
-    def which(name) -> bool:
-        """
-        which command wrapper on python
-        :param name:
-        :return:
-        """
-        # print(shutil.which('ls'))  # > '/bin/ls'
-        # print(shutil.which('ssss'))  # > None
-        res = shutil.which(name)
-        if res:
-            return True, res
-        else:
-            return False, ""
+    # @staticmethod
+    # def which(name) -> Tuple[bool, str]:
+    #     """
+    #     which command wrapper on python
+    #     :param name:
+    #     :return:
+    #     """
+    #     # print(shutil.which('ls'))  # > '/bin/ls'
+    #     # print(shutil.which('ssss'))  # > None
+    #     res = shutil.which(name)
+    #     if res:
+    #         return True, res
+    #     else:
+    #         return False, ""
 
     @staticmethod
-    def util_get_tmp_path(path: Path) -> Path:
+    def util_manage_tmp_path(path: Path, is_remove=False) -> Path:
         """
         「共通」したtempファイルpath返却
         :param path:
         :return:
         """
-        return path.with_name(path.stem + "_tmp" + path.suffix)
+        tmp_str = "_tmp"
+        if is_remove:
+            # tmp取り除く
+            return path.with_name(path.stem.replace(tmp_str, "") + path.suffix)
+        else:
+            # tmp印加
+            return path.with_name(path.stem + tmp_str + path.suffix)
 
     # @staticmethod
     # def util_update_dst_path(base_dst_pl: Path, fname_str_or_pl, fmt) -> Path:
@@ -203,28 +213,40 @@ class ChangeHandler(FileSystemEventHandler):
 
         """ crop white space """
         # if src_img_pl.suffix not in [".png", ".jpeg", ".jpeg"]:
-        #     logging.error("source file is not 対応してないImage magickに。")
+        #     logger.error("source file is not 対応してないImage magickに。")
         #     return Path()
 
-        if src_img_pl.suffix in (".png", ".jpg", ".jpeg", ".eps"):  # pdfのcropはできない
+        if src_img_pl.suffix in (".png", ".jpg", ".jpeg", ".eps", ".pdf"):  # pdfのcropはできない
             cmd_name = "convert"
             # p_conv = Path("/usr/local/bin/convert")
             # if not p_conv.exists():
             #     raise Exception("%s not found" % p_conv)
-            cmd = "{cmd_name} {path_in} -trim {path_out} ".format(cmd_name=cmd_name,
-                                                                  path_in=src_img_pl,
-                                                                  path_out=dst_pl)
+            # if src_img_pl.suffix == ".pdf":
+            #     # url: https://www.imagemagick.org/discourse-server/viewtopic.php?t=15667
+            #     # src: mogrify -format pdf -define pdf:use-trimbox=true /TEMP/foo.pdf
+            #     trim_cmd = "-mogrify -format pdf -define pdf:use-trimbox=true"
+            # else:
+            trim_cmd = "-trim"
+            cmd = "{cmd_name} {path_in} {trim_cmd} {path_out} ".format(cmd_name=cmd_name,
+                                                                       trim_cmd=trim_cmd,
+                                                                       path_in=src_img_pl,
+                                                                       path_out=dst_pl)
+        # 自動変換対応していない
         elif src_img_pl.suffix == ".pdf":
+            # FIXME: cropされない
             cmd_name = "pdfcrop"
             cmd = "{cmd_name} {path_in} {path_out}".format(cmd_name=cmd_name, path_in=src_img_pl, path_out=dst_pl)
+            # imagemagick mogrifyを使う->失敗
+        #     shutil.copy(src_img_pl, dst_pl)
+        #     cmd = "magick mogrify -format pdf -define pdf:use-trimbox=true {dst_path}".format(dst_path=dst_pl)
         else:
             # new_path = shutil.move(fname_str_or_pl.as_posix(), dir_dst)
-            logging.error("対応していないFormatをcroppingしようとして停止: %s" % src_img_pl)
+            logger.error("対応していないFormatをcroppingしようとして停止: %s" % src_img_pl)
             return
 
         if shutil.which(cmd_name) is None:
-            print("[Warning] cmd(%s) is not in path " % cmd)
-        print("[Debug] Cropping CMD: " + cmd)
+            logger.error("Conversion cmd(%s) is not in path " % cmd)
+        logger.debug("Cropping CMD: " + cmd)
         tokens = shlex.split(cmd)
         subprocess.run(tokens)
         # output = check_output(tokens, stderr=STDOUT).decode("utf8")
@@ -240,11 +262,15 @@ class ChangeHandler(FileSystemEventHandler):
         :return: output of rum
         """
         if is_print:
-            print("[Debug] CMD(%s):%s" % (short_msg, cmd))
+            logger.debug("CMD(%s):%s" % (short_msg, cmd))
         tokens = shlex.split(cmd)
-        output = check_output(tokens, stderr=STDOUT).decode("utf8")
+        try:
+            output = check_output(tokens, stderr=STDOUT).decode("utf8")
+        except Exception as e:
+            logger.error(e)
+            return "Error occurred"
         if is_print:
-            print("Output(%s):%s" % (short_msg, cmd))
+            logger.debug("Output(%s):%s" % (short_msg, cmd))
         return output
 
     @classmethod
@@ -270,34 +296,42 @@ class ChangeHandler(FileSystemEventHandler):
         #################################################
         # 同一FormatはIgnore
         if src_pl.suffix == dst_pl.suffix:
-            logging.info("同一formatなので画像変換はSkip")
+            logger.info("同一formatなので画像変換はせず、コピーだけ行う(srcとdstが同じでなければ)")
+            if src_pl != dst_pl:
+                shutil.copy(src_pl, dst_pl)
             return dst_pl
 
         need_conv = True
-        cmd_conv = "pdftops"
-        if src_pl.suffix == dst_pl.suffix:
-            if cls.which(cmd_conv):
-                logging.info("pdftopsで変換します")
-                cmd = "{cmd_conv} -eps {src} {dst}".format(
-                    cmd_conv=cmd_conv,
-                    src=src_pl,
-                    dst=dst_pl
-                )
-                need_conv = False
-            else:
-                logging.info("pdf->epsへの変換はpdftopsコマンドを推奨。pdftopsコマンドへpathが通ってません")
+        # cmd_conv = "pdftops"
+        # if src_pl.suffix == dst_pl.suffix:
+        #     if shutil.which(cmd_conv) != "":
+        #         logger.info("pdftopsで変換します")
+        #         cmd = "{cmd_conv} -eps {src} {dst}".format(
+        #             cmd_conv=cmd_conv,
+        #             src=src_pl,
+        #             dst=dst_pl
+        #         )
+        #         need_conv = False
+        #     else:
+        #         logger.info("pdf->epsへの変換はpdftopsコマンドを推奨。pdftopsコマンドへpathが通ってません")
         if need_conv:
-            logging.info("ImageMagickで変換します")
-            cmd = "{cmd_conv} {src} {dst}".format(
-                cmd_conv="convert"
+            cmd_conv = "convert"
+            logger.info("ImageMagickで変換します")
+            if dst_pl.suffix == ".eps":
+                head = "eps2:"
+            else:
+                head = ""
+            cmd = "{cmd_conv} {src} {head}{dst}".format(
+                cmd_conv=cmd_conv
+                , head=head
                 , src=src_pl
                 , dst=dst_pl
             )
-        logging.debug("CMD(%s): %s" % (cmd_conv, cmd))
+        logger.debug("CMD(%s): %s" % (cmd_conv, cmd))
         tokens = shlex.split(cmd)
         # subprocess.run(tokens)
         output = check_output(tokens, stderr=STDOUT).decode(decode)
-        print("Output: %s" % output)
+        logger.debug("Output: %s" % output)
         return dst_pl
 
     # @classmethod
@@ -327,20 +361,21 @@ class ChangeHandler(FileSystemEventHandler):
     #     return pl_dst_dir
 
     @classmethod
-    def _conv_plantuml(cls, src_pl: Path, dst_pl: Path, to_fmt=".png"):
+    def _conv_plantuml(cls, src_pl: Path, dst_pl: Path):
         cls._cmd_plantuml = "plantuml"
-        if shutil.which(cls._cmd_plantuml) is None:
-            print("[ERROR] %s not found" % cls._cmd_plantuml)
+        path_cmd = shutil.which(cls._cmd_plantuml)
+        if path_cmd is None:
+            logger.error("%s not found. Can't convert from PlantUML" % cls._cmd_plantuml)
             return
         # todo: plantuml conv.
-        if to_fmt not in (".png", ".pdf", ".eps"):
+        if dst_pl.suffix not in cls.plantuml_fmt_to:
             print("[ERROR] Indicated Formatは未対応 in coverting with plantuml")
             return
-        cmd = "{cmd_pu} -o {dst} -t{fmt} {src}".format(
+        cmd = "{cmd_pu} -o {dst_abs_dir_only} -t{fmt} {src}".format(
             cmd_pu=cls._cmd_plantuml,
             src=src_pl.as_posix(),
-            dst=dst_pl.as_posix(),
-            fmt=to_fmt[1:]
+            dst_abs_dir_only=dst_pl.parent,
+            fmt=dst_pl.suffix[1:]
         )
         res = cls._run_cmd(cmd=cmd, short_msg="Converting with %s" % cls._cmd_plantuml)
         print("Result:%s" % res)
@@ -365,8 +400,8 @@ class ChangeHandler(FileSystemEventHandler):
             pl_dst_dir = dst_pl
         else:
             pl_dst_dir = dst_pl.parent
-        print("[Debug] dst_pl: %s" % dst_pl)
-        print("[Debug] CWD:%s" % os.getcwd())
+        logger.debug("dst_pl: %s" % dst_pl)
+        logger.debug("CWD:%s" % os.getcwd())
         found_libreoffice = False
 
         for p_soffice in self._ppaths_soffice:  # type: Path
@@ -381,15 +416,15 @@ class ChangeHandler(FileSystemEventHandler):
                 break
 
         # output = self._run_cmd(cmd)
-        print("[Debug] CMD(slide2img):" + cmd)
+        logger.debug("CMD(slide2img):" + cmd)
         tokens = shlex.split(cmd)
         # subprocess.run(tokens)
         output = check_output(tokens, stderr=STDOUT).decode("utf8")
-        print("Output: %s" % output)
+        logger.debug("Output: %s" % output)
         if output == "Error: source file could not be loaded\n":
             """なぜかLO Vanillaで出現？"""
             # raise Exception("")
-            print("[ERROR] なぜかLO Vanillaで出現？")
+            logger.error("なぜかLO Vanillaで出現？")
 
         ### 変換成功したはず
         #
@@ -439,19 +474,29 @@ class ChangeHandler(FileSystemEventHandler):
         :param to_fmt:
         :return:
         """
-        tmp_dst_pl = cls.util_get_tmp_path(dst_pl)
+        tmp_dst_pl = cls.util_manage_tmp_path(dst_pl)
         # dst_pl2, tmp_dst_pl = cls.util_update_dst_path(base_dst_pl=src_pl, fname_str_or_pl=dst_pl, fmt=to_fmt,
         #                                                is_tmp=True)
-        if src_pl.suffix == ".pdf":
-            """
-            - pdfはcropできないので、先に画像変換する。変換後があわよくばcrop_imgに対応したフォーマットなら画質落としにくい。
-            - 一方、上記でなければ、先にcropする場合、元のソース画像の画像変換を行わないため、画質が落ちないと思われる
-            """
-            path_dst = cls._conv2img(src_pl=src_pl, dst_pl=tmp_dst_pl)  # , fmt_if_dst_without_ext=fmt)
-            path_dst = cls._crop_img(src_img_pl=path_dst, dst_pl=dst_pl)
-        else:
-            path_dst = cls._crop_img(src_img_pl=src_pl, dst_pl=tmp_dst_pl)
-            path_dst = cls._conv2img(src_pl=path_dst, dst_pl=dst_pl)  # , fmt_if_dst_without_ext=fmt)
+        path_dst = cls._conv2img(src_pl=src_pl, dst_pl=tmp_dst_pl)  # , fmt_if_dst_without_ext=fmt)
+        path_dst = cls._crop_img(src_img_pl=path_dst, dst_pl=dst_pl)
+
+        #
+        # 下記で解像度向上させようとしたが、jpeg,pngがcropされない
+        #
+        # if src_pl.suffix == ".pdf":
+        #     """
+        #     - pdfはcropできないので、先に画像変換する。変換後があわよくばcrop_imgに対応したフォーマットなら画質落としにくい。
+        #     - 一方、上記でなければ、先にcropする場合、元のソース画像の画像変換を行わないため、画質が落ちないと思われる
+        #     """
+        #     path_dst = cls._conv2img(src_pl=src_pl, dst_pl=tmp_dst_pl)  # , fmt_if_dst_without_ext=fmt)
+        #     path_dst = cls._crop_img(src_img_pl=path_dst, dst_pl=dst_pl)
+        # else:
+        #     tmp_dst_pl = tmp_dst_pl.with_suffix(src_pl.suffix)
+        #     path_dst = cls._crop_img(src_img_pl=src_pl, dst_pl=tmp_dst_pl)
+        #     path_dst = cls._conv2img(src_pl=path_dst, dst_pl=cls.util_manage_tmp_path(dst_pl,
+        #                                                                               is_remove=True))  # , fmt_if_dst_without_ext=fmt)
+        if tmp_dst_pl.exists():
+            tmp_dst_pl.unlink()
         return path_dst
 
     @classmethod
@@ -460,7 +505,7 @@ class ChangeHandler(FileSystemEventHandler):
         """
         Mermaid(*_mermaid.md) Conversion
         mermaid markdownを変換
-        - 外部
+        - dst_dir: cwdに生成されるので、生成時にchdirで出力先を調整しなければならない。
         :param src_pl:
         :param dst_pl:
         :param to_fmt:
@@ -468,20 +513,20 @@ class ChangeHandler(FileSystemEventHandler):
         """
         # Check on format
         if dst_pl.suffix not in (".svg", ".png", ".pdf"):
-            logger.error("Cannot conversion file type:%s" % dst_pl.suffix)
+            logger.error("Cannot convert file type:%s. Skipped" % dst_pl.suffix)
             return False, None
 
         """ Check exists of mermaid-cli """
         cmd_name_mermaid = "mmdc"
-        res, path = cls.which(cmd_name_mermaid)
-        if not res:
+        cmd_name_mermaid = shutil.which(cmd_name_mermaid)
+        if cmd_name_mermaid == "":
             msg = """
                 mermaidコマンドに当たるmmdcにpathが通っていません。
                 要PATH通し/インスト（下記参考）
                 npm install -g mermaid
                 npm install -g mermaid.cli
                 """
-            logging.error(msg)
+            logger.error(msg)
             return
 
         """  
@@ -503,23 +548,24 @@ class ChangeHandler(FileSystemEventHandler):
 
         # dst_pl_full, _ = cls.util_update_dst_path(base_dst_pl=dst_pl, fname_str_or_pl=src_pl, fmt=to_fmt)
 
-        cmd = "{cmd_mmdc} -i {src_path} -o {dst_filename_only}".format(
+        cmd = "{cmd_mmdc} -i {src_path} -o {dst_fullpath_ok}".format(
             cmd_mmdc=cmd_name_mermaid,
-            dst_filename_only=dst_pl.name,
+            dst_fullpath_ok=dst_pl,
             src_path=src_pl.as_posix()
         )
+        # FIXME:
         out_msg = cls._run_cmd(
             cmd=cmd
             , short_msg="Converting mermaid file"
         )
-        # Move generated file
-        gen_path = src_pl.with_name(dst_pl.name)
-        shutil.move(gen_path, dst_pl)
+        # # Move generated file
+        # gen_path = src_pl.with_name(dst_pl.name)
+        # shutil.move(gen_path, dst_pl)
         if out_msg != "":
-            logging.error("Failed conversion into mermaid image:%s" % src_pl)
+            logger.error("Failed conversion into mermaid image:%s" % src_pl)
             return False, None
         else:
-            logging.info("Succeeded conversion due mermaid:%s" % src_pl)
+            logger.info("Succeeded conversion on mermaid:%s" % src_pl)
             return True, dst_pl
 
     @classmethod
@@ -531,7 +577,7 @@ class ChangeHandler(FileSystemEventHandler):
         :param to_fmt:
         :return: Success?, Output file's path
         """
-        if dst_pl.suffix in ("svg", "png", "pdf"):
+        if dst_pl.suffix in cls.mermaid_fmt_out:
             tmp_fmt = dst_pl.suffix
         else:
             tmp_fmt = ".png"  # ImageMagickが対応しておりcropが利くフォーマット
@@ -541,22 +587,22 @@ class ChangeHandler(FileSystemEventHandler):
         # Conversion
         res, tmp_dst_pl = cls.conv_mermaid(
             src_pl=src_pl,
-            dst_pl=dst_pl)#,
-            # to_fmt=tmp_fmt)
+            dst_pl=dst_pl)  # ,
+        # to_fmt=tmp_fmt)
         """ Conversion: mermaid """
         if not res:
             return False, None
         """ Cropping image """
         tmp_dst_pl = cls._crop_img(src_img_pl=tmp_dst_pl, dst_pl=dst_pl)
         if tmp_dst_pl is None:
-            logging.error("Failed crop: %s" % src_pl)
+            logger.error("Failed crop: %s" % src_pl)
             return False, None
 
         if src_pl.suffix == dst_pl.suffix:
             return True, tmp_dst_pl
 
         """ Image conversion"""
-        tmp_dst_pl = cls._conv2img(src_pl=tmp_dst_pl, dst_pl=dst_pl, fmt_if_dst_without_ext=to_fmt)
+        tmp_dst_pl = cls._conv2img(src_pl=tmp_dst_pl, dst_pl=dst_pl)
         if tmp_dst_pl is None:
             return False, None
         else:
@@ -589,18 +635,18 @@ class ChangeHandler(FileSystemEventHandler):
         # del to_fmt # 消すな. .bibコピー失敗するから. #FIXME: 要修正
         # to_fmt = None  # Prevent Trouble
 
+        """ 無視すべき拡張子 """
+        if src_pl.name.startswith("~") or src_pl.name.startswith("."):
+            logger.info("Ingored: %s" % src_pl.name)
+            return
         # チェック
         # to_fmt = self._validated_fmt(to_fmt=to_fmt, src_pl=src_pl)
         if src_pl.suffix is None or src_pl.suffix == "":
-            logging.error("Stop conversion because the indicated extension of source was wrong")
+            logger.error("Stop conversion because the indicated extension of source was wrong(file:%s)." % src_pl.name)
             return
         if dst_pl.suffix is None or dst_pl.suffix == "":
-            logging.error("Stop conversion because the indicated extension of destination was wrong")
-            return
-
-        """ 無視すべき拡張子 """
-        if src_pl.name.startswith("~"):
-            logging.info("Ingored: %s" % src_pl.stem + src_pl.suffix)
+            logger.error(
+                "Stop conversion because the indicated extension of destination was wrong(file:%s)." % dst_pl.name)
             return
 
         # 下記不要？
@@ -664,7 +710,7 @@ class ChangeHandler(FileSystemEventHandler):
             """ rm tmpfile"""
             # if plib_pdf_convd_tmp.exists():
             #     pathlib.Path(plib_pdf_convd_tmp).unlink()
-            logging.info("Converted")
+            logger.info("Converted")
         # elif src_pl.suffix == ".ai":
         #     """
         #     - Image Conversion and Cropping
@@ -683,12 +729,12 @@ class ChangeHandler(FileSystemEventHandler):
             new_path = shutil.copyfile(tmp_src, tmp_dst)
             print("[Info] copied %s to %s" % (tmp_src, tmp_dst))
         elif src_pl.suffix in self._ext_pluntuml:
-            self._conv_plantuml(src_pl=src_pl, dst_pl=dst_pl, to_fmt=to_fmt)
+            self._conv_plantuml(src_pl=src_pl, dst_pl=dst_pl)
         elif src_pl.name.endswith("_mermaid") and src_pl.suffix == ".md" or src_pl.suffix == ".mmd":
             print("[Info] Mermaid conversion:%s" % src_pl)
             self.conv_mermaid_with_crop(src_pl=src_pl, dst_pl=dst_pl)  # , to_fmt=to_fmt)
         else:
-            logging.info("未処理ファイル:%s" % src_pl)
+            logger.info("未処理ファイル:%s" % src_pl)
 
     #
     # def conv2pnt(self, path_src, dir_dst):
@@ -724,20 +770,23 @@ class ChangeHandler(FileSystemEventHandler):
         """
         filepath = event.src_path
         filename = os.path.basename(filepath)
-        print('%sが生成された' % filename)
+        print("-------------------  Event Start -------------------")
+        logger.info('Created: %s' % filename)
         # self.convert(src_file_apath=event.src_path, dst_dir_apath=self._dst_pl, fmt_if_dst_without_ext=self._to_fmt)  # , _to_fmt="png")
         self._road_balancer(event=event)
 
     def on_modified(self, event):
         filepath = event.src_path
         filename = os.path.basename(filepath)
-        print('%sが変更されました' % filename)
+        print("\n\n")
+        logger.info('Modified:%s' % filename)
         self._road_balancer(event=event)
 
     def on_deleted(self, event):
         filepath = event.src_path
         filename = os.path.basename(filepath)
-        print('%sを削除しました' % filename)
+        print("\n\n")
+        logger.info('Deleted:%s' % filename)
         # self._road_balancer(event=event)
 
     def on_moved(self, event):
@@ -750,7 +799,8 @@ class ChangeHandler(FileSystemEventHandler):
         """
         filepath = event.src_path
         filename = os.path.basename(filepath)
-        print('%s moved' % filename)
+        print("\n\n")
+        logger.info('Moved:%s' % filename)
         # self.convert(src_file_apath=event.dest_path, dst_dir_apath=self._dst_pl,fmt_if_dst_without_ext=self._to_fmt)  # , _to_fmt="png")
         self._road_balancer(event=event)
 
