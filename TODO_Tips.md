@@ -1,5 +1,6 @@
 # TODO
-1. [ ] 徐々にOpenCV+Numpyに置き換える事!!
+1. [ ] 徐々にPillow/OpenCV+Numpyに置き換える事!!
+   - ~~Pillowは2MB, OpenCVは約50MB. Pillowも少しなれるか。cropにもPillow使えるので問題ない？~~
    - Pillow: OpenCVと重複する。OpenCVになれる事にする。
 - [ ] .aiを.eps/.pngへ変換可能へ
 - [ ] mermaidを画像化
