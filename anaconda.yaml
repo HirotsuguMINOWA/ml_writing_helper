@@ -1,0 +1,10 @@
+name: ml_writing_helper
+dependencies:
+#- python=3.5.1=5
+- python>=3.6
+#- opencv
+- watchdog
+#- numpy
+- pip:
+#  - peewee==2.8.1
+#˝    - strenum
