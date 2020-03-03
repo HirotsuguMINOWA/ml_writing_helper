@@ -599,7 +599,6 @@ class ChangeHandler(FileSystemEventHandler):
             logger.error("Failed:%s" % src_pl)
             return None
 
-
     @classmethod
     def _conv_with_crop(cls, src_pl: Path, dst_pl: Path) -> Path:
         """
@@ -772,6 +771,10 @@ class ChangeHandler(FileSystemEventHandler):
         # init1
         # FIXME: Pathしか受け付けないように要修正
         src_pl = Path(src_file_apath)  # pathlibのインスタンス
+        """ 無視すべき拡張子 """
+        if src_pl.name.startswith("~") or src_pl.name.startswith(".") or src_pl.suffix in (".part"):
+            logger.info("Ignored: %s" % src_pl.name)
+            return
         if not src_pl.is_absolute():
             raise Exception("path_srcは絶対Pathで指定して下さい。src_path:%s" % src_pl)
         del src_file_apath
@@ -787,10 +790,7 @@ class ChangeHandler(FileSystemEventHandler):
         # del to_fmt # 消すな. .bibコピー失敗するから. #FIXME: 要修正
         # to_fmt = None  # Prevent Trouble
 
-        """ 無視すべき拡張子 """
-        if src_pl.name.startswith("~") or src_pl.name.startswith("."):
-            logger.info("Ingored: %s" % src_pl.name)
-            return
+
         # チェック
         # to_fmt = self._validated_fmt(to_fmt=to_fmt, src_pl=src_pl)
         if src_pl.suffix is None or src_pl.suffix == "":
@@ -870,16 +870,17 @@ class ChangeHandler(FileSystemEventHandler):
         #     """
         #     _ = self._conv_with_crop(src_pl=src_pl, dst_pl=dst_pl, fmt=fmt)
 
-        elif src_pl.suffix == ".bib" or src_pl.suffix == to_fmt:  # and fmt_if_dst_without_ext == ".bib":
+        elif src_pl.suffix == ".bib":  # and fmt_if_dst_without_ext == ".bib":
             """
             .bibファイルのコピー
             注意).bib.partが生成されるが、瞬間的に.bibになる。それを捉えて該当フォルダへコピーしている
             """
             # FIXME: 上記if、条件が重複しているので注
-            tmp_src = src_pl  # .with_suffix("")
-            tmp_dst = dst_pl.joinpath(src_pl.name)  # .with_suffix(".bib")
-            new_path = shutil.copyfile(tmp_src, tmp_dst)
-            print("[Info] copied %s to %s" % (tmp_src, tmp_dst))
+            # tmp_src = src_pl  # .with_suffix("")
+            # tmp_dst = dst_pl.joinpath(src_pl.name)  # .with_suffix(".bib")
+            # new_path = shutil.copyfile(tmp_src, tmp_dst)
+            shutil.copy(src_pl, dst_pl)
+            logger.info("Copied %s to %s" % (src_pl, dst_pl))
         elif src_pl.suffix in self._ext_pluntuml:
             self._conv_plantuml(src_pl=src_pl, dst_pl=dst_pl)
         elif src_pl.name.endswith("_mermaid") and src_pl.suffix == ".md" or src_pl.suffix == ".mmd":
