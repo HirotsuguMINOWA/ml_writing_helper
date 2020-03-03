@@ -3,6 +3,7 @@
 # You can import by "from core import ChangeHandler"
 import os
 import shutil
+import sys
 from pathlib import Path
 from core import ChangeHandler
 import concurrent.futures
@@ -12,11 +13,13 @@ from concurrent.futures import ThreadPoolExecutor
 
 # from logging import StreamHandler, Formatter, INFO, getLogger
 
-to_fmt=".eps"
+to_fmt = ".eps"
 src = "fig_src"
 sample = "fig_sample"
 dst = "fig_gen"
 exc_ext = [".odp"]
+
+e_task1 = None
 
 
 def task1():
@@ -46,11 +49,12 @@ def task2():
             print("copy %s to %s" % (fn, src))
             shutil.copy(fn, src)
     print("end task2")
+    e_task1.cancel()  # FIXME: 効いていない
 
 
 print("main start")
 with ThreadPoolExecutor(max_workers=2, thread_name_prefix="thread") as executor:
-    executor.submit(task1)
+    e_task1 = executor.submit(task1)
     # time.sleep(0.5)
     executor.submit(task2)
     # getLogger().info("submit end")
