@@ -1,6 +1,8 @@
 ## Added by me
 #.idea/*
 **/fig_gen/*
+**/fig_src/*
+**/.history
 
 # Created by .ignore support plugin (hsz.mobi)
 ### Python template
@@ -1638,4 +1640,44 @@ ipython_config.py
 pyvenv.cfg
 .venv
 pip-selfcheck.json
+### https://raw.github.com/github/gitignore/65047ae444f1a784cde8d6f52c32e781a484a505/Global/VisualStudioCode.gitignore
+
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+# !.vscode/launch.json
+!.vscode/extensions.json
+*.code-workspace
+
+
+### https://raw.github.com/github/gitignore/65047ae444f1a784cde8d6f52c32e781a484a505/Global/macOS.gitignore
+
+# General
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Icon must end with two \r
+Icon
+
+
+# Thumbnails
+._*
+
+# Files that might appear in the root of a volume
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+
+# Directories potentially created on remote AFP share
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk
+
 
