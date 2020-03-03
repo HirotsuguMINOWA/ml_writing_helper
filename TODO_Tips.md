@@ -1,7 +1,9 @@
 # TODO
+1. [ ] 徐々にOpenCV+Numpyに置き換える事!!
+   - Pillow: OpenCVと重複する。OpenCVになれる事にする。
 - [ ] .aiを.eps/.pngへ変換可能へ
 - [ ] mermaidを画像化
-- [ ] 出力時の日時datetimeを併記
+- [x] 出力時の日時datetimeを併記
 - [ ] raise Exceptionを全て排除。エラーでいちいち留めない。例外処理を追加して
 - [ ] bin(soffice, imagemagick'convert and so on)の存在確認
 - [ ] pdfは透過png?が黒くなるためデフォルトはpng

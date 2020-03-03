@@ -1,12 +1,33 @@
 # ML Writing Helper
 
-## CLI
+## CLI(未実装)
 - 書式: `convert4ml src_path dst_dir to_fmt is_crop`
 
 ### watcher
 - 書式: `mlhelper.watch`
 
 ## Usage
+
+```python
+from ml_writing_helper.src.core import ChangeHandler
+from pathlib import Path
+manu_path = Path(__file__).resolve().parent # manuscript_path as hiro_watcher
+o=ChangeHandler()
+
+o.set_monitor(
+ src_dir=manu_path.joinpath("fig_src")
+ ,dst_dir=manu_path.joinpath("fig_gen")
+ ,to_fmt=".eps"
+)
+
+o.set_monitor(
+  src_dir="/usr/<username>/Documents/BibTexExported"
+  ,dst_dir=manu_path
+  ,to_fmt=".bib"
+)
+
+o.start_monitors()
+```
 
 ## Caution
 
@@ -20,6 +41,9 @@
 - LaTeXには`.eps`
   - 現在, pdfはcropができてない。cropできるならpdfの方がよいかも。
   - eps変換は画質劣化が生じる。pdfからの変換
+  - epsズレ
+    - eps2pdf, pdf2psコマンドでrepairするmethod設けている。
+    - convert, matplotlib, matlab?の生成.epsはよくずれる...
 - Markdownには`.png`へ変換がよい
 
 
@@ -33,3 +57,8 @@
   - pdfでは、`\linewidth`で正しく幅(複数列)に収まらない,pdfのサイズが正しく取得できていないためと思われる。
     - pngに比べbouindingboxの指定が不要bouindingboxは単なるサイズ指定ではないので、epsか.xbbを使う方が楽。
   - IEICEのテンプレでは、上記サイズ取得の失敗のためか、普通に画像出力で、文字の中に埋もれた
+
+# Troubleshooting
+
+## **Cropされない**
+ - 見えない枠が対象画像にあるかと。
