@@ -66,6 +66,7 @@ logger.addHandler(stream_handler)
 
 class ChangeHandler(FileSystemEventHandler):
     msg_event_start = "-------------------  Start Event  -------------------"
+    app_in = (".jpeg", ".jpg", ".png")  # 本アプリのinput拡張子
     imagic_fmt_conv_in = (".png", ".jpg", ".jpeg", ".png", ".eps", ".svg")
     imagic_fmt_conv_out = (".png", ".jpg", ".jpeg", ".png", ".eps", ".svg")
     mermaid_fmt_in = (".svg", ".png", ".pdf")
@@ -790,7 +791,6 @@ class ChangeHandler(FileSystemEventHandler):
         # del to_fmt # 消すな. .bibコピー失敗するから. #FIXME: 要修正
         # to_fmt = None  # Prevent Trouble
 
-
         # チェック
         # to_fmt = self._validated_fmt(to_fmt=to_fmt, src_pl=src_pl)
         if src_pl.suffix is None or src_pl.suffix == "":
@@ -869,6 +869,11 @@ class ChangeHandler(FileSystemEventHandler):
         #     - その他のフォーマット(eg. ai)を画像化してcrop
         #     """
         #     _ = self._conv_with_crop(src_pl=src_pl, dst_pl=dst_pl, fmt=fmt)
+
+        elif dst_pl.suffix == ".md":
+            pass
+            # TODO: PdfにPWを印加できるように。
+            # TODO:　変換したpdfをしてPathへ転送
 
         elif src_pl.suffix == ".bib":  # and fmt_if_dst_without_ext == ".bib":
             """
