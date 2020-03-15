@@ -1,2 +1,3 @@
 watchdog
 #python-opencv
+# pdf2image
