@@ -13,6 +13,7 @@ import shutil
 import subprocess
 import sys
 import time
+from enum import Enum
 from pathlib import Path
 from subprocess import check_output, STDOUT
 
@@ -63,8 +64,14 @@ logger.addHandler(stream_handler)
 
 # 出力がepsの場合、監視folderにpngなど画像ファイルが書き込まれたらepsへ変換するコードをかけ
 
-
 class ChangeHandler(FileSystemEventHandler):
+    """
+    - Part:
+        - event receiver : start trigger to convert
+        - convert main method
+        - convert sub methods
+        - check_external_sub_modules: this checkes exists and proposes to install sub modules. e.g.: gs, pdf2eps and so on.
+    """
     msg_event_start = "-------------------  Start Event  -------------------"
     app_in = (".jpeg", ".jpg", ".png")  # 本アプリのinput拡張子
     imagic_fmt_conv_in = (".png", ".jpg", ".jpeg", ".png", ".eps", ".svg")
@@ -538,67 +545,91 @@ class ChangeHandler(FileSystemEventHandler):
         # TODO: 面倒なんとか最も簡単な方法できないか
 
     @classmethod
-    def _fix_eps(cls, src_pl: Path) -> Path:
+    def fix_eps(cls, src_pl: Path) -> Path:
         """
         Repair eps corruption
         - epsがlatex上でずれる問題の修正
+        - epstopdf,pdf2epsを使うと「画質が落ちる?」
         :param src_pl:
         :return:
         """
-        path_epstopdf = "epstopdf"
-        path_pdftops = "pdftops"
-        path_epstopdf = shutil.which(path_epstopdf)
-        path_pdftops = shutil.which(path_pdftops)
-        if path_epstopdf is None or path_epstopdf == "" or path_pdftops is None or path_pdftops == "":
-            # Failed due to commands are absent
-            logger.error(".epsファイルを修正しようとしましたが、%sのコマンドにPATHが非存在/通ってません。" % (path_pdftops, path_epstopdf))
-            return None
 
-        # Generate tmp
-        tmp_pl = cls.util_manage_tmp_path(src_pl)
-        tmp_pl = tmp_pl.with_suffix(".pdf")
+        class MethodToFixEPS(Enum):
+            gs = "gs"
+            eps_pdf_converter = "eps2pdf&pdf2eps"
 
-        # EPS to PDF
-        cmd = "{path_epstopdf} -o={tmp} {src}".format(
-            path_epstopdf=path_epstopdf,
-            # path_pdftops=path_pdftops,
-            tmp=tmp_pl,
-            src=src_pl
-        )
-        # FIXME:
-        out_msg = cls._run_cmd(
-            cmd=cmd
-            , short_msg="Repair1/2(.eps->.pdf):"
-        )
-        if out_msg != "":
-            logger.error(out_msg)
-            return None
+        method = MethodToFixEPS.gs # Current method
+        if method == MethodToFixEPS.gs:
+            path_cmd_gs = cls.check_ghostscript()
+            if path_cmd_gs is None:
+                return
+            else:
+                """
+                - URL: https://tex.stackexchange.com/questions/22063/how-to-fix-eps-with-incorrect-bounding-box
+                """
+                # gs -dNOPAUSE -dBATCH -q -sDEVICE=bbox file.eps
+                cmd = "{gs} -dNOPAUSE -dBATCH -q -sDEVICE=bbox {src}".format(gs=path_cmd_gs, src=src_pl)
+                out_msg = cls._run_cmd(
+                    cmd=cmd
+                    , short_msg="Repair .eps by Ghost Script"
+                )
+                if out_msg != "":
+                    logger.error(out_msg)
+                    return None
 
-        cmd = "{path_pdftops} -eps {tmp} {src}".format(
-            path_pdftops=path_pdftops,
-            tmp=tmp_pl,
-            src=src_pl
-        )
-        # FIXME:
-        out_msg = cls._run_cmd(
-            cmd=cmd
-            , short_msg="Repair2/2(.pdf->.eps):"
-        )
-        # if out_msg != "":
-        #     logger.error(out_msg)
-        #     return None
+        elif method == MethodToFixEPS.eps_pdf_converter:
+            path_epstopdf = "epstopdf"
+            path_pdftops = "pdftops"
+            path_epstopdf = shutil.which(path_epstopdf)
+            path_pdftops = shutil.which(path_pdftops)
+            if path_epstopdf is None or path_epstopdf == "" or path_pdftops is None or path_pdftops == "":
+                # Failed due to commands are absent
+                logger.error(".epsファイルを修正しようとしましたが、%sのコマンドにPATHが非存在/通ってません。" % (path_pdftops, path_epstopdf))
+                return None
 
-        # Remove tmp
-        if tmp_pl.exists():
-            tmp_pl.unlink()
+            # Generate tmp
+            tmp_pl = cls.util_manage_tmp_path(src_pl)
+            tmp_pl = tmp_pl.with_suffix(".pdf")
 
-        # 結果処理
-        if out_msg == "":
-            logger.info("Succeeded:%s" % src_pl)
-            return src_pl
-        else:
-            logger.error("Failed:%s" % src_pl)
-            return None
+            # EPS to PDF
+            cmd = "{path_epstopdf} -o={tmp} {src}".format(
+                path_epstopdf=path_epstopdf,
+                # path_pdftops=path_pdftops,
+                tmp=tmp_pl,
+                src=src_pl
+            )
+            out_msg = cls._run_cmd(
+                cmd=cmd
+                , short_msg="Repair1/2(.eps->.pdf):"
+            )
+            if out_msg != "":
+                logger.error(out_msg)
+                return None
+
+            cmd = "{path_pdftops} -eps {tmp} {src}".format(
+                path_pdftops=path_pdftops,
+                tmp=tmp_pl,
+                src=src_pl
+            )
+            out_msg = cls._run_cmd(
+                cmd=cmd
+                , short_msg="Repair2/2(.pdf->.eps):"
+            )
+            # if out_msg != "":
+            #     logger.error(out_msg)
+            #     return None
+
+            # Remove tmp
+            if tmp_pl.exists():
+                tmp_pl.unlink()
+
+            # 結果処理
+            if out_msg == "":
+                logger.info("Succeeded:%s" % src_pl)
+                return src_pl
+            else:
+                logger.error("Failed:%s" % src_pl)
+                return None
 
     @classmethod
     def _conv_with_crop(cls, src_pl: Path, dst_pl: Path) -> Path:
@@ -719,6 +750,21 @@ class ChangeHandler(FileSystemEventHandler):
         else:
             logger.info("Succeeded conversion on mermaid:%s" % src_pl)
             return True, dst_pl
+
+    @classmethod
+    def conv_pandoc(cls, src: Path, dst: Path):
+        """
+        Pandocを用いた変換
+        :param src:
+        :param dst:
+        :return: None
+        """
+        cmd_pandoc = "pandoc"
+        if not shutil.which(cmd_pandoc):
+            logger.error("command %s was not found" % cmd_pandoc)
+            return None
+        # pandoc is exists after here
+        cmd = cmd_pandoc + "-N -TOC-F pandoc-citeproc -F pandoc-crossref {src}".format(src=src)
 
     @classmethod
     def conv_mermaid_with_crop(cls, src_pl: Path, dst_pl: Path) -> Tuple[bool, Path]:
@@ -870,10 +916,17 @@ class ChangeHandler(FileSystemEventHandler):
         #     """
         #     _ = self._conv_with_crop(src_pl=src_pl, dst_pl=dst_pl, fmt=fmt)
 
-        elif dst_pl.suffix == ".md":
+        elif dst_pl.suffix == ".md" and src_pl.name.endswith("_pdc"):
+            """PANDOCでpdf変換
+            
+            """
             pass
-            # TODO: PdfにPWを印加できるように。
+            # TODO: PdfにPWを印加できるように。必ずmethod化しろ、この処理は。
             # TODO:　変換したpdfをしてPathへ転送
+        elif dst_pl.suffix == ".md" and src_pl.name.endswith("_mp"):
+            """Marp-cliを利用したスライドPDFへ
+            """
+            pass
 
         elif src_pl.suffix == ".bib":  # and fmt_if_dst_without_ext == ".bib":
             """
@@ -895,7 +948,7 @@ class ChangeHandler(FileSystemEventHandler):
             logger.info("未処理ファイル:%s" % src_pl)
 
         if dst_pl.suffix == ".eps":
-            dst_pl = self._fix_eps(dst_pl)
+            dst_pl = self.fix_eps(dst_pl)
 
     #
     # def conv2pnt(self, path_src, dir_dst):
@@ -907,6 +960,17 @@ class ChangeHandler(FileSystemEventHandler):
     #         print("[Debug] CMD: ppt2pdf" + cmd)
     #         tokens = shlex.split(cmd)
     #         subprocess.run(tokens)
+
+    @staticmethod
+    def check_ghostscript(cmd="gs"):
+        res = shutil.which(cmd)
+        if res:
+            return res
+        else:
+            msg = """
+            Mac: brew isntall ghostscript
+            """
+            logger.error(msg)
 
     def _road_balancer(self, event):
         """
