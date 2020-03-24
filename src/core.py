@@ -428,6 +428,8 @@ class ChangeHandler(FileSystemEventHandler):
                     , path_src=src_pl)
                 break
 
+        if src_pl.suffix in (".pptx", ".ppt"):
+            logger.warning(msg="(Math) symbols may be VANISH!!!!. Please confirm generated product not to disappear symbols")
         # output = self._run_cmd(cmd)
         logger.debug("CMD(slide2img):" + cmd)
         tokens = shlex.split(cmd)
@@ -558,7 +560,7 @@ class ChangeHandler(FileSystemEventHandler):
             gs = "gs"
             eps_pdf_converter = "eps2pdf&pdf2eps"
 
-        method = MethodToFixEPS.gs # Current method
+        method = MethodToFixEPS.gs  # Current method
         if method == MethodToFixEPS.gs:
             path_cmd_gs = cls.check_ghostscript()
             if path_cmd_gs is None:
