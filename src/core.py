@@ -205,8 +205,8 @@ class ChangeHandler(FileSystemEventHandler):
     #     else:
     #         return base_dst_pl, None
 
-    @staticmethod
-    def _crop_img(src_img_pl: Path, dst_pl: Path) -> Path:
+    @classmethod
+    def _crop_img(cls, src_img_pl: Path, dst_pl: Path) -> Path:
         """
         image(pdf/png,jpeg?)をcroppingする
         :param p_src:
@@ -228,7 +228,28 @@ class ChangeHandler(FileSystemEventHandler):
         #     logger.error("source file is not 対応してないImage magickに。")
         #     return Path()
 
-        if src_img_pl.suffix in (".png", ".jpg", ".jpeg", ".eps", ".pdf"):  # pdfのcropはできない
+        if src_img_pl.suffix == ".pdf":
+            """
+            時々pdfの自動cropは不可。これは仕様と思われる。
+             - pdfcrop: AutoCrop可能. 引数にdstは指定しない、指定したsrc名+"-crop"が生成される
+             - http://would-be-astronomer.hatenablog.com/entry/2015/03/26/214633
+            """
+            cmd_name = shutil.which("pdfcrop")
+            if cmd_name is None:
+                logger.error("pdfcrop not found")
+            cmd = "{cmd_name} {path_in} {path_out}".format(cmd_name=cmd_name, path_in=src_img_pl, path_out=dst_pl)
+            # rename cropped pdf(*_crop.pdf) to dst_pl
+            res_msg = cls._run_cmd(cmd, short_msg="Cropping CMD: %s" % cmd)
+            if res_msg:
+                logger.info(res_msg)
+            # if dst_pl.exists():
+            #     dst_pl.unlink()
+            # shutil.move(src=src_img_pl.with_name(src_img_pl.stem + "-crop.pdf"), dst=dst_pl)
+
+            # imagemagick mogrifyを使う->失敗
+        #     shutil.copy(src_pl, dst_pl)
+        #     cmd = "magick mogrify -format pdf -define pdf:use-trimbox=true {dst_path}".format(dst_path=dst_pl)
+        elif src_img_pl.suffix in (".png", ".jpg", ".jpeg", ".eps"):  # pdfのcropはできない
             cmd_name = "convert"
             # p_conv = Path("/usr/local/bin/convert")
             # if not p_conv.exists():
@@ -239,28 +260,23 @@ class ChangeHandler(FileSystemEventHandler):
             #     trim_cmd = "-mogrify -format pdf -define pdf:use-trimbox=true"
             # else:
             trim_cmd = "-trim"
-            cmd = "{cmd_name} {path_in} {trim_cmd} {path_out} ".format(cmd_name=cmd_name,
-                                                                       trim_cmd=trim_cmd,
-                                                                       path_in=src_img_pl,
-                                                                       path_out=dst_pl)
-        # 自動変換対応していない
-        elif src_img_pl.suffix == ".pdf":
-            # FIXME: cropされない
-            cmd_name = "pdfcrop"
-            cmd = "{cmd_name} {path_in} {path_out}".format(cmd_name=cmd_name, path_in=src_img_pl, path_out=dst_pl)
-            # imagemagick mogrifyを使う->失敗
-        #     shutil.copy(src_pl, dst_pl)
-        #     cmd = "magick mogrify -format pdf -define pdf:use-trimbox=true {dst_path}".format(dst_path=dst_pl)
+            cmd = "{cmd_name} {path_in} {trim_cmd} {path_out}".format(cmd_name=cmd_name,
+                                                                      trim_cmd=trim_cmd,
+                                                                      path_in=src_img_pl,
+                                                                      path_out=dst_pl)
+            res_msg = cls._run_cmd(cmd, short_msg="Cropping CMD: %s" % cmd)
+            if res_msg:
+                logger.info(res_msg)
         else:
             # new_path = shutil.move(fname_str_or_pl.as_posix(), dir_dst)
             logger.error("対応していないFormatをcroppingしようとして停止: %s" % src_img_pl)
             return
 
-        if shutil.which(cmd_name) is None:
-            logger.error("Conversion cmd(%s) is not in path " % cmd)
-        logger.debug("Cropping CMD: " + cmd)
-        tokens = shlex.split(cmd)
-        subprocess.run(tokens)
+        # if shutil.which(cmd_name) is None:
+        #     logger.error("Conversion cmd(%s) is not in path " % cmd)
+        # logger.debug("Cropping CMD: " + cmd)
+        # tokens = shlex.split(cmd)
+        # subprocess.run(tokens)
         # output = check_output(tokens, stderr=STDOUT).decode("utf8")
         # return Path(dst_pl.with_name(src_pl.name).with_suffix("%s" % to_img_fmt))
         return dst_pl
@@ -284,6 +300,37 @@ class ChangeHandler(FileSystemEventHandler):
         if is_print:
             logger.debug("Output(%s):%s" % (short_msg, cmd))
         return output
+
+    @classmethod
+    def img_magick(cls, src_pl, dst_pl, do_trim=True, is_eps2=True):
+        """
+        Image Magicコマンド
+        :param src_pl:
+        :param dst_pl:
+        :param do_trim:
+        :param is_eps2:
+        :return:
+        """
+        conv_name = "convert"
+        conv_path = shutil.which(conv_name)
+        if not conv_path:
+            logger.error("convert command not found")
+            return None
+        head = ""
+        if dst_pl.suffix == ".eps" and is_eps2:
+            head = "eps2:"
+        param = ""
+        if do_trim:
+            param = "-trim"
+        cmd = "{conv_path} {src} {param} {head}{dst}".format(
+            cmd_conv=conv_path
+            , param=param
+            , head=head
+            , src=src_pl
+            , dst=dst_pl
+        )
+        cls._run_cmd(cmd, "Convert by ImageMagic:%s" % cmd)
+        return dst_pl
 
     @classmethod
     # def _conv2img(cls, src_pl: Path, dst_pl: Path, fmt_if_dst_without_ext=None, decode="utf8") -> Path:
@@ -328,23 +375,24 @@ class ChangeHandler(FileSystemEventHandler):
         #     else:
         #         logger.info("pdf->epsへの変換はpdftopsコマンドを推奨。pdftopsコマンドへpathが通ってません")
         if need_conv:
-            cmd_conv = "convert"
-            logger.info("ImageMagickで変換します")
-            if dst_pl.suffix == ".eps":
-                head = "eps2:"
-            else:
-                head = ""
-            cmd = "{cmd_conv} {src} {head}{dst}".format(
-                cmd_conv=cmd_conv
-                , head=head
-                , src=src_pl
-                , dst=dst_pl
-            )
-        logger.debug("CMD(%s): %s" % (cmd_conv, cmd))
-        tokens = shlex.split(cmd)
-        # subprocess.run(tokens)
-        output = check_output(tokens, stderr=STDOUT).decode(decode)
-        logger.debug("Output: %s" % output)
+            #     cmd_conv = "convert"
+            #     logger.info("ImageMagickで変換します")
+            #     if dst_pl.suffix == ".eps":
+            #         head = "eps2:"
+            #     else:
+            #         head = ""
+            #     cmd = "{cmd_conv} {src} {head}{dst}".format(
+            #         cmd_conv=cmd_conv
+            #         , head=head
+            #         , src=src_pl
+            #         , dst=dst_pl
+            #     )
+            # logger.debug("CMD(%s): %s" % (cmd_conv, cmd))
+            # tokens = shlex.split(cmd)
+            # # subprocess.run(tokens)
+            # output = check_output(tokens, stderr=STDOUT).decode(decode)
+            # logger.debug("Output: %s" % output)
+            dst_pl = cls.img_magick(src_pl, dst_pl)
         return dst_pl
 
     # @classmethod
@@ -429,7 +477,8 @@ class ChangeHandler(FileSystemEventHandler):
                 break
 
         if src_pl.suffix in (".pptx", ".ppt"):
-            logger.warning(msg="(Math) symbols may be VANISH!!!!. Please confirm generated product not to disappear symbols")
+            logger.warning(
+                msg="(Math) symbols may be VANISH!!!!. Please confirm generated product not to disappear symbols")
         # output = self._run_cmd(cmd)
         logger.debug("CMD(slide2img):" + cmd)
         tokens = shlex.split(cmd)
@@ -506,35 +555,46 @@ class ChangeHandler(FileSystemEventHandler):
         # FIXME: 合わせてcrop可否確認が必要？
         cmd_name = ""
 
-        if src_pl.suffix in cls.imagic_fmt_conv_in and dst_pl.suffix in cls.imagic_fmt_conv_out:  # pdfのcropはできない
-            cmd_name = "convert"
-            # p_conv = Path("/usr/local/bin/convert")
-            # if not p_conv.exists():
-            #     raise Exception("%s not found" % p_conv)
-            # if src_pl.suffix == ".pdf":
-            #     # url: https://www.imagemagick.org/discourse-server/viewtopic.php?t=15667
-            #     # src: mogrify -format pdf -define pdf:use-trimbox=true /TEMP/foo.pdf
-            #     trim_cmd = "-mogrify -format pdf -define pdf:use-trimbox=true"
-            # else:
-            head = ""
-            if dst_pl.suffix == ".eps":
-                head = "eps2:"
-            else:
-                head = ""
-            trim_cmd = "-trim"
-            cmd = "{cmd_name} {path_in} {trim_cmd} {head}{path_out} ".format(cmd_name=cmd_name,
-                                                                             trim_cmd=trim_cmd,
-                                                                             head=head,
-                                                                             path_in=src_pl,
-                                                                             path_out=dst_pl)
+        if ".pdf" in (src_pl.suffix, dst_pl.suffix):
+            """
+            PDFへのin,outの場合
+            """
+            cls._conv_and_crop(src_pl, dst_pl)
+
+        elif src_pl.suffix in cls.imagic_fmt_conv_in and dst_pl.suffix in cls.imagic_fmt_conv_out:
+            """
+            - (in,out)共にpdfのcropはできない. epsのin?,outは可
+            """
+            # cmd_name = shutil.which("convert")
+            # # p_conv = Path("/usr/local/bin/convert")
+            # # if not p_conv.exists():
+            # #     raise Exception("%s not found" % p_conv)
+            # # if src_pl.suffix == ".pdf":
+            # #     # url: https://www.imagemagick.org/discourse-server/viewtopic.php?t=15667
+            # #     # src: mogrify -format pdf -define pdf:use-trimbox=true /TEMP/foo.pdf
+            # #     trim_cmd = "-mogrify -format pdf -define pdf:use-trimbox=true"
+            # # else:
+            # head = ""
+            # if dst_pl.suffix == ".eps":
+            #     head = "eps2:"
+            # trim_cmd = "-trim"
+            # cmd = "{cmd_name} {path_in} {trim_cmd} {head}{path_out} ".format(cmd_name=cmd_name,
+            #                                                                  trim_cmd=trim_cmd,
+            #                                                                  head=head,
+            #                                                                  path_in=src_pl,
+            #                                                                  path_out=dst_pl)
+            # msg = cls._run_cmd(cmd, "Conversion cmd(%s) is not in path " % cmd)
+            # if msg:
+            #     logger.info(msg)
+            dst_pl = cls.img_magick(src_pl, dst_pl)
         else:
             # both crop & img_conv stimulaselly impossible
             return None
-        if shutil.which(cmd_name) is None:
-            logger.error("Conversion cmd(%s) is not in path " % cmd)
-        logger.debug("Cropping CMD: " + cmd)
-        tokens = shlex.split(cmd)
-        subprocess.run(tokens)
+        # if shutil.which(cmd_name) is None:
+        #     logger.error("Conversion cmd(%s) is not in path " % cmd)
+        # logger.debug("Cropping CMD: " + cmd)
+        # tokens = shlex.split(cmd)
+        # subprocess.run(tokens)
         # output = check_output(tokens, stderr=STDOUT).decode("utf8")
         # return Path(dst_pl.with_name(src_pl.name).with_suffix("%s" % to_img_fmt))
         return dst_pl
@@ -576,7 +636,7 @@ class ChangeHandler(FileSystemEventHandler):
                     , short_msg="Repair .eps by Ghost Script"
                 )
                 if out_msg != "":
-                    logger.error(out_msg)
+                    logger.info(out_msg)  # 生成したbbox情報など呈示
                     return None
 
         elif method == MethodToFixEPS.eps_pdf_converter:
@@ -634,9 +694,10 @@ class ChangeHandler(FileSystemEventHandler):
                 return None
 
     @classmethod
-    def _conv_with_crop(cls, src_pl: Path, dst_pl: Path) -> Path:
+    def _conv_and_crop(cls, src_pl: Path, dst_pl: Path) -> Path:
         """
-        イメージをcrop込で変換する
+        イメージを変換して、cropする。
+        - Step by Stepな変換。もし、変換, cropの両方を_conv_with_crop_bothメソッドで行え
         - (注意) img変換とcropを同時にimagemagickで実現する別methodを設けた
         :param cls:
         :param src_pl:
@@ -645,16 +706,21 @@ class ChangeHandler(FileSystemEventHandler):
         :return:
         """
         need_conv = True
-        path_dst = cls._conv_with_crop_both(src_pl=src_pl, dst_pl=dst_pl)  # conv both crop and imgconv stimulatelly
-        if path_dst:
-            need_conv = False
+        # path_dst = cls._conv_with_crop_both(src_pl=src_pl, dst_pl=dst_pl)  # conv both crop and imgconv stimulatelly
+        # if path_dst:
+        #     need_conv = False
         """ 上記、変換が失敗した場合 """
         if need_conv:
             tmp_dst_pl = cls.util_manage_tmp_path(dst_pl)
             # dst_pl2, tmp_dst_pl = cls.util_update_dst_path(base_dst_pl=src_pl, fname_str_or_pl=dst_pl, fmt=to_fmt,
             #                                                is_tmp=True)
+            # 変換後にcrop
             path_dst = cls._conv2img(src_pl=src_pl, dst_pl=tmp_dst_pl)  # , fmt_if_dst_without_ext=fmt)
             path_dst = cls._crop_img(src_img_pl=path_dst, dst_pl=dst_pl)
+
+            # Crop後に変換
+            # path_dst = cls._crop_img(src_img_pl=src_pl, dst_pl=tmp_dst_pl)
+            # path_dst = cls._conv2img(src_pl=path_dst, dst_pl=dst_pl)  # , fmt_if_dst_without_ext=fmt)
 
             #
             # 下記で解像度向上させようとしたが、jpeg,pngがcropされない
@@ -821,7 +887,7 @@ class ChangeHandler(FileSystemEventHandler):
         # FIXME: Pathしか受け付けないように要修正
         src_pl = Path(src_file_apath)  # pathlibのインスタンス
         """ 無視すべき拡張子 """
-        if src_pl.name.startswith("~") or src_pl.name.startswith(".") or src_pl.suffix in (".part"):
+        if src_pl.name.startswith("~") or src_pl.name.startswith(".") or src_pl.suffix in (".part", ".tmp"):
             logger.info("Ignored: %s" % src_pl.name)
             return
         if not src_pl.is_absolute():
@@ -839,7 +905,7 @@ class ChangeHandler(FileSystemEventHandler):
         # del to_fmt # 消すな. .bibコピー失敗するから. #FIXME: 要修正
         # to_fmt = None  # Prevent Trouble
 
-        # チェック
+        """ チェック """
         # to_fmt = self._validated_fmt(to_fmt=to_fmt, src_pl=src_pl)
         if src_pl.suffix is None or src_pl.suffix == "":
             logger.error("Stop conversion because the indicated extension of source was wrong(file:%s)." % src_pl.name)
@@ -861,7 +927,7 @@ class ChangeHandler(FileSystemEventHandler):
 
         ####### 拡張子毎に振り分け
         # TODO: odp?に要対応.LibreOffice
-        if src_pl.suffix in (".png", ".jpg", ".jpeg", ".ai", ".pdf"):
+        if src_pl.suffix in (".png", ".jpg", ".jpeg", ".ai", ".eps", ".pdf"):
             """Image Cropping and Conversion
             - [条件] ImageMagicが対応しているFOrmatのみ. Only the format which corresponded to ImageMagick
             - files entered in src_folder, converted into dst_pl which cropping. and conv to eps
@@ -872,12 +938,13 @@ class ChangeHandler(FileSystemEventHandler):
             # if fmt == ".eps":
             #     self._conv2eps(src_pl=pl_src2, pl_dst_dir=dst_pl.joinpath(src_pl.stem + src_pl.suffix))
             # return
-            _ = self._conv_with_crop(src_pl=src_pl, dst_pl=dst_pl)
+            _ = self._conv_with_crop_both(src_pl=src_pl, dst_pl=dst_pl)
+            # _ = self._conv_and_crop(src_pl=src_pl, dst_pl=dst_pl)
         elif src_pl.suffix in (".ppt", ".pptx", ".odp") and not src_pl.name.startswith("~"):
             """
             スライドの変換
             """
-            if src_pl.suffix == ".odp" and to_fmt in [".pdf", ".eps"]:
+            if src_pl.suffix == ".odp" and dst_pl.suffix in [".pdf", ".eps"]:
                 """
                 .odp formatはpdfに変換するとpdfcropで失敗する。
                 よって、png形式で変換する
@@ -885,24 +952,27 @@ class ChangeHandler(FileSystemEventHandler):
                 warn = """
                   [Warning]
                   [Warning].odpを.pdf/.epsへの変換はCropで失敗します!!!
-                  [Warning] LibreOfficeではPowerPoint形式(.pptx)に変換して使ってください。
+                  [Warning] スライドにはPowerPoint形式(.pptx)に変換して使ってください。
                   [Warning]
                   """
                 print(warn)
-                cur_to_fmt = ".pdf"
+                # cur_to_fmt = ".pdf"
                 # elif fname_str_or_pl.suffix == ".odp" and _to_fmt in ["pdf", "eps"]:
                 #     """
                 #     .odp formatはpdfに変換するとpdfcropで失敗する。
                 #     よって、png形式で変換する
                 #     """
                 #     cur_to_fmt = "png"
-            elif to_fmt == ".eps":
-                cur_to_fmt = ".pdf"
-            else:
-                cur_to_fmt = to_fmt
-            pl_src2 = self._conv_slide(src_pl=src_pl, dst_pl=dst_pl, to_fmt=cur_to_fmt)
+            # elif to_fmt == ".eps":
+            #     cur_to_fmt = ".pdf"
+            # else:
+            # FIXME: cur_to_fmtではなくdst_tmp_plを作り、それで弁別できるように要修正
+            cur_to_fmt = to_fmt
+            pl_dst_tmp = self._conv_slide(src_pl=src_pl, dst_pl=dst_pl, to_fmt=cur_to_fmt)
             if is_crop:
-                p_src_cropped = self._crop_img(src_img_pl=pl_src2, dst_pl=dst_pl)
+                pl_dst = self._crop_img(src_img_pl=pl_dst_tmp, dst_pl=dst_pl)
+            else:
+                pl_dst = pl_dst_tmp
             """ pdf 2 eps """
             # if fmt == ".eps":
             #     # self._conv2eps(src_pl=p_src_cropped, pl_dst_dir=dst_pl)
@@ -911,12 +981,13 @@ class ChangeHandler(FileSystemEventHandler):
             # if plib_pdf_convd_tmp.exists():
             #     pathlib.Path(plib_pdf_convd_tmp).unlink()
             logger.info("Converted")
+
         # elif src_pl.suffix == ".ai":
         #     """
         #     - Image Conversion and Cropping
         #     - その他のフォーマット(eg. ai)を画像化してcrop
         #     """
-        #     _ = self._conv_with_crop(src_pl=src_pl, dst_pl=dst_pl, fmt=fmt)
+        #     _ = self._conv_and_crop(src_pl=src_pl, dst_pl=dst_pl, fmt=fmt)
 
         elif dst_pl.suffix == ".md" and src_pl.name.endswith("_pdc"):
             """PANDOCでpdf変換
