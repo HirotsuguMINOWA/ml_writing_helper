@@ -74,7 +74,7 @@ class ChangeHandler(FileSystemEventHandler):
     """
     msg_event_start = "-------------------  Start Event  -------------------"
     app_in = (".jpeg", ".jpg", ".png")  # 本アプリのinput拡張子
-    imagic_fmt_conv_in = (".png", ".jpg", ".jpeg", ".png", ".eps", ".svg")
+    imagic_fmt_conv_in = (".png", ".jpg", ".jpeg", ".png", ".eps", ".svg", ".pdf")  # inにPDFはOK # TODO: 共通クラス化しろ
     imagic_fmt_conv_out = (".png", ".jpg", ".jpeg", ".png", ".eps", ".svg")
     mermaid_fmt_in = (".svg", ".png", ".pdf")
     plantuml_fmt_out = (".png", ".svg", ".pdf", ".eps", ".html", ".txt", ".tex")
@@ -158,20 +158,24 @@ class ChangeHandler(FileSystemEventHandler):
     #         return False, ""
 
     @staticmethod
-    def util_manage_tmp_path(path: Path, is_remove_tmp_str=False) -> Path:
+    def util_manage_tmp_path(path: Path, is_remove_tmp_str=False, suffix_new=None) -> Path:
         """
         「共通」したtempファイルpath返却
         :param is_remove_tmp_str: 付記したtmpを示す文字列を削除するか否か
         :param path:
+        :param suffix_new: 生成するtmpファイルのsuffix指定
         :return:
         """
         tmp_str = "_tmp"
+        if suffix_new is None:
+            suffix_new = path.suffix
+
         if is_remove_tmp_str:
             # tmp取り除く
-            return path.with_name(path.stem.replace(tmp_str, "") + path.suffix)
+            return path.with_name(path.stem.replace(tmp_str, "") + suffix_new)
         else:
             # tmp印加
-            return path.with_name(path.stem + tmp_str + path.suffix)
+            return path.with_name(path.stem + tmp_str + suffix_new)
 
     # @staticmethod
     # def util_update_dst_path(base_dst_pl: Path, fname_str_or_pl, fmt) -> Path:
@@ -311,6 +315,7 @@ class ChangeHandler(FileSystemEventHandler):
         :param is_eps2:
         :return:
         """
+        # TODO: in,outのfmtの要チェック?いらんかも
         conv_name = "convert"
         conv_path = shutil.which(conv_name)
         if not conv_path:
@@ -322,8 +327,8 @@ class ChangeHandler(FileSystemEventHandler):
         param = ""
         if do_trim:
             param = "-trim"
-        cmd = "{conv_path} {src} {param} {head}{dst}".format(
-            cmd_conv=conv_path
+        cmd = "{cmd_path} {src} {param} {head}{dst}".format(
+            cmd_path=conv_path
             , param=param
             , head=head
             , src=src_pl
@@ -332,68 +337,69 @@ class ChangeHandler(FileSystemEventHandler):
         cls._run_cmd(cmd, "Convert by ImageMagic:%s" % cmd)
         return dst_pl
 
-    @classmethod
-    # def _conv2img(cls, src_pl: Path, dst_pl: Path, fmt_if_dst_without_ext=None, decode="utf8") -> Path:
-    def _conv2img(cls, src_pl: Path, dst_pl: Path, decode="utf8") -> Path:
-        """
-        Image magick等による画像変換
-        - FIXME: 要廃止。cropメソッドでImageMagickを使えるのなら、そちらでcropと変換の両方を実現できるから！！！！
-        - IN: jpeg, png, pdf
-        - OUT: jpeg, png, eps, pdf
-        :param src_pl:
-        :param dst_pl:
-        :param fmt_if_dst_without_ext: pl_dst_or_dirがdirの場合、出力先に生成するPATHのファイルの拡張子になる。
-        :return:
-        """
-
-        # Check src file exists
-        if not src_pl.exists():
-            raise Exception("Input image not exists:%s" % src_pl)
-        # dst_pl, _ = cls.util_update_dst_path(base_dst_pl=dst_pl, fname_str_or_pl=src_pl,
-        #                                      fmt=fmt_if_dst_without_ext)
-        # if dst_pl.is_dir():
-        #     dst_pl = dst_pl / src_pl.stem.join(fmt_if_dst_without_ext)
-        #################################################
-        # 同一FormatはIgnore
-        if src_pl.suffix == dst_pl.suffix:
-            logger.info("同一formatなので画像変換はせず、コピーだけ行う(srcとdstが同じでなければ)")
-            if src_pl != dst_pl:
-                shutil.copy(src_pl, dst_pl)
-            return dst_pl
-
-        need_conv = True
-        # cmd_conv = "pdftops"
-        # if src_pl.suffix == dst_pl.suffix:
-        #     if shutil.which(cmd_conv) != "":
-        #         logger.info("pdftopsで変換します")
-        #         cmd = "{cmd_conv} -eps {src} {dst}".format(
-        #             cmd_conv=cmd_conv,
-        #             src=src_pl,
-        #             dst=dst_pl
-        #         )
-        #         need_conv = False
-        #     else:
-        #         logger.info("pdf->epsへの変換はpdftopsコマンドを推奨。pdftopsコマンドへpathが通ってません")
-        if need_conv:
-            #     cmd_conv = "convert"
-            #     logger.info("ImageMagickで変換します")
-            #     if dst_pl.suffix == ".eps":
-            #         head = "eps2:"
-            #     else:
-            #         head = ""
-            #     cmd = "{cmd_conv} {src} {head}{dst}".format(
-            #         cmd_conv=cmd_conv
-            #         , head=head
-            #         , src=src_pl
-            #         , dst=dst_pl
-            #     )
-            # logger.debug("CMD(%s): %s" % (cmd_conv, cmd))
-            # tokens = shlex.split(cmd)
-            # # subprocess.run(tokens)
-            # output = check_output(tokens, stderr=STDOUT).decode(decode)
-            # logger.debug("Output: %s" % output)
-            dst_pl = cls.img_magick(src_pl, dst_pl)
-        return dst_pl
+    # @classmethod
+    # # def _conv2img(cls, src_pl: Path, dst_pl: Path, fmt_if_dst_without_ext=None, decode="utf8") -> Path:
+    # def _conv2img(cls, src_pl: Path, dst_pl: Path, decode="utf8") -> Path:
+    #     """
+    #     [要廃棄]Image magick等による画像変換
+    #         - 代わりにimg_magickメソッドを使え
+    #     - FIXME: 要廃止。cropメソッドでImageMagickを使えるのなら、そちらでcropと変換の両方を実現できるから！！！！
+    #     - IN: jpeg, png, pdf
+    #     - OUT: jpeg, png, eps, pdf
+    #     :param src_pl:
+    #     :param dst_pl:
+    #     :param fmt_if_dst_without_ext: pl_dst_or_dirがdirの場合、出力先に生成するPATHのファイルの拡張子になる。
+    #     :return:
+    #     """
+    #
+    #     # Check src file exists
+    #     if not src_pl.exists():
+    #         raise Exception("Input image not exists:%s" % src_pl)
+    #     # dst_pl, _ = cls.util_update_dst_path(base_dst_pl=dst_pl, fname_str_or_pl=src_pl,
+    #     #                                      fmt=fmt_if_dst_without_ext)
+    #     # if dst_pl.is_dir():
+    #     #     dst_pl = dst_pl / src_pl.stem.join(fmt_if_dst_without_ext)
+    #     #################################################
+    #     # 同一FormatはIgnore
+    #     if src_pl.suffix == dst_pl.suffix:
+    #         logger.info("同一formatなので画像変換はせず、コピーだけ行う(srcとdstが同じでなければ)")
+    #         if src_pl != dst_pl:
+    #             shutil.copy(src_pl, dst_pl)
+    #         return dst_pl
+    #
+    #     need_conv = True
+    #     # cmd_conv = "pdftops"
+    #     # if src_pl.suffix == dst_pl.suffix:
+    #     #     if shutil.which(cmd_conv) != "":
+    #     #         logger.info("pdftopsで変換します")
+    #     #         cmd = "{cmd_conv} -eps {src} {dst}".format(
+    #     #             cmd_conv=cmd_conv,
+    #     #             src=src_pl,
+    #     #             dst=dst_pl
+    #     #         )
+    #     #         need_conv = False
+    #     #     else:
+    #     #         logger.info("pdf->epsへの変換はpdftopsコマンドを推奨。pdftopsコマンドへpathが通ってません")
+    #     if need_conv:
+    #         #     cmd_conv = "convert"
+    #         #     logger.info("ImageMagickで変換します")
+    #         #     if dst_pl.suffix == ".eps":
+    #         #         head = "eps2:"
+    #         #     else:
+    #         #         head = ""
+    #         #     cmd = "{cmd_conv} {src} {head}{dst}".format(
+    #         #         cmd_conv=cmd_conv
+    #         #         , head=head
+    #         #         , src=src_pl
+    #         #         , dst=dst_pl
+    #         #     )
+    #         # logger.debug("CMD(%s): %s" % (cmd_conv, cmd))
+    #         # tokens = shlex.split(cmd)
+    #         # # subprocess.run(tokens)
+    #         # output = check_output(tokens, stderr=STDOUT).decode(decode)
+    #         # logger.debug("Output: %s" % output)
+    #         dst_pl = cls.img_magick(src_pl, dst_pl)
+    #     return dst_pl
 
     # @classmethod
     # def _conv2eps(cls, src_pl: Path, pl_dst_dir: Path, del_src=True) -> Path:
@@ -531,8 +537,9 @@ class ChangeHandler(FileSystemEventHandler):
     @classmethod
     def _conv_with_crop_both(cls, src_pl: Path, dst_pl: Path) -> Path:
         """
-        Using Pillow+Numpy OR Image conversion with crop.
+        cropとconvertするメソッド
         - ImageMagickのcropと画像変換を合わせ使う
+        - ほぼ、ImageMagickだけでよく、PDF-Outのみ別分岐処理となった
         :param src_pl:
         :param dst_pl:
         :return: 変換後のpath名
@@ -547,56 +554,28 @@ class ChangeHandler(FileSystemEventHandler):
         # if dst_pl.is_dir():
         #     dst_pl = dst_pl.joinpath(src_pl.name)  # if the path is dir, set src_filename_stem converted
 
-        """ crop white space """
-        # if src_pl.suffix not in [".png", ".jpeg", ".jpeg"]:
-        #     logger.error("source file is not 対応してないImage magickに。")
-        #     return Path()
-
-        # FIXME: 合わせてcrop可否確認が必要？
-        cmd_name = ""
-
-        if ".pdf" in (src_pl.suffix, dst_pl.suffix):
+        if dst_pl.suffix == ".pdf":
             """
-            PDFへのin,outの場合
+            出力がPDFの場合のみ2段階変換(conv,crop)を実施
+            pdf->image: OK!!!
+            $ convert test-crop.pdf eps2:test-crop.eps
+            ＞＞ test-crop.eps という、トリミングされたepsができる。
+            http://would-be-astronomer.hatenablog.com/entry/2015/03/26/214633
             """
-            cls._conv_and_crop(src_pl, dst_pl)
+            dst_pl = cls.img_magick(src_pl, dst_pl)
+            dst_pl = cls._crop_img(dst_pl, dst_pl)
 
         elif src_pl.suffix in cls.imagic_fmt_conv_in and dst_pl.suffix in cls.imagic_fmt_conv_out:
             """
             - (in,out)共にpdfのcropはできない. epsのin?,outは可
+            - 処理対象
+                - 一般画像(jpeg, epsなど)
+                - pdf: inのみ。
             """
-            # cmd_name = shutil.which("convert")
-            # # p_conv = Path("/usr/local/bin/convert")
-            # # if not p_conv.exists():
-            # #     raise Exception("%s not found" % p_conv)
-            # # if src_pl.suffix == ".pdf":
-            # #     # url: https://www.imagemagick.org/discourse-server/viewtopic.php?t=15667
-            # #     # src: mogrify -format pdf -define pdf:use-trimbox=true /TEMP/foo.pdf
-            # #     trim_cmd = "-mogrify -format pdf -define pdf:use-trimbox=true"
-            # # else:
-            # head = ""
-            # if dst_pl.suffix == ".eps":
-            #     head = "eps2:"
-            # trim_cmd = "-trim"
-            # cmd = "{cmd_name} {path_in} {trim_cmd} {head}{path_out} ".format(cmd_name=cmd_name,
-            #                                                                  trim_cmd=trim_cmd,
-            #                                                                  head=head,
-            #                                                                  path_in=src_pl,
-            #                                                                  path_out=dst_pl)
-            # msg = cls._run_cmd(cmd, "Conversion cmd(%s) is not in path " % cmd)
-            # if msg:
-            #     logger.info(msg)
             dst_pl = cls.img_magick(src_pl, dst_pl)
         else:
             # both crop & img_conv stimulaselly impossible
-            return None
-        # if shutil.which(cmd_name) is None:
-        #     logger.error("Conversion cmd(%s) is not in path " % cmd)
-        # logger.debug("Cropping CMD: " + cmd)
-        # tokens = shlex.split(cmd)
-        # subprocess.run(tokens)
-        # output = check_output(tokens, stderr=STDOUT).decode("utf8")
-        # return Path(dst_pl.with_name(src_pl.name).with_suffix("%s" % to_img_fmt))
+            dst_pl = None
         return dst_pl
 
     def show_warning_tool(self):
@@ -693,62 +672,62 @@ class ChangeHandler(FileSystemEventHandler):
                 logger.error("Failed:%s" % src_pl)
                 return None
 
-    @classmethod
-    def _conv_and_crop(cls, src_pl: Path, dst_pl: Path) -> Path:
-        """
-        イメージを変換して、cropする。
-        - Step by Stepな変換。もし、変換, cropの両方を_conv_with_crop_bothメソッドで行え
-        - (注意) img変換とcropを同時にimagemagickで実現する別methodを設けた
-        :param cls:
-        :param src_pl:
-        :param dst_pl:
-        :param to_fmt:
-        :return:
-        """
-        need_conv = True
-        # path_dst = cls._conv_with_crop_both(src_pl=src_pl, dst_pl=dst_pl)  # conv both crop and imgconv stimulatelly
-        # if path_dst:
-        #     need_conv = False
-        """ 上記、変換が失敗した場合 """
-        if need_conv:
-            tmp_dst_pl = cls.util_manage_tmp_path(dst_pl)
-            # dst_pl2, tmp_dst_pl = cls.util_update_dst_path(base_dst_pl=src_pl, fname_str_or_pl=dst_pl, fmt=to_fmt,
-            #                                                is_tmp=True)
-            # 変換後にcrop
-            path_dst = cls._conv2img(src_pl=src_pl, dst_pl=tmp_dst_pl)  # , fmt_if_dst_without_ext=fmt)
-            path_dst = cls._crop_img(src_img_pl=path_dst, dst_pl=dst_pl)
-
-            # Crop後に変換
-            # path_dst = cls._crop_img(src_img_pl=src_pl, dst_pl=tmp_dst_pl)
-            # path_dst = cls._conv2img(src_pl=path_dst, dst_pl=dst_pl)  # , fmt_if_dst_without_ext=fmt)
-
-            #
-            # 下記で解像度向上させようとしたが、jpeg,pngがcropされない
-            #
-            # if src_pl.suffix == ".pdf":
-            #     """
-            #     - pdfはcropできないので、先に画像変換する。変換後があわよくばcrop_imgに対応したフォーマットなら画質落としにくい。
-            #     - 一方、上記でなければ、先にcropする場合、元のソース画像の画像変換を行わないため、画質が落ちないと思われる
-            #     """
-            #     path_dst = cls._conv2img(src_pl=src_pl, dst_pl=tmp_dst_pl)  # , fmt_if_dst_without_ext=fmt)
-            #     path_dst = cls._crop_img(src_pl=path_dst, dst_pl=dst_pl)
-            # else:
-            #     tmp_dst_pl = tmp_dst_pl.with_suffix(src_pl.suffix)
-            #     path_dst = cls._crop_img(src_pl=src_pl, dst_pl=tmp_dst_pl)
-            #     path_dst = cls._conv2img(src_pl=path_dst, dst_pl=cls.util_manage_tmp_path(dst_pl,
-            #                                                                               is_remove_tmp_str=True))  # , fmt_if_dst_without_ext=fmt)
-            if tmp_dst_pl.exists():
-                tmp_dst_pl.unlink()
-        if path_dst:
-            return path_dst
-        else:
-            return None
-        #     need_conv = False
-        # if need_conv:
-        #     return None  # Faild
-        # else:
-        #
-        # return path_dst
+    # @classmethod
+    # def _conv_and_crop(cls, src_pl: Path, dst_pl: Path) -> Path:
+    #     """
+    #     イメージを変換して、cropする。
+    #     - Step by Stepな変換。もし、変換, cropの両方を_conv_with_crop_bothメソッドで行え
+    #     - (注意) img変換とcropを同時にimagemagickで実現する別methodを設けた
+    #     :param cls:
+    #     :param src_pl:
+    #     :param dst_pl:
+    #     :param to_fmt:
+    #     :return:
+    #     """
+    #     need_conv = True
+    #     # path_dst = cls._conv_with_crop_both(src_pl=src_pl, dst_pl=dst_pl)  # conv both crop and imgconv stimulatelly
+    #     # if path_dst:
+    #     #     need_conv = False
+    #     """ 上記、変換が失敗した場合 """
+    #     if need_conv:
+    #         tmp_dst_pl = cls.util_manage_tmp_path(dst_pl)
+    #         # dst_pl2, tmp_dst_pl = cls.util_update_dst_path(base_dst_pl=src_pl, fname_str_or_pl=dst_pl, fmt=to_fmt,
+    #         #                                                is_tmp=True)
+    #         # 変換後にcrop
+    #         path_dst = cls._conv2img(src_pl=src_pl, dst_pl=tmp_dst_pl)  # , fmt_if_dst_without_ext=fmt)
+    #         path_dst = cls._crop_img(src_img_pl=path_dst, dst_pl=dst_pl)
+    #
+    #         # Crop後に変換
+    #         # path_dst = cls._crop_img(src_img_pl=src_pl, dst_pl=tmp_dst_pl)
+    #         # path_dst = cls._conv2img(src_pl=path_dst, dst_pl=dst_pl)  # , fmt_if_dst_without_ext=fmt)
+    #
+    #         #
+    #         # 下記で解像度向上させようとしたが、jpeg,pngがcropされない
+    #         #
+    #         # if src_pl.suffix == ".pdf":
+    #         #     """
+    #         #     - pdfはcropできないので、先に画像変換する。変換後があわよくばcrop_imgに対応したフォーマットなら画質落としにくい。
+    #         #     - 一方、上記でなければ、先にcropする場合、元のソース画像の画像変換を行わないため、画質が落ちないと思われる
+    #         #     """
+    #         #     path_dst = cls._conv2img(src_pl=src_pl, dst_pl=tmp_dst_pl)  # , fmt_if_dst_without_ext=fmt)
+    #         #     path_dst = cls._crop_img(src_pl=path_dst, dst_pl=dst_pl)
+    #         # else:
+    #         #     tmp_dst_pl = tmp_dst_pl.with_suffix(src_pl.suffix)
+    #         #     path_dst = cls._crop_img(src_pl=src_pl, dst_pl=tmp_dst_pl)
+    #         #     path_dst = cls._conv2img(src_pl=path_dst, dst_pl=cls.util_manage_tmp_path(dst_pl,
+    #         #                                                                               is_remove_tmp_str=True))  # , fmt_if_dst_without_ext=fmt)
+    #         if tmp_dst_pl.exists():
+    #             tmp_dst_pl.unlink()
+    #     if path_dst:
+    #         return path_dst
+    #     else:
+    #         return None
+    #     #     need_conv = False
+    #     # if need_conv:
+    #     #     return None  # Faild
+    #     # else:
+    #     #
+    #     # return path_dst
 
     @classmethod
     # def conv_mermaid(cls, src_pl: Path, dst_pl: Path, to_fmt=".svg") -> Tuple[bool, Path]:
