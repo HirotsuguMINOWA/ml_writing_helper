@@ -13,4 +13,10 @@
 
 # Tips
 
-- Path.resolve()をつかえ、相対pathの引数をi
+- Path.resolve()をつかえ、相対pathの引数を
+
+# Useful Library
+
+- Pandoc (mentioned before) -- can convert from MD to PPT. This might be the best bet for a solution, since it's complete and mature.
+- odpdown -- Python library that converts to the OpenOffice Presenter format, which can be used for PPTs. Adding Python to the toolchain doesn't sound desirable, though.
+- officegen -- do a lot of code-rolling for this project, but it matches the Electron toolchain. CBA: Yuck!
