@@ -234,7 +234,8 @@ class ChangeHandler(FileSystemEventHandler):
 
         if src_img_pl.suffix == ".pdf":
             """
-            時々pdfの自動cropは不可。これは仕様と思われる。
+            時々pdfの自動cropは不可。原因不明。
+            #TODO: ただ、sample_srcのpdfはcropできるのに、fig_genに入ったpdfはpdfcropできない。要原因を調べる事。ImageMagicで変換したPDFはcropできず？？
              - pdfcrop: AutoCrop可能. 引数にdstは指定しない、指定したsrc名+"-crop"が生成される
              - http://would-be-astronomer.hatenablog.com/entry/2015/03/26/214633
             """
@@ -319,7 +320,7 @@ class ChangeHandler(FileSystemEventHandler):
         :param is_eps2:
         :return:
         """
-        if do_trim and src_pl.suffix != dst_pl.suffix:
+        if do_trim and src_pl.suffix == dst_pl.suffix:
             logger.warning("ImageMagick変換において、Trim(Crop)付きで別Formatへ変換すると、Crop失敗する可能性あり")
         # TODO: in,outのfmtの要チェック?いらんかも
         conv_name = "convert"
@@ -340,7 +341,7 @@ class ChangeHandler(FileSystemEventHandler):
             , src=src_pl
             , dst=dst_pl
         )
-        cls._run_cmd(cmd, "Convert by ImageMagic:%s" % cmd)
+        cls._run_cmd(cmd, "Convert by ImageMagic")
         return dst_pl
 
     # @classmethod
@@ -472,7 +473,7 @@ class ChangeHandler(FileSystemEventHandler):
             #   [Warning] スライドにはPowerPoint形式(.pptx)に変換して使ってください。
             #   """
             # # print(warn)
-            logger.warning(".ppt(x)/.odpの.pdf/.epsへの変換はpng経由で変換します。")
+            logger.warning(".ppt(x)/.odpの.pdf/.epsへの変換は%s経由で変換します。" % via_ext)
             is_mediate = True
             dst_tmp_pl = dst_pl.parent.joinpath(dst_pl.stem + via_ext)
         else:
@@ -530,7 +531,7 @@ class ChangeHandler(FileSystemEventHandler):
         shutil.move(pl_out, dst_pl)
 
     @classmethod
-    def _conv_with_crop_both(cls, src_pl: Path, dst_pl: Path) -> Path:
+    def _conv_with_crop_both(cls, src_pl: Path, dst_pl: Path):
         """
         cropとconvertするメソッド
         - ImageMagickのcropと画像変換を合わせ使う
@@ -548,30 +549,29 @@ class ChangeHandler(FileSystemEventHandler):
             return
         # if dst_pl.is_dir():
         #     dst_pl = dst_pl.joinpath(src_pl.name)  # if the path is dir, set src_filename_stem converted
-
-        if dst_pl.suffix == ".pdf":
-            """
-            出力がPDFの場合のみ2段階変換(conv,crop)を実施
-            pdf->image: OK!!!
-            $ convert test-crop.pdf eps2:test-crop.eps
-            ＞＞ test-crop.eps という、トリミングされたepsができる。
-            http://would-be-astronomer.hatenablog.com/entry/2015/03/26/214633
-            """
-            dst_pl = cls.img_magick(src_pl, dst_pl)
-            dst_pl = cls._crop_img(dst_pl, dst_pl)
-
-        elif src_pl.suffix in cls.imagic_fmt_conv_in and dst_pl.suffix in cls.imagic_fmt_conv_out:
+        if src_pl.suffix in cls.imagic_fmt_conv_in \
+                and dst_pl.suffix in cls.imagic_fmt_conv_out \
+                and dst_pl.suffix not in (".pdf", ".eps"):
             """
             - (in,out)共にpdfのcropはできない. epsのin?,outは可
             - 処理対象
                 - 一般画像(jpeg, epsなど)
                 - pdf: inのみ。
             """
-            dst_pl = cls.img_magick(src_pl, dst_pl)
+            cls.img_magick(src_pl, dst_pl)
         else:
-            # both crop & img_conv stimulaselly impossible
-            dst_pl = None
-        return dst_pl
+            """
+            出力がPDFの場合のみ2段階変換(conv,crop)を実施
+            pdf->image: OK!!!
+                $ convert test-crop.pdf eps2:test-crop.eps
+                ＞＞ test-crop.eps という、トリミングされたepsができる。
+                http://would-be-astronomer.hatenablog.com/entry/2015/03/26/214633
+            pdfcrop機能しない事が多い？img_magickと併用でcropする事
+            """
+            cls.img_magick(src_pl, dst_pl, do_trim=True) #TODO: 現状ImgMagickの-trimでPDFもcropされている！！
+            cls._crop_img(dst_pl, dst_pl)
+        # else:
+        #     logger.error("_conv_with_crop_bothがCalled.しかし何も変換せず。src:%s,dst:%s" % (src_pl, dst_pl))
 
     def show_warning_tool(self):
         """
@@ -594,8 +594,9 @@ class ChangeHandler(FileSystemEventHandler):
             gs = "gs"
             eps_pdf_converter = "eps2pdf&pdf2eps"
 
-        method = MethodToFixEPS.gs  # Current method
+        method = MethodToFixEPS.eps_pdf_converter  # Current method
         if method == MethodToFixEPS.gs:
+            """効果なし？ gs方式"""
             path_cmd_gs = cls.check_ghostscript()
             if path_cmd_gs is None:
                 return
@@ -614,6 +615,7 @@ class ChangeHandler(FileSystemEventHandler):
                     return None
 
         elif method == MethodToFixEPS.eps_pdf_converter:
+            """ 効果アリ """
             path_epstopdf = "epstopdf"
             path_pdftops = "pdftops"
             path_epstopdf = shutil.which(path_epstopdf)
