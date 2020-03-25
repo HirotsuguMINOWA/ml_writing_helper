@@ -455,7 +455,14 @@ class ChangeHandler(FileSystemEventHandler):
 
     @classmethod
     def conv_slide_with_crop_both(cls, src_pl: Path, dst_pl: Path, is_crop=True, via_ext=".png"):
+        """
 
+        :param src_pl:
+        :param dst_pl:
+        :param is_crop:
+        :param via_ext:
+        :return:
+        """
         is_mediate = False
         if dst_pl.suffix in (".pdf", ".eps"):
             """
@@ -467,7 +474,7 @@ class ChangeHandler(FileSystemEventHandler):
             # # print(warn)
             logger.warning(".ppt(x)/.odpの.pdf/.epsへの変換はpng経由で変換します。")
             is_mediate = True
-            dst_tmp_pl = src_pl.parent.joinpath(dst_pl.stem + via_ext)
+            dst_tmp_pl = dst_pl.parent.joinpath(dst_pl.stem + via_ext)
         else:
             dst_tmp_pl = dst_pl
 
@@ -491,7 +498,6 @@ class ChangeHandler(FileSystemEventHandler):
         :param to_fmt:
         :return:
         """
-
         for p_soffice in cls._ppaths_soffice:  # type: Path
             if p_soffice.exists():
                 cmd = "'{path_soffice}' --headless --convert-to {dst_ext} --outdir '{out_dir}' '{path_src}'".format(
