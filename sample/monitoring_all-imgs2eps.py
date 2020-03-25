@@ -17,7 +17,7 @@ to_fmt = ".eps"
 src = "fig_src"
 sample = "fig_sample"
 dst = "fig_gen"
-exc_ext = [".odp"]
+exc_ext = []
 
 e_task1 = None
 
