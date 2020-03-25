@@ -10,6 +10,7 @@
 - [ ] pdfは透過png?が黒くなるためデフォルトはpng
 - [ ] dstとsrcフォルダの生成、実行時に。
 - [ ] LibreOffice Vanilla.appは変換失敗するので、注意を促す
+- [ ] PlantUML変換失敗の要修正
 
 # Tips
 
