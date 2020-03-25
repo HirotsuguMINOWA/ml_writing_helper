@@ -89,7 +89,7 @@ class ChangeHandler(FileSystemEventHandler):
     ]
     _ext_pluntuml = [".pu", ".puml"]
 
-    # def __init__(self
+    # def __init__(cls
     #              , monitoring_dir
     #              , output_dir=None
     #              , _to_fmt="png"
@@ -119,13 +119,13 @@ class ChangeHandler(FileSystemEventHandler):
 
         # if not output_dir:
         #     output_dir = monitoring_dir
-        # self.target_dir = monitoring_dir
-        # self._p_src = Path(monitoring_dir)
-        # # self._p_dst_dir = output_dir
+        # cls.target_dir = monitoring_dir
+        # cls._p_src = Path(monitoring_dir)
+        # # cls._p_dst_dir = output_dir
         # if Path(output_dir).is_absolute():
-        #     self._p_dst_dir = Path(output_dir)
+        #     cls._p_dst_dir = Path(output_dir)
         # else:
-        #     self._p_dst_dir = Path(monitoring_dir).joinpath(output_dir)
+        #     cls._p_dst_dir = Path(monitoring_dir).joinpath(output_dir)
         self._src_pl = None
         self._dst_pl = None
         self._to_fmt = None
@@ -135,11 +135,11 @@ class ChangeHandler(FileSystemEventHandler):
         # # 拡張子チェック
         # #
         # if _to_fmt == "":
-        #     self._to_fmt = self._p_src.suffix
+        #     cls._to_fmt = cls._p_src.suffix
         # elif _to_fmt[0] != ".":
-        #     self._to_fmt = "." + _to_fmt
+        #     cls._to_fmt = "." + _to_fmt
         # else:
-        #     self._to_fmt = _to_fmt
+        #     cls._to_fmt = _to_fmt
         # TODO: 入力フォーマットか否か要チェック
 
     # @staticmethod
@@ -220,7 +220,7 @@ class ChangeHandler(FileSystemEventHandler):
         """
         """ Calc path of base_dst_pl """
         # path_dst = pathlib.Path(dir_dst) / fname_str_or_pl.name
-        # path_dst = pathlib.Path(dir_dst) / plib_src.with_suffix("." + self._to_fmt).name
+        # path_dst = pathlib.Path(dir_dst) / plib_src.with_suffix("." + cls._to_fmt).name
         if not src_img_pl.exists():
             print("[Error] %s not found" % src_img_pl)
             return
@@ -243,7 +243,7 @@ class ChangeHandler(FileSystemEventHandler):
                 logger.error("pdfcrop not found")
             cmd = "{cmd_name} {path_in} {path_out}".format(cmd_name=cmd_name, path_in=src_img_pl, path_out=dst_pl)
             # rename cropped pdf(*_crop.pdf) to dst_pl
-            res_msg = cls._run_cmd(cmd, short_msg="Cropping CMD: %s" % cmd)
+            res_msg = cls._run_cmd(cmd, short_msg="Cropping CMD:")
             if res_msg:
                 logger.info(res_msg)
             # if dst_pl.exists():
@@ -319,6 +319,8 @@ class ChangeHandler(FileSystemEventHandler):
         :param is_eps2:
         :return:
         """
+        if do_trim and src_pl.suffix != dst_pl.suffix:
+            logger.warning("ImageMagick変換において、Trim(Crop)付きで別Formatへ変換すると、Crop失敗する可能性あり")
         # TODO: in,outのfmtの要チェック?いらんかも
         conv_name = "convert"
         conv_path = shutil.which(conv_name)
@@ -452,7 +454,36 @@ class ChangeHandler(FileSystemEventHandler):
         print("Result:%s" % res)
 
     @classmethod
-    def _conv_slide(self, src_pl: Path, dst_pl: Path, to_fmt=".png"):
+    def conv_slide_with_crop_both(cls, src_pl: Path, dst_pl: Path, is_crop=True, via_ext=".png"):
+
+        is_mediate = False
+        if dst_pl.suffix in (".pdf", ".eps"):
+            """
+            - 注意) PowerPoint/LibreOffice(.odp)は.pdf/.epsへ変換してPDFCropで失敗する。そのため、一度、.png経由する。   
+            """
+            # warn = """
+            #   [Warning] スライドにはPowerPoint形式(.pptx)に変換して使ってください。
+            #   """
+            # # print(warn)
+            logger.warning(".ppt(x)/.odpの.pdf/.epsへの変換はpng経由で変換します。")
+            is_mediate = True
+            dst_tmp_pl = src_pl.parent.joinpath(dst_pl.stem + via_ext)
+        else:
+            dst_tmp_pl = dst_pl
+
+        cls._conv_slide(src_pl=src_pl, dst_pl=dst_tmp_pl)
+        if is_crop:
+            if is_mediate:
+                cls._conv_with_crop_both(dst_tmp_pl, dst_pl)
+            else:
+                cls._crop_img(src_img_pl=dst_tmp_pl, dst_pl=dst_pl)
+
+        ### Del mediate file
+        if is_mediate:
+            dst_tmp_pl.unlink()
+
+    @classmethod
+    def _conv_slide(cls, src_pl: Path, dst_pl: Path):
         """
 
         :param src_pl:
@@ -461,82 +492,36 @@ class ChangeHandler(FileSystemEventHandler):
         :return:
         """
 
-        # file_tmp="tmp_"+pathlib.Path(path_src).name
-        # file_tmp=pathlib.Path(file_tmp).with_suffix(".pdf")
-        # path_tmp=pathlib.Path(path_src).parent.joinpath(file_tmp).as_posix()
-        # print("path_tmp:"+path_tmp)
-        # out_dir = plib_src.parent.as_posix()
-        # path_tmp="tmp_"+os.path.basename(path_src)
-        if dst_pl.is_dir():
-            pl_dst_dir = dst_pl
-        else:
-            pl_dst_dir = dst_pl.parent
-        logger.debug("dst_pl: %s" % dst_pl)
-        logger.debug("CWD:%s" % os.getcwd())
-        found_libreoffice = False
-
-        for p_soffice in self._ppaths_soffice:  # type: Path
+        for p_soffice in cls._ppaths_soffice:  # type: Path
             if p_soffice.exists():
                 cmd = "'{path_soffice}' --headless --convert-to {dst_ext} --outdir '{out_dir}' '{path_src}'".format(
                     # cmd = "'{path_soffice}' --headless --convert-to {dst_ext} {path_src}".format(
                     path_soffice=p_soffice
-                    , dst_ext=to_fmt[1:],  # eliminate first "."
+                    , dst_ext=dst_pl.suffix[1:],  # eliminate first "."
                     # , out_dir=dir_dst
-                    out_dir=pl_dst_dir.as_posix()
-                    , path_src=src_pl)
+                    out_dir=dst_pl.parent.as_posix()
+                    , path_src=src_pl
+                )
                 break
 
         if src_pl.suffix in (".pptx", ".ppt"):
             logger.warning(
                 msg="(Math) symbols may be VANISH!!!!. Please confirm generated product not to disappear symbols")
-        # output = self._run_cmd(cmd)
-        logger.debug("CMD(slide2img):" + cmd)
-        tokens = shlex.split(cmd)
+        # output = cls._run_cmd(cmd)
+        output = cls._run_cmd(cmd, "CMD(slide2img):")
+        # logger.debug("CMD(slide2img):" + cmd)
+        # tokens = shlex.split(cmd)
         # subprocess.run(tokens)
-        output = check_output(tokens, stderr=STDOUT).decode("utf8")
+        # output = check_output(tokens, stderr=STDOUT).decode("utf8")
         logger.debug("Output: %s" % output)
         if output == "Error: source file could not be loaded\n":
             """なぜかLO Vanillaで出現？"""
             # raise Exception("")
             logger.error("なぜかLO Vanillaで出現？")
 
-        ### 変換成功したはず
-        #
-        # 生成されたファイルPATH
-
-        pl_out = pl_dst_dir.joinpath(src_pl.with_suffix(to_fmt).name)
-        if dst_pl.is_dir():
-            return pl_out
-        else:
-            """
-            出力ファイルPATHが指定されているのでrenameする
-            """
-            # dst_pl = dst_pl.joinpath(pl_out.with_suffix(pl_out.suffix).name)
-            # else:
-            #     pl_out = dst_pl.joinpath(fname_str_or_pl.name + _to_fmt)
-
-            # # 存在していたら削除
-            # if dst_pl.exists():
-            #     dst_pl.unlink()
-
-            # rename
-            pl_out.rename(dst_pl)
-
-            # """ Add head "tmp_" to converted src_filename_stem """
-            #
-            # plib_pdf_convd = dst_pl.joinpath(fname_str_or_pl.name).with_suffix(cur_to_fmt)
-            # # plib_pdf_convd_tmp = plib_pdf_convd.with_name("tmp_" + plib_pdf_convd.name)
-            #
-            # cmd_cp = "cp -f %s %s" % (plib_pdf_convd, plib_pdf_convd.with_name("pre-crop_" + plib_pdf_convd.name))
-            # self._run_cmd(cmd)
-            # # tokens = shlex.split(cmd_cp)
-            # # output = check_output(tokens, stderr=STDOUT).decode("utf8")
-            # # print("Output: %s" % output)
-            #
-            # # fname_str_or_pl.rename(fname_str_or_pl.with_name("tmp_"+fname_str_or_pl.name))
-            # # fname_str_or_pl.rename(plib_pdf_convd_tmp)
-            # # fname_str_or_pl.with_name("tmp_"+fname_str_or_pl.name)
-            return dst_pl
+        # Change gen file name
+        pl_out = dst_pl.parent.joinpath(src_pl.stem + dst_pl.suffix)
+        shutil.move(pl_out, dst_pl)
 
     @classmethod
     def _conv_with_crop_both(cls, src_pl: Path, dst_pl: Path) -> Path:
@@ -551,7 +536,7 @@ class ChangeHandler(FileSystemEventHandler):
         """
         """ Calc path of base_dst_pl """
         # path_dst = pathlib.Path(dir_dst) / fname_str_or_pl.name
-        # path_dst = pathlib.Path(dir_dst) / plib_src.with_suffix("." + self._to_fmt).name
+        # path_dst = pathlib.Path(dir_dst) / plib_src.with_suffix("." + cls._to_fmt).name
         if not src_pl.exists():
             print("[Error] %s not found" % src_pl)
             return
@@ -889,7 +874,7 @@ class ChangeHandler(FileSystemEventHandler):
         # to_fmt = None  # Prevent Trouble
 
         """ チェック """
-        # to_fmt = self._validated_fmt(to_fmt=to_fmt, src_pl=src_pl)
+        # to_fmt = cls._validated_fmt(to_fmt=to_fmt, src_pl=src_pl)
         if src_pl.suffix is None or src_pl.suffix == "":
             logger.error("Stop conversion because the indicated extension of source was wrong(file:%s)." % src_pl.name)
             return
@@ -909,69 +894,22 @@ class ChangeHandler(FileSystemEventHandler):
         # os.chdir(dst_pl.parent)  # important!
 
         ####### 拡張子毎に振り分け
-        # TODO: odp?に要対応.LibreOffice
         if src_pl.suffix in (".png", ".jpg", ".jpeg", ".ai", ".eps", ".pdf"):
             """Image Cropping and Conversion
             - [条件] ImageMagicが対応しているFOrmatのみ. Only the format which corresponded to ImageMagick
             - files entered in src_folder, converted into dst_pl which cropping. and conv to eps
             """
             logger.info("Image cropping and Conversion")
-            # pl_src2 = self._crop_img(src_pl, dst_pl.joinpath(src_pl.stem + src_pl.suffix),
+            # pl_src2 = cls._crop_img(src_pl, dst_pl.joinpath(src_pl.stem + src_pl.suffix),
             #                          to_img_fmt=src_pl.suffix)
             # if fmt == ".eps":
-            #     self._conv2eps(src_pl=pl_src2, pl_dst_dir=dst_pl.joinpath(src_pl.stem + src_pl.suffix))
+            #     cls._conv2eps(src_pl=pl_src2, pl_dst_dir=dst_pl.joinpath(src_pl.stem + src_pl.suffix))
             # return
             _ = self._conv_with_crop_both(src_pl=src_pl, dst_pl=dst_pl)
-            # _ = self._conv_and_crop(src_pl=src_pl, dst_pl=dst_pl)
+            # _ = cls._conv_and_crop(src_pl=src_pl, dst_pl=dst_pl)
         elif src_pl.suffix in (".ppt", ".pptx", ".odp") and not src_pl.name.startswith("~"):
-            """
-            Conversion Slide
-                     
-            """
-            if dst_pl.suffix in [".pdf", ".eps"]:
-                """
-                - .odp formatはpdfに変換するとpdfcropで失敗する。よって、png形式で変換する
-                - 注意) PowerPoint/LibreOffice(.odp)は.pdf/.epsへのDirect変換失敗する。一度、.png経由する。   
-                """
-                # warn = """
-                #   [Warning] スライドにはPowerPoint形式(.pptx)に変換して使ってください。
-                #   """
-                # # print(warn)
-                logger.warning(".ppt(x)/.odpの.pdf/.epsへの変換はpng経由で変換します。")
-                # cur_to_fmt = ".pdf"
-                # elif fname_str_or_pl.suffix == ".odp" and _to_fmt in ["pdf", "eps"]:
-                #     """
-                #     .odp formatはpdfに変換するとpdfcropで失敗する。
-                #     よって、png形式で変換する
-                #     """
-            cur_to_fmt = ".png"  # 注意!!PPTXはそのままpdf/.epsへ変換すると画像がずれる
-            # elif to_fmt == ".eps":
-            #     cur_to_fmt = ".pdf"
-            # else:
-            # FIXME: cur_to_fmtではなくdst_tmp_plを作り、それで弁別できるように要修正
-            # cur_to_fmt = to_fmt
-
-            pl_dst_tmp = self._conv_slide(src_pl=src_pl, dst_pl=dst_pl, to_fmt=cur_to_fmt)
-            if is_crop:
-                dst_pl = self._crop_img(src_img_pl=pl_dst_tmp, dst_pl=dst_pl)
-            else:
-                dst_pl = pl_dst_tmp
-            """ pdf 2 eps """
-            # if fmt == ".eps":
-            #     # self._conv2eps(src_pl=p_src_cropped, pl_dst_dir=dst_pl)
-            #     self._conv2img(src_pl=p_src_cropped, dst_pl=dst_pl, fmt_if_dst_without_ext=fmt)
-            """ rm tmpfile"""
-            # if plib_pdf_convd_tmp.exists():
-            #     pathlib.Path(plib_pdf_convd_tmp).unlink()
-            logger.info("Converted")
-
-        # elif src_pl.suffix == ".ai":
-        #     """
-        #     - Image Conversion and Cropping
-        #     - その他のフォーマット(eg. ai)を画像化してcrop
-        #     """
-        #     _ = self._conv_and_crop(src_pl=src_pl, dst_pl=dst_pl, fmt=fmt)
-
+            """ Slide Conversion """
+            self.conv_slide_with_crop_both(src_pl, dst_pl)
         elif dst_pl.suffix == ".md" and src_pl.name.endswith("_pdc"):
             """PANDOCでpdf変換
             
@@ -1007,7 +945,7 @@ class ChangeHandler(FileSystemEventHandler):
             dst_pl = self.fix_eps(dst_pl)
 
     #
-    # def conv2pnt(self, path_src, dir_dst):
+    # def conv2pnt(cls, path_src, dir_dst):
     #     plib_src = pathlib.Path(path_src)  # pathlibのインスタンス
     #     if plib_src.suffix in (".ppt", ".pptx") and not plib_src.name.startswith("~"):
     #         path_dst = pathlib.Path(dir_dst) / plib_src.with_suffix(".pdf").name
@@ -1053,7 +991,7 @@ class ChangeHandler(FileSystemEventHandler):
         filename = os.path.basename(filepath)
         print(self.msg_event_start)
         logger.info('Created: %s' % filename)
-        # self.convert(src_file_apath=event.src_path, dst_dir_apath=self._dst_pl, fmt_if_dst_without_ext=self._to_fmt)  # , _to_fmt="png")
+        # cls.convert(src_file_apath=event.src_path, dst_dir_apath=cls._dst_pl, fmt_if_dst_without_ext=cls._to_fmt)  # , _to_fmt="png")
         self._road_balancer(event=event)
 
     def on_modified(self, event):
@@ -1068,7 +1006,7 @@ class ChangeHandler(FileSystemEventHandler):
         filename = os.path.basename(filepath)
         print("\n\n")
         logger.info('Deleted:%s' % filename)
-        # self._road_balancer(event=event)
+        # cls._road_balancer(event=event)
 
     def on_moved(self, event):
         """
@@ -1082,14 +1020,14 @@ class ChangeHandler(FileSystemEventHandler):
         filename = os.path.basename(filepath)
         print(self.msg_event_start)
         logger.info('Moved:%s' % filename)
-        # self.convert(src_file_apath=event.dest_path, dst_dir_apath=self._dst_pl,fmt_if_dst_without_ext=self._to_fmt)  # , _to_fmt="png")
+        # cls.convert(src_file_apath=event.dest_path, dst_dir_apath=cls._dst_pl,fmt_if_dst_without_ext=cls._to_fmt)  # , _to_fmt="png")
         self._road_balancer(event=event)
 
-    # def start(self, sleep_time=0.5):
+    # def start(cls, sleep_time=0.5):
     #     try:
-    #         event_handler = self
+    #         event_handler = cls
     #         observer = Observer()
-    #         observer.schedule(event_handler, self.target_dir, recursive=True)
+    #         observer.schedule(event_handler, cls.target_dir, recursive=True)
     #         # event_handler = ChangeHandler()
     #         observer.start()
     #         while True:
@@ -1136,24 +1074,24 @@ class ChangeHandler(FileSystemEventHandler):
             path_pl = pl_cwd.joinpath(path)
         return path_pl
 
-    # def monitor(self, src_dir, dst_dir
+    # def monitor(cls, src_dir, dst_dir
     #             , fmt_if_dst_without_ext="png"
     #             , export_fmts=["png", "eps", "pdf"]
     #             , sleep_time=0.5
     #             ):
     #
-    #     self._src_pl = self._get_internal_deal_path(src_dir)
-    #     self._dst_pl = self._get_internal_deal_path(dst_dir)
+    #     cls._src_pl = cls._get_internal_deal_path(src_dir)
+    #     cls._dst_pl = cls._get_internal_deal_path(dst_dir)
     #
     #     # 拡張子チェック
-    #     self._to_fmt = self._validated_fmt(fmt_if_dst_without_ext=fmt_if_dst_without_ext, fname_str_or_pl=self._src_pl)
+    #     cls._to_fmt = cls._validated_fmt(fmt_if_dst_without_ext=fmt_if_dst_without_ext, fname_str_or_pl=cls._src_pl)
     #     try:
-    #         event_handler = self
+    #         event_handler = cls
     #         observer = Observer()
-    #         observer.schedule(event_handler, self._src_pl.as_posix(), recursive=True)
+    #         observer.schedule(event_handler, cls._src_pl.as_posix(), recursive=True)
     #         # event_handler = ChangeHandler()
     #         observer.start()
-    #         print("[Info] Start monitoring:%s" % self._src_pl)
+    #         print("[Info] Start monitoring:%s" % cls._src_pl)
     #         while True:
     #             try:
     #                 time.sleep(sleep_time)
