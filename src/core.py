@@ -254,23 +254,27 @@ class ChangeHandler(FileSystemEventHandler):
         #     shutil.copy(src_pl, dst_pl)
         #     cmd = "magick mogrify -format pdf -define pdf:use-trimbox=true {dst_path}".format(dst_path=dst_pl)
         elif src_img_pl.suffix in (".png", ".jpg", ".jpeg", ".eps"):  # pdfのcropはできない
-            cmd_name = "convert"
-            # p_conv = Path("/usr/local/bin/convert")
-            # if not p_conv.exists():
-            #     raise Exception("%s not found" % p_conv)
-            # if src_pl.suffix == ".pdf":
-            #     # url: https://www.imagemagick.org/discourse-server/viewtopic.php?t=15667
-            #     # src: mogrify -format pdf -define pdf:use-trimbox=true /TEMP/foo.pdf
-            #     trim_cmd = "-mogrify -format pdf -define pdf:use-trimbox=true"
-            # else:
-            trim_cmd = "-trim"
-            cmd = "{cmd_name} {path_in} {trim_cmd} {path_out}".format(cmd_name=cmd_name,
-                                                                      trim_cmd=trim_cmd,
-                                                                      path_in=src_img_pl,
-                                                                      path_out=dst_pl)
-            res_msg = cls._run_cmd(cmd, short_msg="Cropping CMD: %s" % cmd)
-            if res_msg:
-                logger.info(res_msg)
+            cls.img_magick(
+                src_pl=src_img_pl,
+                dst_pl=dst_pl
+            )
+            # cmd_name = "convert"
+            # # p_conv = Path("/usr/local/bin/convert")
+            # # if not p_conv.exists():
+            # #     raise Exception("%s not found" % p_conv)
+            # # if src_pl.suffix == ".pdf":
+            # #     # url: https://www.imagemagick.org/discourse-server/viewtopic.php?t=15667
+            # #     # src: mogrify -format pdf -define pdf:use-trimbox=true /TEMP/foo.pdf
+            # #     trim_cmd = "-mogrify -format pdf -define pdf:use-trimbox=true"
+            # # else:
+            # trim_cmd = "-trim"
+            # cmd = "{cmd_name} {path_in} {trim_cmd} {path_out}".format(cmd_name=cmd_name,
+            #                                                           trim_cmd=trim_cmd,
+            #                                                           path_in=src_img_pl,
+            #                                                           path_out=dst_pl)
+            # res_msg = cls._run_cmd(cmd, short_msg="Cropping CMD: %s" % cmd)
+            # if res_msg:
+            #     logger.info(res_msg)
         else:
             # new_path = shutil.move(fname_str_or_pl.as_posix(), dir_dst)
             logger.error("対応していないFormatをcroppingしようとして停止: %s" % src_img_pl)
@@ -847,7 +851,7 @@ class ChangeHandler(FileSystemEventHandler):
             return True, tmp_dst_pl
 
         """ Image conversion"""
-        tmp_dst_pl = cls._conv2img(src_pl=tmp_dst_pl, dst_pl=dst_pl)
+        tmp_dst_pl = cls.img_magick(src_pl=tmp_dst_pl, dst_pl=dst_pl)
         if tmp_dst_pl is None:
             return False, None
         else:
@@ -921,37 +925,37 @@ class ChangeHandler(FileSystemEventHandler):
             # _ = self._conv_and_crop(src_pl=src_pl, dst_pl=dst_pl)
         elif src_pl.suffix in (".ppt", ".pptx", ".odp") and not src_pl.name.startswith("~"):
             """
-            スライドの変換
+            Conversion Slide
+                     
             """
-            if src_pl.suffix == ".odp" and dst_pl.suffix in [".pdf", ".eps"]:
+            if dst_pl.suffix in [".pdf", ".eps"]:
                 """
-                .odp formatはpdfに変換するとpdfcropで失敗する。
-                よって、png形式で変換する
+                - .odp formatはpdfに変換するとpdfcropで失敗する。よって、png形式で変換する
+                - 注意) PowerPoint/LibreOffice(.odp)は.pdf/.epsへのDirect変換失敗する。一度、.png経由する。   
                 """
-                warn = """
-                  [Warning]
-                  [Warning].odpを.pdf/.epsへの変換はCropで失敗します!!!
-                  [Warning] スライドにはPowerPoint形式(.pptx)に変換して使ってください。
-                  [Warning]
-                  """
-                print(warn)
+                # warn = """
+                #   [Warning] スライドにはPowerPoint形式(.pptx)に変換して使ってください。
+                #   """
+                # # print(warn)
+                logger.warning(".ppt(x)/.odpの.pdf/.epsへの変換はpng経由で変換します。")
                 # cur_to_fmt = ".pdf"
                 # elif fname_str_or_pl.suffix == ".odp" and _to_fmt in ["pdf", "eps"]:
                 #     """
                 #     .odp formatはpdfに変換するとpdfcropで失敗する。
                 #     よって、png形式で変換する
                 #     """
-                #     cur_to_fmt = "png"
+            cur_to_fmt = ".png"  # 注意!!PPTXはそのままpdf/.epsへ変換すると画像がずれる
             # elif to_fmt == ".eps":
             #     cur_to_fmt = ".pdf"
             # else:
             # FIXME: cur_to_fmtではなくdst_tmp_plを作り、それで弁別できるように要修正
-            cur_to_fmt = to_fmt
+            # cur_to_fmt = to_fmt
+
             pl_dst_tmp = self._conv_slide(src_pl=src_pl, dst_pl=dst_pl, to_fmt=cur_to_fmt)
             if is_crop:
-                pl_dst = self._crop_img(src_img_pl=pl_dst_tmp, dst_pl=dst_pl)
+                dst_pl = self._crop_img(src_img_pl=pl_dst_tmp, dst_pl=dst_pl)
             else:
-                pl_dst = pl_dst_tmp
+                dst_pl = pl_dst_tmp
             """ pdf 2 eps """
             # if fmt == ".eps":
             #     # self._conv2eps(src_pl=p_src_cropped, pl_dst_dir=dst_pl)
