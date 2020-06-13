@@ -64,6 +64,26 @@ logger.addHandler(stream_handler)
 
 # 出力がepsの場合、監視folderにpngなど画像ファイルが書き込まれたらepsへ変換するコードをかけ
 
+class Tool:
+    def pdfcrop(self, src_pl, dst_pl):
+        """
+
+        :param src_pl:
+        :param dst_pl:
+        :return:
+        """
+        pass
+
+    def img_magick(self, src_pl, dst_pl):
+        """
+
+        :param src_pl:
+        :param dst_pl:
+        :return:
+        """
+        pass
+
+
 class ChangeHandler(FileSystemEventHandler):
     """
     - Part:
@@ -223,7 +243,7 @@ class ChangeHandler(FileSystemEventHandler):
         # path_dst = pathlib.Path(dir_dst) / plib_src.with_suffix("." + cls._to_fmt).name
         if not src_img_pl.exists():
             print("[Error] %s not found" % src_img_pl)
-            return
+            return Path()
         # if dst_pl.is_dir():
         #     dst_pl = dst_pl.joinpath(src_pl.name)  # if the path is dir, set src_filename_stem converted
 
@@ -279,7 +299,7 @@ class ChangeHandler(FileSystemEventHandler):
         else:
             # new_path = shutil.move(fname_str_or_pl.as_posix(), dir_dst)
             logger.error("対応していないFormatをcroppingしようとして停止: %s" % src_img_pl)
-            return
+            return Path()
 
         # if shutil.which(cmd_name) is None:
         #     logger.error("Conversion cmd(%s) is not in path " % cmd)
@@ -568,7 +588,7 @@ class ChangeHandler(FileSystemEventHandler):
                 http://would-be-astronomer.hatenablog.com/entry/2015/03/26/214633
             pdfcrop機能しない事が多い？img_magickと併用でcropする事
             """
-            cls.img_magick(src_pl, dst_pl, do_trim=True) #TODO: 現状ImgMagickの-trimでPDFもcropされている！！
+            cls.img_magick(src_pl, dst_pl, do_trim=True)  # TODO: 現状ImgMagickの-trimでPDFもcropされている！！
             cls._crop_img(dst_pl, dst_pl)
         # else:
         #     logger.error("_conv_with_crop_bothがCalled.しかし何も変換せず。src:%s,dst:%s" % (src_pl, dst_pl))
@@ -863,7 +883,8 @@ class ChangeHandler(FileSystemEventHandler):
         # FIXME: Pathしか受け付けないように要修正
         src_pl = Path(src_file_apath)  # pathlibのインスタンス
         """ 無視すべき拡張子 """
-        if src_pl.name.startswith("~") or src_pl.name.startswith(".") or src_pl.suffix in (".part", ".tmp"):
+        if src_pl.name.startswith("~") or src_pl.name.startswith(".") or src_pl.suffix in (".part", ".tmp") or \
+                src_pl.stem.endswith("~"):  # for bibdesk
             logger.info("Ignored: %s" % src_pl.name)
             return
         if not src_pl.is_absolute():
