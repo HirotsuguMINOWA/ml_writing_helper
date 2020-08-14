@@ -1,4 +1,3 @@
-from pathlib import Path
 import pathlib
 import os
 from typing import Tuple
@@ -6,14 +5,12 @@ from typing import Tuple
 from PIL import Image
 
 
-# class PathWithImg(type(Path())):
-class PathWithImg(Path):
-# class PathWithImg(type(Path())):
+class PathWithImg(pathlib.Path):
     """
 
     - ImageMagic変換用にサイズ指定のため、ソースで画像情報取得可能にする
     - Ref
-        - file:///Users/hirots-m/Zotero/storage/5476ZANN/subclass-pathlib-path-fails.html
+        - https://stackoverflow.com/questions/29850801/subclass-pathlib-path-fails or zotero
     """
     # def __new__(cls, **kwargs):
     #     path = cls._std_etc()
@@ -29,14 +26,14 @@ class PathWithImg(Path):
 
     def __init__(self, *args):
         # super().__init__(arg)
-        super().__init__() #Path.__init__ does not take any arg (all is done in new)
+        super().__init__()  # Path.__init__ does not take any arg (all is done in new)
         # self._some_instance_ppath_value = self.exists() #Path method
         # ※ 毎回求めた方がよい、∵ Pathの値変更に追いつけないため。
         # self._dpi = None
         # self._width = None
         # self._height = None
-        self._im = None
-        self._dpi = None
+        self._im = None  # Image class of Pillow
+        self._dpi = None  # info DPI
 
     @property
     def im(self) -> Image:
