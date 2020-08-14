@@ -18,10 +18,13 @@ from pathlib import Path
 from subprocess import check_output, STDOUT
 
 from typing import Tuple
+
+from PIL import Image
 from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
 import magic  # python-magic
 
+wait_sec = 1
 # coding:utf-8
 
 # # ログのライブラリ
@@ -56,6 +59,7 @@ import magic  # python-magic
 # # 3.loggerにhandlerをセット
 # # --------------------------------
 # logger.addHandler(stream_handler)
+from img_crop import img_crop
 from logger_getter import get_logger
 
 logger = get_logger(__name__)
@@ -347,26 +351,58 @@ class ChangeHandler(FileSystemEventHandler):
         """
         if do_trim and src_pl.suffix == dst_pl.suffix:
             logger.warning("ImageMagick変換において、Trim(Crop)付きで別Formatへ変換すると、Crop失敗する可能性あり")
-        # TODO: in,outのfmtの要チェック?いらんかも
-        conv_name = "convert"
-        conv_path = shutil.which(conv_name)
-        if not conv_path:
-            logger.error("convert command not found")
-            return None
-        head = ""
-        if dst_pl.suffix == ".eps" and is_eps2:
-            head = "eps3:"  # FIXME: eps3にしている。eps3はGIFのLZW圧縮？
-        param = ""
-        if do_trim:
-            param = "-trim"
-        cmd = "{cmd_path} {src} {param} -quality 100 -density 200 -resize 4000x4000 {head}{dst}".format(
-            cmd_path=conv_path
-            , param=param
-            , head=head
-            , src=src_pl
-            , dst=dst_pl
-        )
-        cls._run_cmd(cmd, "Convert by ImageMagic")
+        # # TODO: in,outのfmtの要チェック?いらんかも
+        # conv_name = "convert"
+        # conv_path = shutil.which(conv_name)
+        # if not conv_path:
+        #     logger.error("convert command not found")
+        #     return None
+        # head = ""
+        # if dst_pl.suffix == ".eps" and is_eps2:
+        #     head = "eps3:"  # FIXME: eps3にしている。eps3はGIFのLZW圧縮？
+        # param = ""
+        # if do_trim:
+        #     param = "-trim"
+        # cmd = "{cmd_path} {src} {param} -quality 100 -density 200 -resize 4000x4000 {head}{dst}".format(
+        #     cmd_path=conv_path
+        #     , param=param
+        #     , head=head
+        #     , src=src_pl
+        #     , dst=dst_pl
+        # )
+        # cls._run_cmd(cmd, "Convert by ImageMagic")
+        src_img = Image.open(src_pl.as_posix())
+        dst_im = img_crop(image=src_img)
+
+        if dst_pl.suffix == ".eps":
+            def remove_transparency(im, bg_color=(255, 255, 255)):
+                """
+                Taken from https://stackoverflow.com/a/35859141/7444782
+                """
+                # Only process if image has transparency (http://stackoverflow.com/a/1963146)
+                if im.mode in ('RGBA', 'LA') or (im.mode == 'P' and 'transparency' in im.info):
+
+                    # Need to convert to RGBA if LA format due to a bug in PIL (http://stackoverflow.com/a/1963146)
+                    alpha = im.convert('RGBA').split()[-1]
+
+                    # Create a new background image of our matt color.
+                    # Must be RGBA because paste requires both images have the same format
+                    # (http://stackoverflow.com/a/8720632  and  http://stackoverflow.com/a/9459208)
+                    bg = Image.new("RGBA", im.size, bg_color + (255,))
+                    bg.paste(im, mask=alpha)
+                    return bg
+                else:
+                    return im
+            if dst_im.mode in ('RGBA', 'LA'):
+                # https://pillow.readthedocs.io/en/stable/handbook/image-file-formats.html?highlight=eps#eps
+                print('Current figure mode "{}" cannot be directly saved to .eps and should be converted (e.g. to "RGB")'.format(dst_im.mode))
+                dst_im= remove_transparency(dst_im)
+                # dst_im = dst_im[:, :, 0:2]
+                dst_im = dst_im.convert('RGB')
+            dst_im.save(dst_pl.as_posix(), lossless=True)
+        else:
+            dst_im.save(dst_pl.as_posix())
+
         return dst_pl
 
     # @classmethod
@@ -1022,6 +1058,7 @@ class ChangeHandler(FileSystemEventHandler):
         :param event:
         :return:
         """
+
         filepath = event.src_path
         filename = os.path.basename(filepath)
         print(self.msg_event_start)
@@ -1030,6 +1067,7 @@ class ChangeHandler(FileSystemEventHandler):
         self._road_balancer(event=event)
 
     def on_modified(self, event):
+        time.sleep(wait_sec)  # 画像生成まで少し待つ
         filepath = event.src_path
         filename = os.path.basename(filepath)
         print(self.msg_event_start)
