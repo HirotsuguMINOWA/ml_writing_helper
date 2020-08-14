@@ -2,6 +2,8 @@
 1. [ ] 徐々にPillow/OpenCV+Numpyに置き換える事!!
    - ~~Pillowは2MB, OpenCVは約50MB. Pillowも少しなれるか。cropにもPillow使えるので問題ない？~~
    - Pillow: OpenCVと重複する。OpenCVになれる事にする。
+- [ ] PythonMagicなるライブラリがあるらしい。使う？
+    - `python-magic`
 - [ ] ~~.aiを.eps/.pngへ変換可能へ~~
 - [ ] mermaidを画像化
 - [x] 出力時の日時datetimeを併記

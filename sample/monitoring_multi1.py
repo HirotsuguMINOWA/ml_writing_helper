@@ -1,11 +1,11 @@
-from src.core import ChangeHandler
+from core import ChangeHandler
 
 o = ChangeHandler()
 
 # 監視１つ目: pptxをepsら画像へ
 o.set_monitor(
-    src_dir="fig_src"
-    , dst_dir="fig_gen"
+    src_dir="sample/fig_src"
+    , dst_dir="sample/fig_gen"
     # , fmt_if_dst_without_ext="png"
     , to_fmt=".eps"
 )

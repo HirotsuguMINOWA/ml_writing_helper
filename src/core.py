@@ -20,40 +20,45 @@ from subprocess import check_output, STDOUT
 from typing import Tuple
 from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
+import magic  # python-magic
+
 # coding:utf-8
 
-# ログのライブラリ
-import logging
-from logging import getLogger, StreamHandler, Formatter
+# # ログのライブラリ
+# import logging
+# from logging import getLogger, StreamHandler, Formatter
+#
+# # --------------------------------
+# # 1.loggerの設定
+# # --------------------------------
+# # loggerオブジェクトの宣言
+# logger = getLogger("LogTest")
+#
+# # loggerのログレベル設定(ハンドラに渡すエラーメッセージのレベル)
+# logger.setLevel(logging.DEBUG)
+#
+# # --------------------------------
+# # 2.handlerの設定
+# # --------------------------------
+# # handlerの生成
+# stream_handler = StreamHandler()
+#
+# # handlerのログレベル設定(ハンドラが出力するエラーメッセージのレベル)
+# stream_handler.setLevel(logging.DEBUG)
+#
+# # ログ出力フォーマット設定
+# # handler_format = Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+# # handler_format = Formatter('%(asctime)-15s - %(name)s - %(levelname)s - %(message)s')
+# handler_format = Formatter('%(asctime)s[%(levelname)s] %(message)s', datefmt='%H:%M:%S')
+# stream_handler.setFormatter(handler_format)
+#
+# # --------------------------------
+# # 3.loggerにhandlerをセット
+# # --------------------------------
+# logger.addHandler(stream_handler)
+from logger_getter import get_logger
 
-# --------------------------------
-# 1.loggerの設定
-# --------------------------------
-# loggerオブジェクトの宣言
-logger = getLogger("LogTest")
-
-# loggerのログレベル設定(ハンドラに渡すエラーメッセージのレベル)
-logger.setLevel(logging.DEBUG)
-
-# --------------------------------
-# 2.handlerの設定
-# --------------------------------
-# handlerの生成
-stream_handler = StreamHandler()
-
-# handlerのログレベル設定(ハンドラが出力するエラーメッセージのレベル)
-stream_handler.setLevel(logging.DEBUG)
-
-# ログ出力フォーマット設定
-# handler_format = Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-# handler_format = Formatter('%(asctime)-15s - %(name)s - %(levelname)s - %(message)s')
-handler_format = Formatter('%(asctime)s[%(levelname)s] %(message)s', datefmt='%H:%M:%S')
-stream_handler.setFormatter(handler_format)
-
-# --------------------------------
-# 3.loggerにhandlerをセット
-# --------------------------------
-logger.addHandler(stream_handler)
+logger = get_logger(__name__)
 
 
 # --------------------------------
@@ -337,7 +342,7 @@ class ChangeHandler(FileSystemEventHandler):
         :param src_pl:
         :param dst_pl:
         :param do_trim:
-        :param is_eps2:
+        :param is_eps2: eps_ver2に変換する？defaultはTrue
         :return:
         """
         if do_trim and src_pl.suffix == dst_pl.suffix:
@@ -350,11 +355,11 @@ class ChangeHandler(FileSystemEventHandler):
             return None
         head = ""
         if dst_pl.suffix == ".eps" and is_eps2:
-            head = "eps2:"
+            head = "eps3:"  # FIXME: eps3にしている。eps3はGIFのLZW圧縮？
         param = ""
         if do_trim:
             param = "-trim"
-        cmd = "{cmd_path} {src} {param} {head}{dst}".format(
+        cmd = "{cmd_path} {src} {param} -quality 100 -density 200 -resize 4000x4000 {head}{dst}".format(
             cmd_path=conv_path
             , param=param
             , head=head
@@ -565,7 +570,7 @@ class ChangeHandler(FileSystemEventHandler):
         # path_dst = pathlib.Path(dir_dst) / fname_str_or_pl.name
         # path_dst = pathlib.Path(dir_dst) / plib_src.with_suffix("." + cls._to_fmt).name
         if not src_pl.exists():
-            print("[Error] %s not found" % src_pl)
+            logger.error(f"{src_pl} not found")
             return
         # if dst_pl.is_dir():
         #     dst_pl = dst_pl.joinpath(src_pl.name)  # if the path is dir, set src_filename_stem converted
@@ -581,6 +586,7 @@ class ChangeHandler(FileSystemEventHandler):
             cls.img_magick(src_pl, dst_pl)
         else:
             """
+            ★ こちらはImageMagicで直接Crop(Trim)できるfmtだけを処理する
             出力がPDFの場合のみ2段階変換(conv,crop)を実施
             pdf->image: OK!!!
                 $ convert test-crop.pdf eps2:test-crop.eps

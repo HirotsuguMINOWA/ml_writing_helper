@@ -1,6 +1,7 @@
 # Caution
 # Set src dir as source folder in projectPref.
 # You can import by "from core import ChangeHandler"
+# and need set working dir at prj root(ml_writing_helper)
 import os
 import shutil
 import sys
