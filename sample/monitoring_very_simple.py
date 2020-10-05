@@ -5,7 +5,7 @@ from core import ChangeHandler
 
 p = ChangeHandler()
 p.set_monitor(
-    src_dir="fig_src"
+    src_dir="fig_srcぽぺび"
     , dst_dir="fig_gen"
     , to_fmt=".eps"
 )

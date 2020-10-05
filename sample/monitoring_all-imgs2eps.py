@@ -15,7 +15,7 @@ from concurrent.futures import ThreadPoolExecutor
 # from logging import StreamHandler, Formatter, INFO, getLogger
 
 to_fmt = ".eps"
-src = "fig_src"
+src = "fig_srcぽぺび"
 sample = "fig_sample"
 dst = "fig_gen"
 exc_ext = []

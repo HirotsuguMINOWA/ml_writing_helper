@@ -17,7 +17,8 @@ from pathlib import Path
 from subprocess import check_output, STDOUT
 
 from typing import Tuple
-
+import unicodedata  # for MacOS NDF
+import platform
 from PIL import Image
 from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
@@ -130,7 +131,7 @@ class ChangeHandler(FileSystemEventHandler):
     #              , output_dir=None
     #              , _to_fmt="png"
     #              , export_fmts=["png", "eps", "pdf"]):
-    def __init__(self, logger_=None):
+    def __init__(self, log_level_console=None):
         """[summary]
 
         Arguments:
@@ -167,9 +168,9 @@ class ChangeHandler(FileSystemEventHandler):
         self._to_fmt = None
         self._monitors = {}
         self._ppaths_soffice = [Path(x) for x in self.paths_soffice]
-        if logger_ is not None:
+        if log_level_console is not None:
             global logger
-            logger = logger_
+            logger = get_logger(name=__name__, level_console=log_level_console)
         # #
         # # 拡張子チェック
         # #
@@ -338,7 +339,7 @@ class ChangeHandler(FileSystemEventHandler):
         :return: output of rum
         """
         if is_print:
-            logger.debug("CMD(%s):%s" % (short_msg, cmd))
+            logger.info("CMD(%s):%s" % (short_msg, cmd))
         tokens = shlex.split(cmd)
         try:
             output = check_output(tokens, stderr=STDOUT).decode("utf8")
@@ -346,7 +347,7 @@ class ChangeHandler(FileSystemEventHandler):
             logger.error(e)
             return "Error occurred"
         if is_print:
-            logger.debug("Output(%s):%s" % (short_msg, cmd))
+            logger.info("Output(%s):%s" % (short_msg, cmd))
         return output
 
     @classmethod
@@ -523,12 +524,16 @@ class ChangeHandler(FileSystemEventHandler):
         #     dst_abs_dir_only=dst_pl.parent,
         #     fmt=dst_pl.suffix[1:]
         # )
-        cmd = f"{cls._cmd_plantuml} -t{dst_pl.suffix[1:]} {src_pl.as_posix()}"
+        cmd = f"{cls._cmd_plantuml} -o {dst_pl.parent} -t{dst_pl.suffix[1:]} {src_pl.as_posix()}"
         res = cls._run_cmd(cmd=cmd, short_msg="Converting with %s" % cls._cmd_plantuml)
         # Move generated file to dst_pl
-        pl_out = src_pl.parent.joinpath(src_pl.stem + dst_pl.suffix)
+        pl_out = dst_pl.parent.joinpath(src_pl.stem + dst_pl.suffix)
         shutil.move(pl_out, dst_pl)
-        logger.info("Result:%s" % res)
+        """Show output msg"""
+        if res is None or res == "":
+            logger.info("Completed. ")
+        else:
+            logger.info("Finished with msg: %s" % res)
 
     @classmethod
     def conv_slide_with_crop_both(cls, src_pl: Path, dst_pl: Path, is_crop=True, via_ext=".png"):
@@ -1051,6 +1056,13 @@ class ChangeHandler(FileSystemEventHandler):
             """
             logger.error(msg)
 
+    @staticmethod
+    def is_nfd(line):
+        for char in line.strip():
+            if unicodedata.combining(char) != 0:
+                return True
+        return False
+
     def _road_balancer(self, event):
         """
 
@@ -1058,8 +1070,16 @@ class ChangeHandler(FileSystemEventHandler):
         :return:
         """
         if self._monitors and not event.is_directory:
+            # print(f"event.src_path:{self.is_nfd(event.src_path)},{event.src_path}")
             for key_path, closure in self._monitors.items():  # type:Tuple[Path,Path],function
-                if key_path[0].as_posix() in event.src_path:  # 0: src_path, 1:dst_path
+                # print(f"key_path:{self.is_nfd(key_path[0].as_posix())},{event.src_path}")
+                """ Check the env. applied NDF or not"""
+                if platform.system() == 'Darwin':
+                    """convert NDF to NFC """
+                    converted = unicodedata.normalize('NFC', key_path[0].as_posix())
+                else:
+                    converted = key_path[0].as_posix()
+                if converted in event.src_path:  # 0: src_path, 1:dst_path
                     if event.event_type == "moved":
                         src_path = event.dest_path
                     else:
