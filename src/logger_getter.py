@@ -17,6 +17,7 @@ def get_logger(
     logger.setLevel(logging.DEBUG)
 
     # create file handler which logs even DEBUG messages
+    fh = None
     if logfile_path != "":
         fh = logging.FileHandler(logfile_path)
         fh.setLevel(level_file)
@@ -31,7 +32,7 @@ def get_logger(
     ch_formatter = logging.Formatter(log_format, '%Y-%m-%d %H:%M:%S')
     ch.setFormatter(ch_formatter)
 
-    # add the handlers to the logger
+    # add the handlers to the logger main body
     if logfile_path != "":
         logger.addHandler(fh)
     logger.addHandler(ch)

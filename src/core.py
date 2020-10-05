@@ -10,7 +10,6 @@ import os
 import shlex
 # import ftplib
 import shutil
-import subprocess
 import sys
 import time
 from enum import Enum
@@ -92,6 +91,14 @@ class Tool:
         """
         pass
 
+    def _conv_raw_img(self, src_pl, dst_pl):
+        """
+        ラスタ型?(png, jpeg)の画像変換
+        :param src_pl:
+        :param dst_pl:
+        :return:
+        """
+
 
 class ChangeHandler(FileSystemEventHandler):
     """
@@ -123,7 +130,7 @@ class ChangeHandler(FileSystemEventHandler):
     #              , output_dir=None
     #              , _to_fmt="png"
     #              , export_fmts=["png", "eps", "pdf"]):
-    def __init__(self):
+    def __init__(self, logger_=None):
         """[summary]
 
         Arguments:
@@ -160,6 +167,9 @@ class ChangeHandler(FileSystemEventHandler):
         self._to_fmt = None
         self._monitors = {}
         self._ppaths_soffice = [Path(x) for x in self.paths_soffice]
+        if logger_ is not None:
+            global logger
+            logger = logger_
         # #
         # # 拡張子チェック
         # #
@@ -393,10 +403,11 @@ class ChangeHandler(FileSystemEventHandler):
                     return bg
                 else:
                     return im
+
             if dst_im.mode in ('RGBA', 'LA'):
                 # https://pillow.readthedocs.io/en/stable/handbook/image-file-formats.html?highlight=eps#eps
                 print('Current figure mode "{}" cannot be directly saved to .eps and should be converted (e.g. to "RGB")'.format(dst_im.mode))
-                dst_im= remove_transparency(dst_im)
+                dst_im = remove_transparency(dst_im)
                 # dst_im = dst_im[:, :, 0:2]
                 dst_im = dst_im.convert('RGB')
             dst_im.save(dst_pl.as_posix(), lossless=True)
@@ -496,24 +507,28 @@ class ChangeHandler(FileSystemEventHandler):
     #     return pl_dst_dir
 
     @classmethod
-    def _conv_plantuml(cls, src_pl: Path, dst_pl: Path):
+    def conv_plantuml(cls, src_pl: Path, dst_pl: Path) -> None:
+        logger.debug("Start converting plantuml")
         cls._cmd_plantuml = "plantuml"
         path_cmd = shutil.which(cls._cmd_plantuml)
         if path_cmd is None:
             logger.error("%s not found. Can't convert from PlantUML" % cls._cmd_plantuml)
             return
-        # todo: plantuml conv.
         if dst_pl.suffix not in cls.plantuml_fmt_out:
-            print("[ERROR] Indicated Formatは未対応 in coverting with plantuml")
+            logger.error("Indicated Formatは未対応 in converting with plantuml")
             return
-        cmd = "{cmd_pu} -o {dst_abs_dir_only} -t{fmt} {src}".format(
-            cmd_pu=cls._cmd_plantuml,
-            src=src_pl.as_posix(),
-            dst_abs_dir_only=dst_pl.parent,
-            fmt=dst_pl.suffix[1:]
-        )
+        # cmd = "{cmd_pu} -o {dst_abs_dir_only} -t{fmt} {src}".format(
+        #     cmd_pu=cls._cmd_plantuml,
+        #     src=src_pl.as_posix(),
+        #     dst_abs_dir_only=dst_pl.parent,
+        #     fmt=dst_pl.suffix[1:]
+        # )
+        cmd = f"{cls._cmd_plantuml} -t{dst_pl.suffix[1:]} {src_pl.as_posix()}"
         res = cls._run_cmd(cmd=cmd, short_msg="Converting with %s" % cls._cmd_plantuml)
-        print("Result:%s" % res)
+        # Move generated file to dst_pl
+        pl_out = dst_pl.parent.joinpath(src_pl.stem + dst_pl.suffix)
+        shutil.move(pl_out, dst_pl)
+        logger.info("Result:%s" % res)
 
     @classmethod
     def conv_slide_with_crop_both(cls, src_pl: Path, dst_pl: Path, is_crop=True, via_ext=".png"):
@@ -557,7 +572,6 @@ class ChangeHandler(FileSystemEventHandler):
 
         :param src_pl:
         :param dst_pl: ファイル/folderまでのPATH.場合分けが必要
-        :param to_fmt:
         :return:
         """
         for p_soffice in cls._ppaths_soffice:  # type: Path
@@ -1005,7 +1019,7 @@ class ChangeHandler(FileSystemEventHandler):
             shutil.copy(src_pl, dst_pl)
             logger.info("Copied %s to %s" % (src_pl, dst_pl))
         elif src_pl.suffix in self._ext_pluntuml:
-            self._conv_plantuml(src_pl=src_pl, dst_pl=dst_pl)
+            self.conv_plantuml(src_pl=src_pl, dst_pl=dst_pl)
         elif src_pl.name.endswith("_mermaid") and src_pl.suffix == ".md" or src_pl.suffix == ".mmd":
             print("[Info] Mermaid conversion:%s" % src_pl)
             self.conv_mermaid_with_crop(src_pl=src_pl, dst_pl=dst_pl)  # , to_fmt=to_fmt)
