@@ -526,7 +526,7 @@ class ChangeHandler(FileSystemEventHandler):
         cmd = f"{cls._cmd_plantuml} -t{dst_pl.suffix[1:]} {src_pl.as_posix()}"
         res = cls._run_cmd(cmd=cmd, short_msg="Converting with %s" % cls._cmd_plantuml)
         # Move generated file to dst_pl
-        pl_out = dst_pl.parent.joinpath(src_pl.stem + dst_pl.suffix)
+        pl_out = src_pl.parent.joinpath(src_pl.stem + dst_pl.suffix)
         shutil.move(pl_out, dst_pl)
         logger.info("Result:%s" % res)
 
