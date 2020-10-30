@@ -9,7 +9,8 @@ o.set_monitor(
     src_dir="sample/fig_srcぽぺび"
     , dst_dir=dst_dir
     # , fmt_if_dst_without_ext="png"
-    , to_fmt=".png"
+    # , to_fmt=".png"
+    , to_fmt=".eps"
 )
 
 # 監視２つ目：.bibを所定のpathへコピー

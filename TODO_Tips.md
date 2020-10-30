@@ -1,5 +1,7 @@
 # TODO
-1. [ ] 徐々にPillow/OpenCV+Numpyに置き換える事!!
+1. [ ] 白黒出力モードのサポート
+    - 科研なんかで白黒で判断したい画像もあるため。船の小火をAIが火災と判断している率を%で表示するため。
+2. [ ] 徐々にPillow/OpenCV+Numpyに置き換える事!!
    - ~~Pillowは2MB, OpenCVは約50MB. Pillowも少しなれるか。cropにもPillow使えるので問題ない？~~
    - Pillow: OpenCVと重複する。OpenCVになれる事にする。
 - [ ] PythonMagicなるライブラリがあるらしい。使う？

@@ -22,6 +22,8 @@ import platform
 from PIL import Image
 from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
+import numpy as np
+import matplotlib
 import magic  # python-magic
 
 wait_sec = 1
@@ -253,6 +255,7 @@ class ChangeHandler(FileSystemEventHandler):
     def _crop_img(cls, src_img_pl: Path, dst_pl: Path) -> Path:
         """
         image(pdf/png,jpeg?)をcroppingする
+        TODO: こちらはもう不要かも。
         :param p_src:
         :param dst_pl:
         :return: 変換後のpath名
@@ -295,7 +298,7 @@ class ChangeHandler(FileSystemEventHandler):
         #     shutil.copy(src_pl, dst_pl)
         #     cmd = "magick mogrify -format pdf -define pdf:use-trimbox=true {dst_path}".format(dst_path=dst_pl)
         elif src_img_pl.suffix in (".png", ".jpg", ".jpeg", ".eps"):  # pdfのcropはできない
-            cls.img_magick(
+            cls.conv_img(
                 src_pl=src_img_pl,
                 dst_pl=dst_pl
             )
@@ -351,15 +354,19 @@ class ChangeHandler(FileSystemEventHandler):
         return output
 
     @classmethod
-    def img_magick(cls, src_pl, dst_pl, do_trim=True, is_eps2=True):
+    def conv_img(cls, src_pl, dst_pl, do_trim=True, gray=False, eps_ver=2):
         """
-        Image Magicコマンド
+        Convert Image
+        - Image Magicコマンド
         :param src_pl:
         :param dst_pl:
         :param do_trim:
-        :param is_eps2: eps_ver2に変換する？defaultはTrue
+        :param gray: conv to gray
+        :param eps_ver: eps_ver2に変換する？defaultはTrue
         :return:
         """
+        if not src_pl.exists():
+            raise Exception(f"指定ファイルが存在しない:{src_pl.as_posix()}")
         if do_trim and src_pl.suffix == dst_pl.suffix:
             logger.warning("ImageMagick変換において、Trim(Crop)付きで別Formatへ変換すると、Crop失敗する可能性あり")
         # # TODO: in,outのfmtの要チェック?いらんかも
@@ -382,8 +389,10 @@ class ChangeHandler(FileSystemEventHandler):
         #     , dst=dst_pl
         # )
         # cls._run_cmd(cmd, "Convert by ImageMagic")
-        src_img = Image.open(src_pl.as_posix())
-        dst_im = img_crop(image=src_img)
+        print("src:", src_pl.as_posix())
+        dst_im = Image.open(src_pl.as_posix())
+        if do_trim:
+            dst_im = img_crop(image=dst_im)
 
         if dst_pl.suffix == ".eps":
             def remove_transparency(im, bg_color=(255, 255, 255)):
@@ -406,11 +415,19 @@ class ChangeHandler(FileSystemEventHandler):
                     return im
 
             if dst_im.mode in ('RGBA', 'LA'):
+                """ 透過画像を解除? """
                 # https://pillow.readthedocs.io/en/stable/handbook/image-file-formats.html?highlight=eps#eps
                 print('Current figure mode "{}" cannot be directly saved to .eps and should be converted (e.g. to "RGB")'.format(dst_im.mode))
                 dst_im = remove_transparency(dst_im)
                 # dst_im = dst_im[:, :, 0:2]
                 dst_im = dst_im.convert('RGB')
+
+        if gray:
+            """ Convert to gray img """
+            dst_im = dst_im.convert("L")
+
+        """保存"""
+        if dst_pl.suffix in (".eps", ".png", ".gif"):
             dst_im.save(dst_pl.as_posix(), lossless=True)
         else:
             dst_im.save(dst_pl.as_posix())
@@ -478,7 +495,7 @@ class ChangeHandler(FileSystemEventHandler):
     #         # # subprocess.run(tokens)
     #         # output = check_output(tokens, stderr=STDOUT).decode(decode)
     #         # logger.debug("Output: %s" % output)
-    #         dst_pl = cls.img_magick(src_pl, dst_pl)
+    #         dst_pl = cls.conv_img(src_pl, dst_pl)
     #     return dst_pl
 
     # @classmethod
@@ -536,7 +553,7 @@ class ChangeHandler(FileSystemEventHandler):
             logger.info("Finished with msg: %s" % res)
 
     @classmethod
-    def conv_slide_with_crop_both(cls, src_pl: Path, dst_pl: Path, is_crop=True, via_ext=".png"):
+    def conv_slide_with_crop_both(cls, src_pl: Path, dst_pl: Path, gray, is_crop=True, via_ext=".png"):
         """
 
         :param src_pl:
@@ -563,7 +580,7 @@ class ChangeHandler(FileSystemEventHandler):
         cls._conv_slide(src_pl=src_pl, dst_pl=dst_tmp_pl)
         if is_crop:
             if is_mediate:
-                cls._conv_with_crop_both(dst_tmp_pl, dst_pl)
+                cls._conv_with_crop_both(dst_tmp_pl, dst_pl, gray=gray)
             else:
                 cls._crop_img(src_img_pl=dst_tmp_pl, dst_pl=dst_pl)
 
@@ -611,8 +628,9 @@ class ChangeHandler(FileSystemEventHandler):
         shutil.move(pl_out, dst_pl)
 
     @classmethod
-    def _conv_with_crop_both(cls, src_pl: Path, dst_pl: Path):
+    def _conv_with_crop_both(cls, src_pl: Path, dst_pl: Path, gray=False):
         """
+        FIXME: _conv_imgやらと重複しており、機能もそちらに移動している。もう、こちらは不要
         cropとconvertするメソッド
         - ImageMagickのcropと画像変換を合わせ使う
         - ほぼ、ImageMagickだけでよく、PDF-Outのみ別分岐処理となった
@@ -638,7 +656,7 @@ class ChangeHandler(FileSystemEventHandler):
                 - 一般画像(jpeg, epsなど)
                 - pdf: inのみ。
             """
-            cls.img_magick(src_pl, dst_pl)
+            cls.conv_img(src_pl=src_pl, dst_pl=dst_pl, gray=gray)
         else:
             """
             ★ こちらはImageMagicで直接Crop(Trim)できるfmtだけを処理する
@@ -649,7 +667,7 @@ class ChangeHandler(FileSystemEventHandler):
                 http://would-be-astronomer.hatenablog.com/entry/2015/03/26/214633
             pdfcrop機能しない事が多い？img_magickと併用でcropする事
             """
-            cls.img_magick(src_pl, dst_pl, do_trim=True)  # TODO: 現状ImgMagickの-trimでPDFもcropされている！！
+            cls.conv_img(src_pl, dst_pl, do_trim=True, gray=gray)  # TODO: 現状ImgMagickの-trimでPDFもcropされている！！
             cls._crop_img(dst_pl, dst_pl)
         # else:
         #     logger.error("_conv_with_crop_bothがCalled.しかし何も変換せず。src:%s,dst:%s" % (src_pl, dst_pl))
@@ -702,7 +720,7 @@ class ChangeHandler(FileSystemEventHandler):
             path_epstopdf = shutil.which(path_epstopdf)
             path_pdftops = shutil.which(path_pdftops)
             if path_epstopdf is None or path_epstopdf == "" or path_pdftops is None or path_pdftops == "":
-                # Failed due to commands are absent
+                # Failed due to †commands are absent
                 logger.error(".epsファイルを修正しようとしましたが、%sのコマンドにPATHが非存在/通ってません。" % (path_pdftops, path_epstopdf))
                 return None
 
@@ -892,12 +910,12 @@ class ChangeHandler(FileSystemEventHandler):
         cmd = cmd_pandoc + "-N -TOC-F pandoc-citeproc -F pandoc-crossref {src}".format(src=src)
 
     @classmethod
-    def conv_mermaid_with_crop(cls, src_pl: Path, dst_pl: Path) -> Tuple[bool, Path]:
+    def conv_mermaid_with_crop(cls, src_pl: Path, dst_pl: Path, gray=False) -> Tuple[bool, Path]:
         """
         mermaid markdownを変換 及び 特定のformatへ変換する
         :param src_pl:
         :param dst_pl:
-        :param to_fmt:
+        :param gray:
         :return: Success?, Output file's path
         """
         if dst_pl.suffix in cls.mermaid_fmt_in:
@@ -925,19 +943,20 @@ class ChangeHandler(FileSystemEventHandler):
             return True, tmp_dst_pl
 
         """ Image conversion"""
-        tmp_dst_pl = cls.img_magick(src_pl=tmp_dst_pl, dst_pl=dst_pl)
+        tmp_dst_pl = cls.conv_img(src_pl=tmp_dst_pl, dst_pl=dst_pl, gray=gray)
         if tmp_dst_pl is None:
             return False, None
         else:
             return True, tmp_dst_pl
 
-    def convert(self, src_file_apath, dst_dir_apath, to_fmt=".png", is_crop=True):  # , _to_fmt="pdf"):
+    def convert(self, src_file_apath, dst_dir_apath, to_fmt=".png", is_crop=True, gray=False):  # , _to_fmt="pdf"):
         """
         ppt->pdf->cropping
         :param src_file_apath:
         :param dst_dir_apath: Indicating dir path. NOT file path
         :param to_fmt: format type converted
         :param is_crop: Whether crop or not
+        :param gray:
         """
 
         # init1
@@ -984,7 +1003,7 @@ class ChangeHandler(FileSystemEventHandler):
         # os.chdir(dst_pl.parent)  # important!
 
         ####### 拡張子毎に振り分け
-        if src_pl.suffix in (".png", ".jpg", ".jpeg", ".ai", ".eps", ".pdf"):
+        if src_pl.suffix in (".png", ".jpg", ".jpeg", ".ai", ".eps"):
             """Image Cropping and Conversion
             - [条件] ImageMagicが対応しているFOrmatのみ. Only the format which corresponded to ImageMagick
             - files entered in src_folder, converted into dst_pl which cropping. and conv to eps
@@ -995,11 +1014,18 @@ class ChangeHandler(FileSystemEventHandler):
             # if fmt == ".eps":
             #     cls._conv2eps(src_pl=pl_src2, pl_dst_dir=dst_pl.joinpath(src_pl.stem + src_pl.suffix))
             # return
-            _ = self._conv_with_crop_both(src_pl=src_pl, dst_pl=dst_pl)
+            # _ = self._conv_with_crop_both(src_pl=src_pl, dst_pl=dst_pl, gray=gray)
+            # _ = self.conv_img(src_pl=src_pl, dst_pl=dst_pl, do_trim=is_crop, gray=gray)
             # _ = cls._conv_and_crop(src_pl=src_pl, dst_pl=dst_pl)
+            self.conv_img(src_pl=src_pl, dst_pl=dst_pl, gray=gray)
+        elif src_pl.suffix in ".pdf":
+            dst_pl = self.conv_img(src_pl, dst_pl, do_trim=True, gray=gray)  # TODO: 現状ImgMagickの-trimでPDFもcropされている！！
+            dst_pl = self._crop_img(dst_pl, dst_pl)
+            # FIXME: 下記fixは不要なのでは。
+            dst_pl = self.fix_eps(dst_pl)
         elif src_pl.suffix in (".ppt", ".pptx", ".odp") and not src_pl.name.startswith("~"):
             """ Slide Conversion """
-            self.conv_slide_with_crop_both(src_pl, dst_pl)
+            self.conv_slide_with_crop_both(src_pl, dst_pl, gray=gray)
         elif dst_pl.suffix == ".md" and src_pl.name.endswith("_pdc"):
             """PANDOCでpdf変換
             
@@ -1027,12 +1053,13 @@ class ChangeHandler(FileSystemEventHandler):
             self.conv_plantuml(src_pl=src_pl, dst_pl=dst_pl)
         elif src_pl.name.endswith("_mermaid") and src_pl.suffix == ".md" or src_pl.suffix == ".mmd":
             print("[Info] Mermaid conversion:%s" % src_pl)
-            self.conv_mermaid_with_crop(src_pl=src_pl, dst_pl=dst_pl)  # , to_fmt=to_fmt)
+            self.conv_mermaid_with_crop(src_pl=src_pl, dst_pl=dst_pl, gray=gray)  # , to_fmt=to_fmt)
         else:
             logger.info("未処理ファイル:%s" % src_pl)
 
-        if dst_pl.suffix == ".eps":
-            dst_pl = self.fix_eps(dst_pl)
+        # FIXME: 下記fixは不要なのでは。
+        # if dst_pl.suffix == ".eps":
+        #     dst_pl = self.fix_eps(dst_pl)
 
     #
     # def conv2pnt(cls, path_src, dir_dst):
@@ -1213,19 +1240,19 @@ class ChangeHandler(FileSystemEventHandler):
                           , dst_pl
                           , to_fmt_in
                           , is_crop=True
+                          , gray=False
                           ):
         """
         closure type func return
         :param src_pl:
         :param dst_pl:
-        :param fmt_if_dst_without_ext:
         :param is_crop:
         :return:
         """
 
         # async def moniko(sel
         def moniko(path_updated_file):
-            self.convert(src_file_apath=path_updated_file, dst_dir_apath=dst_pl, to_fmt=to_fmt_in, is_crop=is_crop)
+            self.convert(src_file_apath=path_updated_file, dst_dir_apath=dst_pl, to_fmt=to_fmt_in, is_crop=is_crop, gray=gray)
             # loop = asyncio.get_event_loop()
             # print(f'start:  {sec}秒待つよ')
             # await loop.run_in_executor(None, time.sleep, sec)
@@ -1238,13 +1265,24 @@ class ChangeHandler(FileSystemEventHandler):
                     , src_dir
                     , dst_dir
                     , to_fmt
+                    , gray=False
                     , is_crop=True):
+        """
+
+        :param src_dir:
+        :param dst_dir:
+        :param to_fmt:
+        :param gray:
+        :param is_crop:
+        :return:
+        """
         src_pl = self._get_internal_deal_path(path=src_dir)
         dst_pl = self._get_internal_deal_path(path=dst_dir)
         to_fmt_in = self._validated_fmt(to_fmt=to_fmt, src_pl=src_pl)
         self._monitors[src_pl, dst_pl] = self._get_monitor_func(src_pl=src_pl, dst_pl=dst_pl,
                                                                 to_fmt_in=to_fmt_in,
-                                                                is_crop=is_crop)
+                                                                is_crop=is_crop,
+                                                                gray=gray)
 
     def start_monitors(self
                        , sleep_sec=1):
