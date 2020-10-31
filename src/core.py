@@ -252,10 +252,10 @@ class ChangeHandler(FileSystemEventHandler):
     #         return base_dst_pl, None
 
     @classmethod
-    def _crop_img(cls, src_img_pl: Path, dst_pl: Path) -> Path:
+    def _crop_all_fmt(cls, src_img_pl: Path, dst_pl: Path) -> Path:
         """
-        image(pdf/png,jpeg?)をcroppingする
-        TODO: こちらはもう不要かも。
+        PDFとimage(png,jpeg,eps?)をcroppingする
+        - 必要。なぜならImage系はPillowのImageクラスで扱えるが、PDFはファイル単位で操作しなくてはならない
         :param p_src:
         :param dst_pl:
         :return: 変換後のpath名
@@ -298,14 +298,17 @@ class ChangeHandler(FileSystemEventHandler):
         #     shutil.copy(src_pl, dst_pl)
         #     cmd = "magick mogrify -format pdf -define pdf:use-trimbox=true {dst_path}".format(dst_path=dst_pl)
         elif src_img_pl.suffix in (".png", ".jpg", ".jpeg", ".eps"):  # pdfのcropはできない
-            # cls.conv_img(
-            #     src_pl=src_img_pl,
-            #     dst_pl=dst_pl
-            # )
-            img_crop(
+            cls.conv_manipulation_img(
                 src_pl=src_img_pl,
                 dst_pl=dst_pl
+                , do_trim=True
             )
+            # dst_im = Image.open(src_img_pl.as_posix())
+            # dst_im = img_crop(image=dst_im)
+            # dst_im.save(dst_pl)
+            # dst_im = Image.open(src_img_pl.as_posix())
+            # dst_im = img_crop(image=dst_im)
+            # dst_im.save(dst_pl)
             # cmd_name = "convert"
             # # p_conv = Path("/usr/local/bin/convert")
             # # if not p_conv.exists():
@@ -357,11 +360,30 @@ class ChangeHandler(FileSystemEventHandler):
             logger.info("Output(%s):%s" % (short_msg, cmd))
         return output
 
-    @classmethod
-    def conv_img(cls, src_pl, dst_pl, do_trim=True, gray=False, eps_ver=2):
+    @staticmethod
+    def remove_transparency(im: Image, bg_color=(255, 255, 255)) -> Image:
         """
-        Convert Image
-        - Image Magicコマンド
+        Taken from https://stackoverflow.com/a/35859141/7444782
+        """
+        # Only process if image has transparency (http://stackoverflow.com/a/1963146)
+        if im.mode in ('RGBA', 'LA') or (im.mode == 'P' and 'transparency' in im.info):
+
+            # Need to convert to RGBA if LA format due to a bug in PIL (http://stackoverflow.com/a/1963146)
+            alpha = im.convert('RGBA').split()[-1]
+
+            # Create a new background image of our matt color.
+            # Must be RGBA because paste requires both images have the same format
+            # (http://stackoverflow.com/a/8720632  and  http://stackoverflow.com/a/9459208)
+            bg = Image.new("RGBA", im.size, bg_color + (255,))
+            bg.paste(im, mask=alpha)
+            return bg
+        else:
+            return im
+
+    @classmethod
+    def conv_manipulation_img(cls, src_pl, dst_pl, do_trim=True, gray=False, eps_ver=2):
+        """
+        Manipulation (Convert/Crop/Gray) Image
         :param src_pl:
         :param dst_pl:
         :param do_trim:
@@ -396,36 +418,24 @@ class ChangeHandler(FileSystemEventHandler):
         # FIXME: 中間生成ファイルを変換しようとして失敗している模様
         print("[Info_p] src:", src_pl.as_posix())
         print("[Info_p] dst:", dst_pl.as_posix())
+
+        """
+        下記は「Imageクラス」で画像データを処理を実施する
+        """
         dst_im = Image.open(src_pl.as_posix())
         if do_trim:
-            # FIXME: croppingは別関数で実施するようにしろ
             dst_im = img_crop(image=dst_im)
 
+        if src_pl.suffix == dst_pl.suffix:
+            logger.info("同一拡張子なので画像変換はしません。trimは実施するかも")
+            return
+
         if dst_pl.suffix == ".eps":
-            def remove_transparency(im, bg_color=(255, 255, 255)):
-                """
-                Taken from https://stackoverflow.com/a/35859141/7444782
-                """
-                # Only process if image has transparency (http://stackoverflow.com/a/1963146)
-                if im.mode in ('RGBA', 'LA') or (im.mode == 'P' and 'transparency' in im.info):
-
-                    # Need to convert to RGBA if LA format due to a bug in PIL (http://stackoverflow.com/a/1963146)
-                    alpha = im.convert('RGBA').split()[-1]
-
-                    # Create a new background image of our matt color.
-                    # Must be RGBA because paste requires both images have the same format
-                    # (http://stackoverflow.com/a/8720632  and  http://stackoverflow.com/a/9459208)
-                    bg = Image.new("RGBA", im.size, bg_color + (255,))
-                    bg.paste(im, mask=alpha)
-                    return bg
-                else:
-                    return im
-
             if dst_im.mode in ('RGBA', 'LA'):
                 """ 透過画像を解除? """
                 # https://pillow.readthedocs.io/en/stable/handbook/image-file-formats.html?highlight=eps#eps
                 print('Current figure mode "{}" cannot be directly saved to .eps and should be converted (e.g. to "RGB")'.format(dst_im.mode))
-                dst_im = remove_transparency(dst_im)
+                dst_im = cls.remove_transparency(dst_im)
                 # dst_im = dst_im[:, :, 0:2]
                 dst_im = dst_im.convert('RGB')
 
@@ -438,7 +448,6 @@ class ChangeHandler(FileSystemEventHandler):
             dst_im.save(dst_pl.as_posix(), lossless=True)
         else:
             dst_im.save(dst_pl.as_posix())
-
         return dst_pl
 
     # @classmethod
@@ -502,7 +511,7 @@ class ChangeHandler(FileSystemEventHandler):
     #         # # subprocess.run(tokens)
     #         # output = check_output(tokens, stderr=STDOUT).decode(decode)
     #         # logger.debug("Output: %s" % output)
-    #         dst_pl = cls.conv_img(src_pl, dst_pl)
+    #         dst_pl = cls.conv_manipulation_img(src_pl, dst_pl)
     #     return dst_pl
 
     # @classmethod
@@ -588,7 +597,7 @@ class ChangeHandler(FileSystemEventHandler):
         else:
             dst_tmp_pl = dst_pl
 
-        # スライド変換
+        # スライド変換 ※ ただし、変換のみ
         cls._conv_slide(src_pl=src_pl, dst_pl=dst_tmp_pl)
 
         if is_crop:
@@ -597,7 +606,7 @@ class ChangeHandler(FileSystemEventHandler):
                 cls.mgr_conv_img(dst_tmp_pl, dst_pl, gray=gray)
             else:
                 # croppingのみ
-                cls._crop_img(src_img_pl=dst_tmp_pl, dst_pl=dst_pl)
+                cls._crop_all_fmt(src_img_pl=dst_tmp_pl, dst_pl=dst_pl)
 
         ### Del mediate file
         if is_mediate:
@@ -671,8 +680,8 @@ class ChangeHandler(FileSystemEventHandler):
                 - 一般画像(jpeg, epsなど)
                 - pdf: inのみ。
             """
-            cls.conv_img(src_pl=src_pl, dst_pl=dst_pl, gray=gray)
-            cls._crop_img(dst_pl, dst_pl)
+            cls.conv_manipulation_img(src_pl=src_pl, dst_pl=dst_pl, do_trim=False, gray=gray)
+            cls._crop_all_fmt(dst_pl, dst_pl)
         else:
             """
             ★ こちらはImageMagicで直接Crop(Trim)できるfmtだけを処理する
@@ -683,8 +692,8 @@ class ChangeHandler(FileSystemEventHandler):
                 http://would-be-astronomer.hatenablog.com/entry/2015/03/26/214633
             pdfcrop機能しない事が多い？img_magickと併用でcropする事
             """
-            cls.conv_img(src_pl, dst_pl, do_trim=True, gray=gray)  # TODO: 現状ImgMagickの-trimでPDFもcropされている！！
-            cls._crop_img(dst_pl, dst_pl)
+            cls.conv_manipulation_img(src_pl, dst_pl, do_trim=True, gray=gray)  # TODO: 現状ImgMagickの-trimでPDFもcropされている！！
+            # cls._crop_all_fmt(dst_pl, dst_pl)
         # else:
         #     logger.error("_conv_with_crop_bothがCalled.しかし何も変換せず。src:%s,dst:%s" % (src_pl, dst_pl))
 
@@ -807,10 +816,10 @@ class ChangeHandler(FileSystemEventHandler):
     #         #                                                is_tmp=True)
     #         # 変換後にcrop
     #         path_dst = cls._conv2img(src_pl=src_pl, dst_pl=tmp_dst_pl)  # , fmt_if_dst_without_ext=fmt)
-    #         path_dst = cls._crop_img(src_img_pl=path_dst, dst_pl=dst_pl)
+    #         path_dst = cls._crop_all_fmt(src_img_pl=path_dst, dst_pl=dst_pl)
     #
     #         # Crop後に変換
-    #         # path_dst = cls._crop_img(src_img_pl=src_pl, dst_pl=tmp_dst_pl)
+    #         # path_dst = cls._crop_all_fmt(src_img_pl=src_pl, dst_pl=tmp_dst_pl)
     #         # path_dst = cls._conv2img(src_pl=path_dst, dst_pl=dst_pl)  # , fmt_if_dst_without_ext=fmt)
     #
     #         #
@@ -822,10 +831,10 @@ class ChangeHandler(FileSystemEventHandler):
     #         #     - 一方、上記でなければ、先にcropする場合、元のソース画像の画像変換を行わないため、画質が落ちないと思われる
     #         #     """
     #         #     path_dst = cls._conv2img(src_pl=src_pl, dst_pl=tmp_dst_pl)  # , fmt_if_dst_without_ext=fmt)
-    #         #     path_dst = cls._crop_img(src_pl=path_dst, dst_pl=dst_pl)
+    #         #     path_dst = cls._crop_all_fmt(src_pl=path_dst, dst_pl=dst_pl)
     #         # else:
     #         #     tmp_dst_pl = tmp_dst_pl.with_suffix(src_pl.suffix)
-    #         #     path_dst = cls._crop_img(src_pl=src_pl, dst_pl=tmp_dst_pl)
+    #         #     path_dst = cls._crop_all_fmt(src_pl=src_pl, dst_pl=tmp_dst_pl)
     #         #     path_dst = cls._conv2img(src_pl=path_dst, dst_pl=cls.util_manage_tmp_path(dst_pl,
     #         #                                                                               is_remove_tmp_str=True))  # , fmt_if_dst_without_ext=fmt)
     #         if tmp_dst_pl.exists():
@@ -950,7 +959,7 @@ class ChangeHandler(FileSystemEventHandler):
         if not res:
             return False, None
         """ Cropping image """
-        tmp_dst_pl = cls._crop_img(src_img_pl=tmp_dst_pl, dst_pl=dst_pl)
+        tmp_dst_pl = cls._crop_all_fmt(src_img_pl=tmp_dst_pl, dst_pl=dst_pl)
         if tmp_dst_pl is None:
             logger.error("Failed crop: %s" % src_pl)
             return False, None
@@ -959,7 +968,7 @@ class ChangeHandler(FileSystemEventHandler):
             return True, tmp_dst_pl
 
         """ Image conversion"""
-        tmp_dst_pl = cls.conv_img(src_pl=tmp_dst_pl, dst_pl=dst_pl, gray=gray)
+        tmp_dst_pl = cls.conv_manipulation_img(src_pl=tmp_dst_pl, dst_pl=dst_pl, gray=gray)
         if tmp_dst_pl is None:
             return False, None
         else:
@@ -1025,21 +1034,21 @@ class ChangeHandler(FileSystemEventHandler):
             - files entered in src_folder, converted into dst_pl which cropping. and conv to eps
             """
             logger.info("Image cropping and Conversion")
-            # pl_src2 = cls._crop_img(src_pl, dst_pl.joinpath(src_pl.stem + src_pl.suffix),
+            # pl_src2 = cls._crop_all_fmt(src_pl, dst_pl.joinpath(src_pl.stem + src_pl.suffix),
             #                          to_img_fmt=src_pl.suffix)
             # if fmt == ".eps":
             #     cls._conv2eps(src_pl=pl_src2, pl_dst_dir=dst_pl.joinpath(src_pl.stem + src_pl.suffix))
             # return
             # _ = self.mgr_conv_img(src_pl=src_pl, dst_pl=dst_pl, gray=gray)
-            # _ = self.conv_img(src_pl=src_pl, dst_pl=dst_pl, do_trim=is_crop, gray=gray)
+            # _ = self.conv_manipulation_img(src_pl=src_pl, dst_pl=dst_pl, do_trim=is_crop, gray=gray)
             # _ = cls._conv_and_crop(src_pl=src_pl, dst_pl=dst_pl)
-            self.conv_img(src_pl=src_pl, dst_pl=dst_pl, gray=gray)
+            self.conv_manipulation_img(src_pl=src_pl, dst_pl=dst_pl, gray=gray)
         elif src_pl.suffix in ".pdf":
             """
             .pdfへの変換
             """
-            dst_pl = self.conv_img(src_pl, dst_pl, do_trim=True, gray=gray)  # TODO: 現状ImgMagickの-trimでPDFもcropされている！！
-            dst_pl = self._crop_img(dst_pl, dst_pl)
+            dst_pl = self.conv_manipulation_img(src_pl, dst_pl, do_trim=True, gray=gray)  # TODO: 現状ImgMagickの-trimでPDFもcropされている！！
+            dst_pl = self._crop_all_fmt(dst_pl, dst_pl)
             # FIXME: 下記fixは不要なのでは。
             dst_pl = self.fix_eps(dst_pl)
         elif src_pl.suffix in (".ppt", ".pptx", ".odp") and not src_pl.name.startswith("~"):
