@@ -393,12 +393,12 @@ class ChangeHandler(FileSystemEventHandler):
         #     , dst=dst_pl
         # )
         # cls._run_cmd(cmd, "Convert by ImageMagic")
-        #FIXME: 中間生成ファイルを変換しようとして失敗している模様
+        # FIXME: 中間生成ファイルを変換しようとして失敗している模様
         print("[Info_p] src:", src_pl.as_posix())
         print("[Info_p] dst:", dst_pl.as_posix())
         dst_im = Image.open(src_pl.as_posix())
         if do_trim:
-            #FIXME: croppingは別関数で実施するようにしろ
+            # FIXME: croppingは別関数で実施するようにしろ
             dst_im = img_crop(image=dst_im)
 
         if dst_pl.suffix == ".eps":
@@ -583,7 +583,7 @@ class ChangeHandler(FileSystemEventHandler):
             logger.warning(f".ppt(x)/.odpから{div_proc}への変換は%s経由で変換します。" % via_ext)
             # 他のフォーマット経由で変換する
             is_mediate = True
-            dst_tmp_pl = dst_pl.parent.joinpath(dst_pl.stem + via_ext)
+            dst_tmp_pl = dst_pl.parent.joinpath(dst_pl.stem + "_tmp" + via_ext)
             logger.info(f"tmp: {dst_tmp_pl.as_posix()}")
         else:
             dst_tmp_pl = dst_pl
