@@ -298,7 +298,11 @@ class ChangeHandler(FileSystemEventHandler):
         #     shutil.copy(src_pl, dst_pl)
         #     cmd = "magick mogrify -format pdf -define pdf:use-trimbox=true {dst_path}".format(dst_path=dst_pl)
         elif src_img_pl.suffix in (".png", ".jpg", ".jpeg", ".eps"):  # pdfのcropはできない
-            cls.conv_img(
+            # cls.conv_img(
+            #     src_pl=src_img_pl,
+            #     dst_pl=dst_pl
+            # )
+            img_crop(
                 src_pl=src_img_pl,
                 dst_pl=dst_pl
             )
@@ -389,9 +393,12 @@ class ChangeHandler(FileSystemEventHandler):
         #     , dst=dst_pl
         # )
         # cls._run_cmd(cmd, "Convert by ImageMagic")
-        print("src:", src_pl.as_posix())
+        #FIXME: 中間生成ファイルを変換しようとして失敗している模様
+        print("[Info_p] src:", src_pl.as_posix())
+        print("[Info_p] dst:", dst_pl.as_posix())
         dst_im = Image.open(src_pl.as_posix())
         if do_trim:
+            #FIXME: croppingは別関数で実施するようにしろ
             dst_im = img_crop(image=dst_im)
 
         if dst_pl.suffix == ".eps":
@@ -553,35 +560,43 @@ class ChangeHandler(FileSystemEventHandler):
             logger.info("Finished with msg: %s" % res)
 
     @classmethod
-    def conv_slide_with_crop_both(cls, src_pl: Path, dst_pl: Path, gray, is_crop=True, via_ext=".png"):
+    def mgr_conv_slide(cls, src_pl: Path, dst_pl: Path, gray, is_crop=True, via_ext=".png", div_proc=(".pdf", ".eps")):
         """
-
+        スライドの変換を制御するマネージャ
+        TODO: mgr_conv_slideメソッドに統一すべき。
         :param src_pl:
         :param dst_pl:
         :param is_crop:
         :param via_ext:
+        :param div_proc:
         :return:
         """
         is_mediate = False
-        if dst_pl.suffix in (".pdf", ".eps"):
+        if dst_pl.suffix in div_proc:
             """
-            - 注意) PowerPoint/LibreOffice(.odp)は.pdf/.epsへ変換してPDFCropで失敗する。そのため、一度、.png経由する。   
+            - 注意) PowerPoint/LibreOffice(.odp)は.pdfへ変換してPDFCropで失敗する。そのため、一度、.png経由する。   
             """
             # warn = """
             #   [Warning] スライドにはPowerPoint形式(.pptx)に変換して使ってください。
             #   """
             # # print(warn)
-            logger.warning(".ppt(x)/.odpの.pdf/.epsへの変換は%s経由で変換します。" % via_ext)
+            logger.warning(f".ppt(x)/.odpから{div_proc}への変換は%s経由で変換します。" % via_ext)
+            # 他のフォーマット経由で変換する
             is_mediate = True
             dst_tmp_pl = dst_pl.parent.joinpath(dst_pl.stem + via_ext)
+            logger.info(f"tmp: {dst_tmp_pl.as_posix()}")
         else:
             dst_tmp_pl = dst_pl
 
+        # スライド変換
         cls._conv_slide(src_pl=src_pl, dst_pl=dst_tmp_pl)
+
         if is_crop:
             if is_mediate:
-                cls._conv_with_crop_both(dst_tmp_pl, dst_pl, gray=gray)
+                # croppingを含むPDFへ変換。
+                cls.mgr_conv_img(dst_tmp_pl, dst_pl, gray=gray)
             else:
+                # croppingのみ
                 cls._crop_img(src_img_pl=dst_tmp_pl, dst_pl=dst_pl)
 
         ### Del mediate file
@@ -591,7 +606,6 @@ class ChangeHandler(FileSystemEventHandler):
     @classmethod
     def _conv_slide(cls, src_pl: Path, dst_pl: Path):
         """
-
         :param src_pl:
         :param dst_pl: ファイル/folderまでのPATH.場合分けが必要
         :return:
@@ -612,7 +626,7 @@ class ChangeHandler(FileSystemEventHandler):
             logger.warning(
                 msg="(Math) symbols may be VANISH!!!!. Please confirm generated product not to disappear symbols")
         # output = cls._run_cmd(cmd)
-        output = cls._run_cmd(cmd, "CMD(slide2img):")
+        output = cls._run_cmd(cmd, "CMD(slide2img): ")
         # logger.debug("CMD(slide2img):" + cmd)
         # tokens = shlex.split(cmd)
         # subprocess.run(tokens)
@@ -628,10 +642,11 @@ class ChangeHandler(FileSystemEventHandler):
         shutil.move(pl_out, dst_pl)
 
     @classmethod
-    def _conv_with_crop_both(cls, src_pl: Path, dst_pl: Path, gray=False):
+    def mgr_conv_img(cls, src_pl: Path, dst_pl: Path, gray=False):
         """
+        Image Conversion with other(e.g. cropping)
         FIXME: _conv_imgやらと重複しており、機能もそちらに移動している。もう、こちらは不要
-        cropとconvertするメソッド
+        - 対象: 全ての画像, pdf, eps。それ以外の.md, .mmdなどから呼び出して使う様にすべきだろう。
         - ImageMagickのcropと画像変換を合わせ使う
         - ほぼ、ImageMagickだけでよく、PDF-Outのみ別分岐処理となった
         :param src_pl:
@@ -657,6 +672,7 @@ class ChangeHandler(FileSystemEventHandler):
                 - pdf: inのみ。
             """
             cls.conv_img(src_pl=src_pl, dst_pl=dst_pl, gray=gray)
+            cls._crop_img(dst_pl, dst_pl)
         else:
             """
             ★ こちらはImageMagicで直接Crop(Trim)できるfmtだけを処理する
@@ -781,7 +797,7 @@ class ChangeHandler(FileSystemEventHandler):
     #     :return:
     #     """
     #     need_conv = True
-    #     # path_dst = cls._conv_with_crop_both(src_pl=src_pl, dst_pl=dst_pl)  # conv both crop and imgconv stimulatelly
+    #     # path_dst = cls.mgr_conv_img(src_pl=src_pl, dst_pl=dst_pl)  # conv both crop and imgconv stimulatelly
     #     # if path_dst:
     #     #     need_conv = False
     #     """ 上記、変換が失敗した場合 """
@@ -1014,18 +1030,21 @@ class ChangeHandler(FileSystemEventHandler):
             # if fmt == ".eps":
             #     cls._conv2eps(src_pl=pl_src2, pl_dst_dir=dst_pl.joinpath(src_pl.stem + src_pl.suffix))
             # return
-            # _ = self._conv_with_crop_both(src_pl=src_pl, dst_pl=dst_pl, gray=gray)
+            # _ = self.mgr_conv_img(src_pl=src_pl, dst_pl=dst_pl, gray=gray)
             # _ = self.conv_img(src_pl=src_pl, dst_pl=dst_pl, do_trim=is_crop, gray=gray)
             # _ = cls._conv_and_crop(src_pl=src_pl, dst_pl=dst_pl)
             self.conv_img(src_pl=src_pl, dst_pl=dst_pl, gray=gray)
         elif src_pl.suffix in ".pdf":
+            """
+            .pdfへの変換
+            """
             dst_pl = self.conv_img(src_pl, dst_pl, do_trim=True, gray=gray)  # TODO: 現状ImgMagickの-trimでPDFもcropされている！！
             dst_pl = self._crop_img(dst_pl, dst_pl)
             # FIXME: 下記fixは不要なのでは。
             dst_pl = self.fix_eps(dst_pl)
         elif src_pl.suffix in (".ppt", ".pptx", ".odp") and not src_pl.name.startswith("~"):
             """ Slide Conversion """
-            self.conv_slide_with_crop_both(src_pl, dst_pl, gray=gray)
+            self.mgr_conv_slide(src_pl, dst_pl, gray=gray)
         elif dst_pl.suffix == ".md" and src_pl.name.endswith("_pdc"):
             """PANDOCでpdf変換
             
