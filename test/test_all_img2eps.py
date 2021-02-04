@@ -2,20 +2,18 @@
 # Set src dir as source folder in projectPref.
 # You can import by "from core import ChangeHandler"
 # and need set working dir at prj root(ml_writing_helper)
+import os
+import queue
 import re
 import shutil
 import sys
+import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-# sys.path.append("/Users/hirots-m/Documents/PyCharmProjects/ml_writing_helper/src")
 from typing import List
 
 sys.path.append("../src")
 from main import Monitor, StateMonitor
-import time
-from concurrent.futures import ThreadPoolExecutor
-
-
-# from logging import StreamHandler, Formatter, INFO, getLogger
 
 
 class AutoTester:
@@ -33,15 +31,6 @@ class AutoTester:
         :param excludes:
         :return:
         """
-        # cls.to_fmt = to_fmt
-        # cls.src = src
-        # cls.sample = sample
-        # cls.dst = dst
-        #
-        # cls.exc_ext = exe_ext
-        #
-        # cls.e_task1 = None
-        cls._completed_copy = False
         cls.main(sample=Path(sample), src=Path(src), dst=Path(dst), to_fmt=to_fmt, target_exts=target_exts, excludes=excludes)
 
     @classmethod
@@ -81,8 +70,8 @@ class AutoTester:
         # 　monitorに投げるファイルPATHの抽出
         if len(target_ext) > 0:
             pattern = cls.pattener(target_ext)
-            print("pattern: " + pattern)
-            print("files_tmp", list(smpl.glob('*')))
+            # print("pattern: " + pattern)
+            # print("files_tmp", list(smpl.glob('*')))
             files = [p for p in smpl.glob('*') if re.search('.' + pattern, str(p))]
         else:
             files = smpl.glob('**/*')
@@ -132,24 +121,36 @@ class AutoTester:
         # files = sample.glob("*")
         with ThreadPoolExecutor(max_workers=2, thread_name_prefix="thread") as executor:
             e_task1 = executor.submit(cls.task1, src, dst, to_fmt)
-
-            # for a_file in files:
-            #     e_copy = executor.submit(cls.copy, a_file, src, excludes)
-            #     while True:
-            #         if e_copy.done():
-            #             break
             e_task2 = executor.submit(cls.task2, sample, src, target_exts, excludes)
-            states = [False] * 5
+            maxsize = 3
+            states = queue.Queue(maxsize=maxsize)
+            time.sleep(2)
             while True:
-                if len(states) > 5 and all(states) and cls._complete_copy:
+                if len(states.queue) >= maxsize and all(states.queue) and e_task2.done():
+                    # print("Enter break")
+                    e_task1.cancel()
                     break
-                elif cls._monitor.state == StateMonitor.wait:
-                    states.pop()
-                    states.append(True)
-                    time.sleep(2)
+                if len(states.queue) >= maxsize:
+                    states.get_nowait()
+                if cls._monitor.state == StateMonitor.wait:
+                    # states.pop()
+                    # print("branch2")
+                    states.put(True)
+                    time.sleep(1)
+                else:
+                    # states.pop()
+                    # print("branch3")
+                    states.put(False)
+                # print("state:", states.queue)
+                # print("flag:", cls._complete_copy)
+
+                # if i > 5000:
+
             print("main end")
+            os._exit(0)  # スレッドを強制終了
+            # exit(0)
 
 
 if __name__ == "__main__":
     # AutoTester.start(target_exts=[".png"])
-    AutoTester.start(to_fmt=".eps")
+    AutoTester.start(to_fmt=".eps", target_exts=[".puml"])

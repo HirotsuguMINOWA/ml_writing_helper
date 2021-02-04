@@ -27,7 +27,7 @@ java -jar plantuml.jar -o "c:/outputPng" "c:/directory2"
 -txmi                          Generate XMI file for class diagram
 """
 
-from try_all_img2eps import AutoTester
+from test_all_img2eps import AutoTester
 
 a = AutoTester()
 # a.start(to_fmt=".eps", target_exts=[".png"])
