@@ -2,8 +2,8 @@
 #.idea/*
 **/fig_gen
 **/_fig_gen
-**/fig_dst
-**/_fig_dst
+**/fig_src
+**/_fig_src
 sample/fig_srcぽぺび/*
 **/.history
 
@@ -48,7 +48,7 @@ MANIFEST
 pip-log.txt
 pip-delete-this-directory.txt
 
-# Unit test / coverage reports
+# Unit try2 / coverage reports
 htmlcov/
 .tox/
 .nox/
@@ -459,7 +459,7 @@ bld/
 # Visual Studio 2017 auto generated files
 Generated\ Files/
 
-# MSTest test Results
+# MSTest try2 Results
 [Tt]est[Rr]esult*/
 [Bb]uild[Ll]og.*
 
@@ -1101,7 +1101,7 @@ MANIFEST
 pip-log.txt
 pip-delete-this-directory.txt
 
-# Unit test / coverage reports
+# Unit try2 / coverage reports
 htmlcov/
 .tox/
 .nox/
@@ -1234,7 +1234,7 @@ bld/
 # Visual Studio 2017 auto generated files
 Generated\ Files/
 
-# MSTest test Results
+# MSTest try2 Results
 [Tt]est[Rr]esult*/
 [Bb]uild[Ll]og.*
 

@@ -23,6 +23,7 @@ import platform
 from PIL import Image
 from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
+from pdf2image import convert_from_path
 
 # import numpy as np
 # import matplotlib
@@ -76,6 +77,25 @@ logger = get_logger(__name__)
 
 
 # 出力がepsの場合、監視folderにpngなど画像ファイルが書き込まれたらepsへ変換するコードをかけ
+
+class Converter:
+    """1対1formatでの直接画像変換用クラス"""
+
+    @classmethod
+    def pdf2img(cls, src_pl, dst_pl, dpi=150):
+        # PDF -> Image に変換（150dpi）
+        pages = convert_from_path(src_pl.as_posix, dpi)
+
+        # 画像ファイルを１ページずつ保存
+        # image_dir = Path("./image_file")
+        if len(pages) == 1:
+            pages.save(dst_pl.as_posix(), dst_pl.suffix)
+        else:
+            for i, page in enumerate(pages):
+                file_name = dst_pl.stem + "_{:02d}".format(i + 1) + dst_pl.suffix
+                image_path = dst_pl / file_name
+                # JPEGで保存
+                page.save(str(image_path), dst_pl.suffix)
 
 
 class Tool:
@@ -139,7 +159,7 @@ class ChangeHandler(FileSystemEventHandler):
         Path("soffice"),
         Path("/Applications/LibreOffice.app/Contents/MacOS/soffice"),
     ]
-    _ext_pluntuml = [".pu", ".puml"]
+    _ext_pluntuml = (".pu", ".puml")
 
     # def __init__(cls
     #              , monitoring_dir
@@ -224,13 +244,16 @@ class ChangeHandler(FileSystemEventHandler):
             src_pl = src_pl.resolve()
             # check src path
             if not src_pl.is_file():
-                msg = "dst_plはfile pathか"
+                msg = f"src_plはfile pathか:{src_pl.as_posix()}"
                 raise FileNotFoundError(msg)
             # abs. path
             dst_pl = dst_pl.resolve()
-            # pathがあるか否か
-            if not dst_pl.is_file():
-                msg = "dst_plはfile pathか"
+            # 拡張子を持つfileか否かチェック
+            if dst_pl.suffix == "":
+                msg = f"dst_plはfile pathか:{dst_pl.as_posix()}"
+                raise FileNotFoundError(msg)
+            if not dst_pl.parent.exists():
+                msg = f"dst_plの親PATHが存在しない:{dst_pl.as_posix()}"
                 raise FileNotFoundError(msg)
             return src_pl, dst_pl
         except FileNotFoundError as e:
@@ -417,7 +440,7 @@ class ChangeHandler(FileSystemEventHandler):
             return im
 
     @classmethod
-    def conv_manipulation_img(cls, src_pl, dst_pl, do_trim=True, gray=False, eps_ver=2):
+    def conv_manipulation_img(cls, src_pl, dst_pl, do_trim=True, gray=False, eps_ver=2) -> None:
         """
         Manipulation (Convert/Crop/Gray) Image
         :param src_pl:
@@ -427,8 +450,8 @@ class ChangeHandler(FileSystemEventHandler):
         :param eps_ver: eps_ver2に変換する？defaultはTrue
         :return:
         """
-        if not src_pl.exists():
-            raise Exception(f"指定ファイルが存在しない:{src_pl.as_posix()}")
+        # if not src_pl.exists():
+        #     raise Exception(f"指定ファイルが存在しない:{src_pl.as_posix()}")
         if do_trim and src_pl.suffix == dst_pl.suffix:
             logger.warning("ImageMagick変換において、Trim(Crop)付きで別Formatへ変換すると、Crop失敗する可能性あり")
         # # TODO: in,outのfmtの要チェック?いらんかも
@@ -458,7 +481,10 @@ class ChangeHandler(FileSystemEventHandler):
         """
         下記は「Imageクラス」で画像データを処理を実施する
         """
-        dst_im = Image.open(src_pl.as_posix())
+        if src_pl.suffix == ".pdf":
+            Converter.pdf2img(src_pl=src_pl, dst_pl=dst_pl)
+        else:
+            dst_im = Image.open(src_pl.as_posix())
         if do_trim:
             dst_im = img_crop(image=dst_im)
 
@@ -758,8 +784,8 @@ class ChangeHandler(FileSystemEventHandler):
             ★ こちらはImageMagicで直接Crop(Trim)できるfmtだけを処理する
             出力がPDFの場合のみ2段階変換(conv,crop)を実施
             pdf->image: OK!!!
-                $ convert test-crop.pdf eps2:test-crop.eps
-                ＞＞ test-crop.eps という、トリミングされたepsができる。
+                $ convert try2-crop.pdf eps2:try2-crop.eps
+                ＞＞ try2-crop.eps という、トリミングされたepsができる。
                 http://would-be-astronomer.hatenablog.com/entry/2015/03/26/214633
             pdfcrop機能しない事が多い？img_magickと併用でcropする事
             """
@@ -1098,6 +1124,9 @@ class ChangeHandler(FileSystemEventHandler):
             )
             return
 
+        # preprocee - 前処理で解決
+        src_pl, dst_pl = self.preprocess(src_pl=src_pl, dst_pl=dst_pl)
+
         # 下記不要？
         if not src_pl.exists() and not dst_pl.suffix == ".bib":
             raise Exception("src path(1st-arg:%s)が見つかりません、訂正して下さい" % src_pl.as_posix())
@@ -1109,6 +1138,7 @@ class ChangeHandler(FileSystemEventHandler):
         # os.chdir(dst_pl.parent)  # important!
 
         ####### 拡張子毎に振り分け
+        logger.info(f"src file ext is {src_pl.suffix}")
         if src_pl.suffix in (".png", ".jpg", ".jpeg", ".ai", ".eps"):
             """Image Cropping and Conversion
             - [条件] ImageMagicが対応しているFOrmatのみ. Only the format which corresponded to ImageMagick
@@ -1162,6 +1192,7 @@ class ChangeHandler(FileSystemEventHandler):
             # new_path = shutil.copyfile(tmp_src, tmp_dst)
             shutil.copy(src_pl, dst_pl)
             logger.info("Copied %s to %s" % (src_pl, dst_pl))
+
         elif src_pl.suffix in self._ext_pluntuml:
             """PlantUML
             """
@@ -1447,6 +1478,7 @@ class ChangeHandler(FileSystemEventHandler):
         except Exception as e:
             raise Exception("Current path: %s" % Path.cwd())
 
+
 @classmethod
 def cli_watch():
     """
@@ -1458,6 +1490,7 @@ def cli_watch():
     :return:
     """
     pass
+
 
 def convert():
     """
