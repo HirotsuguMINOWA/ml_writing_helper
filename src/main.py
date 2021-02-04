@@ -13,7 +13,7 @@ import shlex
 import shutil
 import sys
 import time
-from enum import Enum
+from enum import Enum, auto
 from pathlib import Path
 from subprocess import check_output, STDOUT
 
@@ -79,12 +79,36 @@ logger = get_logger(__name__)
 # 出力がepsの場合、監視folderにpngなど画像ファイルが書き込まれたらepsへ変換するコードをかけ
 
 class Converter:
-    """1対1formatでの直接画像変換用クラス"""
+    """1対1formatでの直接画像変換用クラス
+    - フォーマット変換のclassmethodが主のクラス
+    """
+    plantuml_fmt_out = (".png", ".svg", ".pdf", ".eps", ".html", ".txt", ".tex")
+    mermaid_fmt_in = (".svg", ".png", ".pdf")
+
+    @staticmethod
+    def _run_cmd(cmd: str, short_msg="", is_print=True) -> str:
+        """
+        コマンド(CLI)の実行
+        :param cmd:
+        :param is_print:
+        :return: output of rum
+        """
+        if is_print:
+            logger.info("CMD(%s):%s" % (short_msg, cmd))
+        tokens = shlex.split(cmd)
+        try:
+            output = check_output(tokens, stderr=STDOUT).decode("utf8")
+        except Exception as e:
+            logger.error(e)
+            return "Error occurred"
+        if is_print:
+            logger.info("Output(%s):%s" % (short_msg, cmd))
+        return output
 
     @classmethod
     def pdf2img(cls, src_pl, dst_pl, dpi=150):
         # PDF -> Image に変換（150dpi）
-        pages = convert_from_path(src_pl.as_posix, dpi)
+        pages = convert_from_path(src_pl.as_posix(), dpi)
 
         # 画像ファイルを１ページずつ保存
         # image_dir = Path("./image_file")
@@ -96,6 +120,232 @@ class Converter:
                 image_path = dst_pl / file_name
                 # JPEGで保存
                 page.save(str(image_path), dst_pl.suffix)
+
+    @classmethod
+    def plantuml2img(cls, src_pl: Path, dst_pl: Path, need_preproc=False) -> None:
+        """PlantUML
+
+        :param src_pl:
+        :param dst_pl:
+        :param done_preproc:
+        :return:
+        """
+        logger.debug("Start converting plantuml")
+        if need_preproc:
+            src_pl, dst_pl = cls.preprocess(src_pl, dst_pl)
+        # to abs. path
+        dst_pl = dst_pl.resolve()
+        cls._cmd_plantuml = "plantuml"
+        # FIXME: dst_plにfullPATHであるかのチェックをする必要がある
+        path_cmd = shutil.which(cls._cmd_plantuml)
+        if path_cmd is None:
+            logger.error(
+                "%s not found. Can't convert from PlantUML" % cls._cmd_plantuml
+            )
+            return
+        if dst_pl.suffix not in cls.plantuml_fmt_out:
+            logger.error("Indicated Formatは未対応 in converting with plantuml")
+            return
+        # FIXME: dst_pathがない場合、再帰的に生成する様に要修正
+        # cmd = "{cmd_pu} -o {dst_abs_dir_only} -t{fmt} {src}".format(
+        #     cmd_pu=cls._cmd_plantuml,
+        #     src=src_pl.as_posix(),
+        #     dst_abs_dir_only=dst_pl.parent,
+        #     fmt=dst_pl.suffix[1:]
+        # )
+        """注意
+        - `-o`: 絶対PATHなら問題なさそうだが、相対PATHでは、srcファイルからの相対PATHとなる模様。よって、dst_plを絶対PATHに変更する必要がある
+        """
+        cmd = f"{cls._cmd_plantuml} -o {dst_pl.parent} -t{dst_pl.suffix[1:]} {src_pl.as_posix()}"
+        res = cls._run_cmd(cmd=cmd, short_msg="Converting with %s" % cls._cmd_plantuml)
+        # Move generated file to dst_pl
+        pl_out = dst_pl.parent.joinpath(src_pl.stem + dst_pl.suffix)
+        shutil.move(pl_out, dst_pl)
+        """Show output msg"""
+        if res is None or res == "":
+            logger.info("Completed. ")
+        else:
+            logger.info("Finished with msg: %s" % res)
+
+    # @classmethod
+    # def _conv_and_crop(cls, src_pl: Path, dst_pl: Path) -> Path:
+    #     """
+    #     イメージを変換して、cropする。
+    #     - Step by Stepな変換。もし、変換, cropの両方を_conv_with_crop_bothメソッドで行え
+    #     - (注意) img変換とcropを同時にimagemagickで実現する別methodを設けた
+    #     :param cls:
+    #     :param src_pl:
+    #     :param dst_pl:
+    #     :param to_fmt:
+    #     :return:
+    #     """
+    #     need_conv = True
+    #     # path_dst = cls.mgr_conv_img(src_pl=src_pl, dst_pl=dst_pl)  # conv both crop and imgconv stimulatelly
+    #     # if path_dst:
+    #     #     need_conv = False
+    #     """ 上記、変換が失敗した場合 """
+    #     if need_conv:
+    #         tmp_dst_pl = cls.util_manage_tmp_path(dst_pl)
+    #         # dst_pl2, tmp_dst_pl = cls.util_update_dst_path(base_dst_pl=src_pl, fname_str_or_pl=dst_pl, fmt=to_fmt,
+    #         #                                                is_tmp=True)
+    #         # 変換後にcrop
+    #         path_dst = cls._conv2img(src_pl=src_pl, dst_pl=tmp_dst_pl)  # , fmt_if_dst_without_ext=fmt)
+    #         path_dst = cls._crop_all_fmt(src_img_pl=path_dst, dst_pl=dst_pl)
+    #
+    #         # Crop後に変換
+    #         # path_dst = cls._crop_all_fmt(src_img_pl=src_pl, dst_pl=tmp_dst_pl)
+    #         # path_dst = cls._conv2img(src_pl=path_dst, dst_pl=dst_pl)  # , fmt_if_dst_without_ext=fmt)
+    #
+    #         #
+    #         # 下記で解像度向上させようとしたが、jpeg,pngがcropされない
+    #         #
+    #         # if src_pl.suffix == ".pdf":
+    #         #     """
+    #         #     - pdfはcropできないので、先に画像変換する。変換後があわよくばcrop_imgに対応したフォーマットなら画質落としにくい。
+    #         #     - 一方、上記でなければ、先にcropする場合、元のソース画像の画像変換を行わないため、画質が落ちないと思われる
+    #         #     """
+    #         #     path_dst = cls._conv2img(src_pl=src_pl, dst_pl=tmp_dst_pl)  # , fmt_if_dst_without_ext=fmt)
+    #         #     path_dst = cls._crop_all_fmt(src_pl=path_dst, dst_pl=dst_pl)
+    #         # else:
+    #         #     tmp_dst_pl = tmp_dst_pl.with_suffix(src_pl.suffix)
+    #         #     path_dst = cls._crop_all_fmt(src_pl=src_pl, dst_pl=tmp_dst_pl)
+    #         #     path_dst = cls._conv2img(src_pl=path_dst, dst_pl=cls.util_manage_tmp_path(dst_pl,
+    #         #                                                                               is_remove_tmp_str=True))  # , fmt_if_dst_without_ext=fmt)
+    #         if tmp_dst_pl.exists():
+    #             tmp_dst_pl.unlink()
+    #     if path_dst:
+    #         return path_dst
+    #     else:
+    #         return None
+    #     #     need_conv = False
+    #     # if need_conv:
+    #     #     return None  # Faild
+    #     # else:
+    #     #
+    #     # return path_dst
+
+    @classmethod
+    # def conv_mermaid(cls, src_pl: Path, dst_pl: Path, to_fmt=".svg") -> Tuple[bool, Path]:
+    def conv_mermaid(cls, src_pl: Path, dst_pl: Path) -> Tuple[bool, Path]:
+        """
+        Mermaid(*_mermaid.md) Conversion
+        mermaid markdownを変換
+        - dst_dir: cwdに生成されるので、生成時にchdirで出力先を調整しなければならない。
+        :param src_pl:
+        :param dst_pl:
+        :param to_fmt:
+        :return:
+        """
+        # Check on format
+        if dst_pl.suffix not in (".svg", ".png", ".pdf"):
+            logger.error("Cannot convert file type:%s. Skipped" % dst_pl.suffix)
+            return False, None
+
+        """ Check exists of mermaid-cli """
+        cmd_name_mermaid = "mmdc"
+        cmd_name_mermaid = shutil.which(cmd_name_mermaid)
+        if cmd_name_mermaid == "":
+            msg = """
+                    mermaidコマンドに当たるmmdcにpathが通っていません。
+                    要PATH通し/インスト（下記参考）
+                    npm install -g mermaid
+                    npm install -g mermaid.cli
+                    """
+            logger.error(msg)
+            return
+
+        """  
+        Usage: mmdc [options]
+
+        Options:
+          -V, --version                                   output the version number
+          -t, --theme [theme]                             Theme of the chart, could be default, forest, dark or neutral. Optional. Default: default (default: "default")
+          -w, --width [width]                             Width of the page. Optional. Default: 800 (default: "800")
+          -H, --height [height]                           Height of the page. Optional. Default: 600 (default: "600")
+          -i, --input <input>                             Input mermaid file. Required.
+          -o, --output [output]                           Output file. It should be either svg, png or pdf. Optional. Default: input + ".svg"
+          -b, --backgroundColor [backgroundColor]         Background color. Example: transparent, red, '#F0F0F0'. Optional. Default: white
+          -c, --configFile [configFile]                   JSON configuration file for mermaid. Optional
+          -C, --cssFile [cssFile]                         CSS file for the page. Optional
+          -p --puppeteerConfigFile [puppeteerConfigFile]  JSON configuration file for puppeteer. Optional
+          -h, --help                                      output usage information
+        """
+
+        # dst_pl_full, _ = cls.util_update_dst_path(base_dst_pl=dst_pl, fname_str_or_pl=src_pl, fmt=to_fmt)
+
+        cmd = "{cmd_mmdc} -i {src_path} -o {dst_fullpath_ok}".format(
+            cmd_mmdc=cmd_name_mermaid,
+            dst_fullpath_ok=dst_pl,
+            src_path=src_pl.as_posix(),
+        )
+        # FIXME:
+        out_msg = cls._run_cmd(cmd=cmd, short_msg="Converting mermaid file")
+        # # Move generated file
+        # gen_path = src_pl.with_name(dst_pl.name)
+        # shutil.move(gen_path, dst_pl)
+        if out_msg != "":
+            logger.error("Failed conversion into mermaid image:%s" % src_pl)
+            return False, None
+        else:
+            logger.info("Succeeded conversion on mermaid:%s" % src_pl)
+            return True, dst_pl
+
+    @classmethod
+    def conv_pandoc(cls, src: Path, dst: Path):
+        """
+        Pandocを用いた変換
+        :param src:
+        :param dst:
+        :return: None
+        """
+        cmd_pandoc = "pandoc"
+        if not shutil.which(cmd_pandoc):
+            logger.error("command %s was not found" % cmd_pandoc)
+            return None
+        # pandoc is exists after here
+        cmd = cmd_pandoc + "-N -TOC-F pandoc-citeproc -F pandoc-crossref {src}".format(
+            src=src
+        )
+
+    @classmethod
+    def conv_mermaid_with_crop(cls, src_pl: Path, dst_pl: Path, gray=False) -> Tuple[bool, Path]:
+        """
+        mermaid markdownを変換 及び 特定のformatへ変換する
+        :param src_pl:
+        :param dst_pl:
+        :param gray:
+        :return: Success?, Output file's path
+        """
+        if dst_pl.suffix in cls.mermaid_fmt_in:
+            tmp_fmt = dst_pl.suffix
+        else:
+            tmp_fmt = ".png"  # ImageMagickが対応しておりcropが利くフォーマット
+        # base_dst_pl filename
+        # dst_fname = base_dst_pl.stem
+        # dst_pl_full, _ = cls.util_update_dst_path(base_dst_pl=dst_pl, fname_str_or_pl=src_pl, fmt=tmp_fmt)
+        # Conversion
+        res, tmp_dst_pl = cls.conv_mermaid(src_pl=src_pl, dst_pl=dst_pl)  # ,
+        # to_fmt=tmp_fmt)
+        """ Conversion: mermaid """
+        if not res:
+            return False, None
+        """ Cropping image """
+        tmp_dst_pl = cls._crop_all_fmt(src_img_pl=tmp_dst_pl, dst_pl=dst_pl)
+        if tmp_dst_pl is None:
+            logger.error("Failed crop: %s" % src_pl)
+            return False, None
+
+        if src_pl.suffix == dst_pl.suffix:
+            return True, tmp_dst_pl
+
+        """ Image conversion"""
+        tmp_dst_pl = cls.conv_manipulation_img(
+            src_pl=tmp_dst_pl, dst_pl=dst_pl, gray=gray
+        )
+        if tmp_dst_pl is None:
+            return False, None
+        else:
+            return True, tmp_dst_pl
 
 
 class Tool:
@@ -126,6 +376,11 @@ class Tool:
         """
 
 
+class StateMonitor(Enum):
+    wait = auto()
+    convert = auto()
+
+
 class Monitor(FileSystemEventHandler):
     """
     - Part:
@@ -147,8 +402,7 @@ class Monitor(FileSystemEventHandler):
         ".pdf",
     )  # inにPDFはOK # TODO: 共通クラス化しろ
     imagic_fmt_conv_out = (".png", ".jpg", ".jpeg", ".png", ".eps", ".svg")
-    mermaid_fmt_in = (".svg", ".png", ".pdf")
-    plantuml_fmt_out = (".png", ".svg", ".pdf", ".eps", ".html", ".txt", ".tex")
+
     # FIXME: 下記２つのsofficeのlistは要整理
     paths_soffice = [
         "soffice",  # pathが通っている前提の場合
@@ -202,6 +456,7 @@ class Monitor(FileSystemEventHandler):
         self._dst_pl = None
         self._to_fmt = None
         self._monitors = {}
+        self._state = StateMonitor.wait
         self._ppaths_soffice = [Path(x) for x in self.paths_soffice]
         if log_level_console is not None:
             global logger
@@ -403,6 +658,7 @@ class Monitor(FileSystemEventHandler):
     def _run_cmd(cmd: str, short_msg="", is_print=True) -> str:
         """
         コマンド(CLI)の実行
+        - TODO: Monitorクラスのこのメソッドは将来削除しろ。Converクラスへ移行済みなので消して良い
         :param cmd:
         :param is_print:
         :return: output of rum
@@ -484,37 +740,38 @@ class Monitor(FileSystemEventHandler):
         if src_pl.suffix == ".pdf":
             Converter.pdf2img(src_pl=src_pl, dst_pl=dst_pl)
         else:
+            """ Conversion other than pdf """
             dst_im = Image.open(src_pl.as_posix())
-        if do_trim:
-            dst_im = img_crop(image=dst_im)
+            if do_trim:
+                dst_im = img_crop(image=dst_im)
 
-        if src_pl.suffix == dst_pl.suffix:
-            logger.info("同一拡張子なので画像変換はしません。trimは実施するかも")
-            return
+            if src_pl.suffix == dst_pl.suffix:
+                logger.info("同一拡張子なので画像変換はしません。trimは実施するかも")
+                return
 
-        if dst_pl.suffix == ".eps":
-            if dst_im.mode in ("RGBA", "LA"):
-                """ 透過画像を解除? """
-                # https://pillow.readthedocs.io/en/stable/handbook/image-file-formats.html?highlight=eps#eps
-                print(
-                    'Current figure mode "{}" cannot be directly saved to .eps and should be converted (e.g. to "RGB")'.format(
-                        dst_im.mode
+            if dst_pl.suffix == ".eps":
+                if dst_im.mode in ("RGBA", "LA"):
+                    """ 透過画像を解除? """
+                    # https://pillow.readthedocs.io/en/stable/handbook/image-file-formats.html?highlight=eps#eps
+                    print(
+                        'Current figure mode "{}" cannot be directly saved to .eps and should be converted (e.g. to "RGB")'.format(
+                            dst_im.mode
+                        )
                     )
-                )
-                dst_im = cls.remove_transparency(dst_im)
-                # dst_im = dst_im[:, :, 0:2]
-                dst_im = dst_im.convert("RGB")
+                    dst_im = cls.remove_transparency(dst_im)
+                    # dst_im = dst_im[:, :, 0:2]
+                    dst_im = dst_im.convert("RGB")
 
-        if gray:
-            """ Convert to gray img """
-            dst_im = dst_im.convert("L")
+            if gray:
+                """ Convert to gray img """
+                dst_im = dst_im.convert("L")
 
-        """保存"""
-        if dst_pl.suffix in (".eps", ".png", ".gif"):
-            dst_im.save(dst_pl.as_posix(), lossless=True)
-        else:
-            dst_im.save(dst_pl.as_posix())
-        return dst_pl
+            """保存"""
+            if dst_pl.suffix in (".eps", ".png", ".gif"):
+                dst_im.save(dst_pl.as_posix(), lossless=True)
+            else:
+                dst_im.save(dst_pl.as_posix())
+            return dst_pl
 
     # @classmethod
     # # def _conv2img(cls, src_pl: Path, dst_pl: Path, fmt_if_dst_without_ext=None, decode="utf8") -> Path:
@@ -605,52 +862,6 @@ class Monitor(FileSystemEventHandler):
     #     if del_src:
     #         src_pl.unlink()
     #     return pl_dst_dir
-
-    @classmethod
-    def conv_plantuml(cls, src_pl: Path, dst_pl: Path, need_preproc=False) -> None:
-        """PlantUML
-
-        :param src_pl:
-        :param dst_pl:
-        :param done_preproc:
-        :return:
-        """
-        logger.debug("Start converting plantuml")
-        if need_preproc:
-            src_pl, dst_pl = cls.preprocess(src_pl, dst_pl)
-        # to abs. path
-        dst_pl = dst_pl.resolve()
-        cls._cmd_plantuml = "plantuml"
-        # FIXME: dst_plにfullPATHであるかのチェックをする必要がある
-        path_cmd = shutil.which(cls._cmd_plantuml)
-        if path_cmd is None:
-            logger.error(
-                "%s not found. Can't convert from PlantUML" % cls._cmd_plantuml
-            )
-            return
-        if dst_pl.suffix not in cls.plantuml_fmt_out:
-            logger.error("Indicated Formatは未対応 in converting with plantuml")
-            return
-        # FIXME: dst_pathがない場合、再帰的に生成する様に要修正
-        # cmd = "{cmd_pu} -o {dst_abs_dir_only} -t{fmt} {src}".format(
-        #     cmd_pu=cls._cmd_plantuml,
-        #     src=src_pl.as_posix(),
-        #     dst_abs_dir_only=dst_pl.parent,
-        #     fmt=dst_pl.suffix[1:]
-        # )
-        """注意
-        - `-o`: 絶対PATHなら問題なさそうだが、相対PATHでは、srcファイルからの相対PATHとなる模様。よって、dst_plを絶対PATHに変更する必要がある
-        """
-        cmd = f"{cls._cmd_plantuml} -o {dst_pl.parent} -t{dst_pl.suffix[1:]} {src_pl.as_posix()}"
-        res = cls._run_cmd(cmd=cmd, short_msg="Converting with %s" % cls._cmd_plantuml)
-        # Move generated file to dst_pl
-        pl_out = dst_pl.parent.joinpath(src_pl.stem + dst_pl.suffix)
-        shutil.move(pl_out, dst_pl)
-        """Show output msg"""
-        if res is None or res == "":
-            logger.info("Completed. ")
-        else:
-            logger.info("Finished with msg: %s" % res)
 
     @classmethod
     def mgr_conv_slide(
@@ -891,186 +1102,6 @@ class Monitor(FileSystemEventHandler):
                 logger.error("Failed:%s" % src_pl)
                 return None
 
-    # @classmethod
-    # def _conv_and_crop(cls, src_pl: Path, dst_pl: Path) -> Path:
-    #     """
-    #     イメージを変換して、cropする。
-    #     - Step by Stepな変換。もし、変換, cropの両方を_conv_with_crop_bothメソッドで行え
-    #     - (注意) img変換とcropを同時にimagemagickで実現する別methodを設けた
-    #     :param cls:
-    #     :param src_pl:
-    #     :param dst_pl:
-    #     :param to_fmt:
-    #     :return:
-    #     """
-    #     need_conv = True
-    #     # path_dst = cls.mgr_conv_img(src_pl=src_pl, dst_pl=dst_pl)  # conv both crop and imgconv stimulatelly
-    #     # if path_dst:
-    #     #     need_conv = False
-    #     """ 上記、変換が失敗した場合 """
-    #     if need_conv:
-    #         tmp_dst_pl = cls.util_manage_tmp_path(dst_pl)
-    #         # dst_pl2, tmp_dst_pl = cls.util_update_dst_path(base_dst_pl=src_pl, fname_str_or_pl=dst_pl, fmt=to_fmt,
-    #         #                                                is_tmp=True)
-    #         # 変換後にcrop
-    #         path_dst = cls._conv2img(src_pl=src_pl, dst_pl=tmp_dst_pl)  # , fmt_if_dst_without_ext=fmt)
-    #         path_dst = cls._crop_all_fmt(src_img_pl=path_dst, dst_pl=dst_pl)
-    #
-    #         # Crop後に変換
-    #         # path_dst = cls._crop_all_fmt(src_img_pl=src_pl, dst_pl=tmp_dst_pl)
-    #         # path_dst = cls._conv2img(src_pl=path_dst, dst_pl=dst_pl)  # , fmt_if_dst_without_ext=fmt)
-    #
-    #         #
-    #         # 下記で解像度向上させようとしたが、jpeg,pngがcropされない
-    #         #
-    #         # if src_pl.suffix == ".pdf":
-    #         #     """
-    #         #     - pdfはcropできないので、先に画像変換する。変換後があわよくばcrop_imgに対応したフォーマットなら画質落としにくい。
-    #         #     - 一方、上記でなければ、先にcropする場合、元のソース画像の画像変換を行わないため、画質が落ちないと思われる
-    #         #     """
-    #         #     path_dst = cls._conv2img(src_pl=src_pl, dst_pl=tmp_dst_pl)  # , fmt_if_dst_without_ext=fmt)
-    #         #     path_dst = cls._crop_all_fmt(src_pl=path_dst, dst_pl=dst_pl)
-    #         # else:
-    #         #     tmp_dst_pl = tmp_dst_pl.with_suffix(src_pl.suffix)
-    #         #     path_dst = cls._crop_all_fmt(src_pl=src_pl, dst_pl=tmp_dst_pl)
-    #         #     path_dst = cls._conv2img(src_pl=path_dst, dst_pl=cls.util_manage_tmp_path(dst_pl,
-    #         #                                                                               is_remove_tmp_str=True))  # , fmt_if_dst_without_ext=fmt)
-    #         if tmp_dst_pl.exists():
-    #             tmp_dst_pl.unlink()
-    #     if path_dst:
-    #         return path_dst
-    #     else:
-    #         return None
-    #     #     need_conv = False
-    #     # if need_conv:
-    #     #     return None  # Faild
-    #     # else:
-    #     #
-    #     # return path_dst
-
-    @classmethod
-    # def conv_mermaid(cls, src_pl: Path, dst_pl: Path, to_fmt=".svg") -> Tuple[bool, Path]:
-    def conv_mermaid(cls, src_pl: Path, dst_pl: Path) -> Tuple[bool, Path]:
-        """
-        Mermaid(*_mermaid.md) Conversion
-        mermaid markdownを変換
-        - dst_dir: cwdに生成されるので、生成時にchdirで出力先を調整しなければならない。
-        :param src_pl:
-        :param dst_pl:
-        :param to_fmt:
-        :return:
-        """
-        # Check on format
-        if dst_pl.suffix not in (".svg", ".png", ".pdf"):
-            logger.error("Cannot convert file type:%s. Skipped" % dst_pl.suffix)
-            return False, None
-
-        """ Check exists of mermaid-cli """
-        cmd_name_mermaid = "mmdc"
-        cmd_name_mermaid = shutil.which(cmd_name_mermaid)
-        if cmd_name_mermaid == "":
-            msg = """
-                    mermaidコマンドに当たるmmdcにpathが通っていません。
-                    要PATH通し/インスト（下記参考）
-                    npm install -g mermaid
-                    npm install -g mermaid.cli
-                    """
-            logger.error(msg)
-            return
-
-        """  
-        Usage: mmdc [options]
-
-        Options:
-          -V, --version                                   output the version number
-          -t, --theme [theme]                             Theme of the chart, could be default, forest, dark or neutral. Optional. Default: default (default: "default")
-          -w, --width [width]                             Width of the page. Optional. Default: 800 (default: "800")
-          -H, --height [height]                           Height of the page. Optional. Default: 600 (default: "600")
-          -i, --input <input>                             Input mermaid file. Required.
-          -o, --output [output]                           Output file. It should be either svg, png or pdf. Optional. Default: input + ".svg"
-          -b, --backgroundColor [backgroundColor]         Background color. Example: transparent, red, '#F0F0F0'. Optional. Default: white
-          -c, --configFile [configFile]                   JSON configuration file for mermaid. Optional
-          -C, --cssFile [cssFile]                         CSS file for the page. Optional
-          -p --puppeteerConfigFile [puppeteerConfigFile]  JSON configuration file for puppeteer. Optional
-          -h, --help                                      output usage information
-        """
-
-        # dst_pl_full, _ = cls.util_update_dst_path(base_dst_pl=dst_pl, fname_str_or_pl=src_pl, fmt=to_fmt)
-
-        cmd = "{cmd_mmdc} -i {src_path} -o {dst_fullpath_ok}".format(
-            cmd_mmdc=cmd_name_mermaid,
-            dst_fullpath_ok=dst_pl,
-            src_path=src_pl.as_posix(),
-        )
-        # FIXME:
-        out_msg = cls._run_cmd(cmd=cmd, short_msg="Converting mermaid file")
-        # # Move generated file
-        # gen_path = src_pl.with_name(dst_pl.name)
-        # shutil.move(gen_path, dst_pl)
-        if out_msg != "":
-            logger.error("Failed conversion into mermaid image:%s" % src_pl)
-            return False, None
-        else:
-            logger.info("Succeeded conversion on mermaid:%s" % src_pl)
-            return True, dst_pl
-
-    @classmethod
-    def conv_pandoc(cls, src: Path, dst: Path):
-        """
-        Pandocを用いた変換
-        :param src:
-        :param dst:
-        :return: None
-        """
-        cmd_pandoc = "pandoc"
-        if not shutil.which(cmd_pandoc):
-            logger.error("command %s was not found" % cmd_pandoc)
-            return None
-        # pandoc is exists after here
-        cmd = cmd_pandoc + "-N -TOC-F pandoc-citeproc -F pandoc-crossref {src}".format(
-            src=src
-        )
-
-    @classmethod
-    def conv_mermaid_with_crop(cls, src_pl: Path, dst_pl: Path, gray=False) -> Tuple[bool, Path]:
-        """
-        mermaid markdownを変換 及び 特定のformatへ変換する
-        :param src_pl:
-        :param dst_pl:
-        :param gray:
-        :return: Success?, Output file's path
-        """
-        if dst_pl.suffix in cls.mermaid_fmt_in:
-            tmp_fmt = dst_pl.suffix
-        else:
-            tmp_fmt = ".png"  # ImageMagickが対応しておりcropが利くフォーマット
-        # base_dst_pl filename
-        # dst_fname = base_dst_pl.stem
-        # dst_pl_full, _ = cls.util_update_dst_path(base_dst_pl=dst_pl, fname_str_or_pl=src_pl, fmt=tmp_fmt)
-        # Conversion
-        res, tmp_dst_pl = cls.conv_mermaid(src_pl=src_pl, dst_pl=dst_pl)  # ,
-        # to_fmt=tmp_fmt)
-        """ Conversion: mermaid """
-        if not res:
-            return False, None
-        """ Cropping image """
-        tmp_dst_pl = cls._crop_all_fmt(src_img_pl=tmp_dst_pl, dst_pl=dst_pl)
-        if tmp_dst_pl is None:
-            logger.error("Failed crop: %s" % src_pl)
-            return False, None
-
-        if src_pl.suffix == dst_pl.suffix:
-            return True, tmp_dst_pl
-
-        """ Image conversion"""
-        tmp_dst_pl = cls.conv_manipulation_img(
-            src_pl=tmp_dst_pl, dst_pl=dst_pl, gray=gray
-        )
-        if tmp_dst_pl is None:
-            return False, None
-        else:
-            return True, tmp_dst_pl
-
     def convert(self, src_file_apath, dst_dir_apath, to_fmt=".png", is_crop=True, gray=False):  # , _to_fmt="pdf"):
         """
         ppt->pdf->cropping
@@ -1161,9 +1192,9 @@ class Monitor(FileSystemEventHandler):
             dst_pl = self.conv_manipulation_img(
                 src_pl, dst_pl, do_trim=True, gray=gray
             )  # TODO: 現状ImgMagickの-trimでPDFもcropされている！！
-            dst_pl = self._crop_all_fmt(dst_pl, dst_pl)
+            dst_pl = self._crop_all_fmt(src_pl, dst_pl)
             # FIXME: 下記fixは不要なのでは。
-            dst_pl = self.fix_eps(dst_pl)
+            # dst_pl = self.fix_eps(dst_pl)
         elif src_pl.suffix in (".ppt", ".pptx", ".odp") and not src_pl.name.startswith(
                 "~"
         ):
@@ -1197,10 +1228,10 @@ class Monitor(FileSystemEventHandler):
             """PlantUML
             """
             logger.debug("Start converting: plantUML")
-            self.conv_plantuml(src_pl=src_pl, dst_pl=dst_pl)
+            Converter.plantuml2img(src_pl=src_pl, dst_pl=dst_pl)
         elif src_pl.name.endswith("_mermaid") and src_pl.suffix == ".md" or src_pl.suffix == ".mmd":
             print("[Info] Mermaid conversion:%s" % src_pl)
-            self.conv_mermaid_with_crop(
+            Converter.conv_mermaid_with_crop(
                 src_pl=src_pl, dst_pl=dst_pl, gray=gray
             )  # , to_fmt=to_fmt)
         else:
@@ -1265,33 +1296,47 @@ class Monitor(FileSystemEventHandler):
                         src_path = event.src_path
                     closure(src_path)  # run
 
+    def event_common(self, event, state_change,start:bool=True):
+        if start:
+            self._state = StateMonitor.convert
+        filepath = event.src_path
+        filename = os.path.basename(filepath)
+        print(self.msg_event_start)
+        logger.info(f"{state_change} : {filename}")
+        # cls.convert(src_file_apath=event.src_path, dst_dir_apath=cls._dst_pl, fmt_if_dst_without_ext=cls._to_fmt)  # , _to_fmt="png")
+        if start:
+            self._road_balancer(event=event)
+            self._state = StateMonitor.wait
+
     def on_created(self, event):
         """
 
         :param event:
         :return:
         """
-
-        filepath = event.src_path
-        filename = os.path.basename(filepath)
-        print(self.msg_event_start)
-        logger.info("Created: %s" % filename)
-        # cls.convert(src_file_apath=event.src_path, dst_dir_apath=cls._dst_pl, fmt_if_dst_without_ext=cls._to_fmt)  # , _to_fmt="png")
-        self._road_balancer(event=event)
+        self.event_common(event, state_change="Created")
+        # filepath = event.src_path
+        # filename = os.path.basename(filepath)
+        # print(self.msg_event_start)
+        # logger.info("Created: %s" % filename)
+        # # cls.convert(src_file_apath=event.src_path, dst_dir_apath=cls._dst_pl, fmt_if_dst_without_ext=cls._to_fmt)  # , _to_fmt="png")
+        # self._road_balancer(event=event)
 
     def on_modified(self, event):
         time.sleep(wait_sec)  # 画像生成まで少し待つ
-        filepath = event.src_path
-        filename = os.path.basename(filepath)
-        print(self.msg_event_start)
-        logger.info("Modified:%s" % filename)
-        self._road_balancer(event=event)
+        self.event_common(event, state_change="Modified")
+        # filepath = event.src_path
+        # filename = os.path.basename(filepath)
+        # print(self.msg_event_start)
+        # logger.info("Modified:%s" % filename)
+        # self._road_balancer(event=event)
 
     def on_deleted(self, event):
-        filepath = event.src_path
-        filename = os.path.basename(filepath)
-        print("\n\n")
-        logger.info("Deleted:%s" % filename)
+        self.event_common(event, state_change="Deleted",start=False)
+        # filepath = event.src_path
+        # filename = os.path.basename(filepath)
+        # print("\n\n")
+        # logger.info("Deleted:%s" % filename)
         # cls._road_balancer(event=event)
 
     def on_moved(self, event):
@@ -1302,12 +1347,13 @@ class Monitor(FileSystemEventHandler):
         :type event: FileMovedEvent | DirMovedEvent
         :return:
         """
-        filepath = event.src_path
-        filename = os.path.basename(filepath)
-        print(self.msg_event_start)
-        logger.info("Moved:%s" % filename)
-        # cls.convert(src_file_apath=event.dest_path, dst_dir_apath=cls._dst_pl,fmt_if_dst_without_ext=cls._to_fmt)  # , _to_fmt="png")
-        self._road_balancer(event=event)
+        self.event_common(event, state_change="Moved")
+        # filepath = event.src_path
+        # filename = os.path.basename(filepath)
+        # print(self.msg_event_start)
+        # logger.info("Moved:%s" % filename)
+        # # cls.convert(src_file_apath=event.dest_path, dst_dir_apath=cls._dst_pl,fmt_if_dst_without_ext=cls._to_fmt)  # , _to_fmt="png")
+        # self._road_balancer(event=event)
 
     # def start(cls, sleep_time=0.5):
     #     try:
@@ -1468,7 +1514,8 @@ class Monitor(FileSystemEventHandler):
                 observer.schedule(event_handler, src_pl.as_posix(), recursive=True)
             # event_handler = ChangeHandler()
             observer.start()
-            print("[Info] Start Monitoring")
+            # print("[Info] Start Monitoring")
+            logger.info("Start Monitoring")
             while True:
                 try:
                     time.sleep(sleep_sec)
@@ -1478,11 +1525,17 @@ class Monitor(FileSystemEventHandler):
         except Exception as e:
             raise Exception("Current path: %s" % Path.cwd())
 
+    @property
+    def state(self):
+        """ return monitoring state """
+        return self._state
+
 
 @classmethod
-def cli_watch():
+def monitor():
     """
     監視を開始する
+    - CLI用Entrypoint
     :param src_path:
     :param dst_dir_apath:
     :param _to_fmt:
@@ -1533,8 +1586,8 @@ def convert():
     #     sys.exit(1)
 
 
-if __name__ in "__main__":
-    ins = Monitor(
-        monitoring_dir="app_single/_fig_src", output_dir="app_single/figs"
-    )
-    ins.convert()
+# if __name__ == "__main__":
+#     # ins = Monitor(
+#     #     monitoring_dir="app_single/_fig_src", output_dir="app_single/figs"
+#     # )
+#     # ins.convert()
