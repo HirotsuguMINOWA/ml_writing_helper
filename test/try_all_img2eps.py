@@ -2,21 +2,17 @@
 # Set src dir as source folder in projectPref.
 # You can import by "from core import ChangeHandler"
 # and need set working dir at prj root(ml_writing_helper)
-import os
+import re
 import shutil
 import sys
 from pathlib import Path
-
 # sys.path.append("/Users/hirots-m/Documents/PyCharmProjects/ml_writing_helper/src")
 from typing import List
 
 sys.path.append("../src")
 from main import Monitor, StateMonitor
-import concurrent.futures
 import time
-from concurrent import futures
 from concurrent.futures import ThreadPoolExecutor
-import glob
 
 
 # from logging import StreamHandler, Formatter, INFO, getLogger
@@ -45,7 +41,8 @@ class AutoTester:
         # cls.exc_ext = exe_ext
         #
         # cls.e_task1 = None
-        cls.main(sample=Path(sample), src=Path(src), dst=Path(dst), to_fmt=to_fmt, excludes=excludes)
+        cls._completed_copy = False
+        cls.main(sample=Path(sample), src=Path(src), dst=Path(dst), to_fmt=to_fmt, target_exts=target_exts, excludes=excludes)
 
     @classmethod
     def task1(cls, src, dst, to_fmt):
@@ -61,32 +58,40 @@ class AutoTester:
         print("End task1")
 
     @classmethod
+    def pattener(cls, target_ext: List[str]) -> str:
+        """
+        .globメソッドを使って、複数の拡張子指定したファイルの抽出用パターンの生成
+        :param target_ext:
+        :return:
+        """
+        pattern = "("
+        for i, ext in enumerate(target_ext):
+            if i == 0:
+                pattern += ext
+            else:
+                pattern += '|' + ext
+        pattern += ")"
+        return pattern
+
+    @classmethod
     def task2(cls, smpl: Path, src: Path, target_ext: List[str], excludes: List[str]):
         """Copy sample dir's file to src dir"""
         msg = "Copy Task"
         print("Start " + msg)
-        # src,dst dir内のfiles削除
-
-        # for a_path in (cls.src, cls.dst):
-        #     print(f"Init: {a_path}")
-        #     p_tmp = Path(a_path)
-        #     files = p_tmp.glob('**/*')
-        #     for a_file in files:
-        #         a_file.unlink(missing_ok=False)
-        #     # if os.path.exists(a_path):
-        #     #     shutil.rmtree(a_path)
-        #     # os.mkdir(a_path)
-        # print("cp1 task2")
+        # 　monitorに投げるファイルPATHの抽出
         if len(target_ext) > 0:
-            files = target_ext
+            pattern = cls.pattener(target_ext)
+            print("pattern: " + pattern)
+            print("files_tmp", list(smpl.glob('*')))
+            files = [p for p in smpl.glob('*') if re.search('.' + pattern, str(p))]
         else:
-            files = smpl.glob("*")
-        # smpl = Path(cls.sample)
-        # print("samples:%s" % smpl)
+            files = smpl.glob('**/*')
+        print("files:", list(files))
         for fn in files:
             if fn.suffix not in excludes:
                 print("copy %s to %s" % (fn, src.as_posix()))
                 shutil.copy(fn, src.as_posix())
+        cls._complete_copy = True
         print("End " + msg)
 
     # @staticmethod
@@ -124,7 +129,7 @@ class AutoTester:
     def main(cls, sample: Path, src: Path, dst: Path, to_fmt: str, target_exts: List[str] = [], excludes: List[str] = []):
         print("main start")
         cls.init_dirs(src, dst)
-        files = sample.glob("*")
+        # files = sample.glob("*")
         with ThreadPoolExecutor(max_workers=2, thread_name_prefix="thread") as executor:
             e_task1 = executor.submit(cls.task1, src, dst, to_fmt)
 
@@ -133,29 +138,18 @@ class AutoTester:
             #     while True:
             #         if e_copy.done():
             #             break
-            executor.submit(cls.task2, sample, src, target_exts, excludes)
-            states = [False * 5]
+            e_task2 = executor.submit(cls.task2, sample, src, target_exts, excludes)
+            states = [False] * 5
             while True:
-                if len(states) > 5 and all(states):
+                if len(states) > 5 and all(states) and cls._complete_copy:
                     break
                 elif cls._monitor.state == StateMonitor.wait:
                     states.pop()
                     states.append(True)
                     time.sleep(2)
-            # # getLogger().info("submit end")
-            # #
-            # #
-            # print("End of submit threads")
-            # # for f in futures.as_completed(wait_for):
-            # #     print('main: result: {}'.format(f.result()))
-            # print("start loop in converting")
-            # while True:
-            #     # TODO:  task2が終わったらプログラム終わりにしたい˝
-            #     time.sleep(10)
-            #     if e_task2.done():
-            #         e_task1.cancel()
             print("main end")
 
 
 if __name__ == "__main__":
-    AutoTester.start()
+    # AutoTester.start(target_exts=[".png"])
+    AutoTester.start(to_fmt=".eps")

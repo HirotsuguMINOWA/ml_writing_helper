@@ -1,4 +1,5 @@
 """
+Test to convert files of plantUML in fig_src into .png files.
 
 - plantuml CLI
     - https://plantuml.com/ja/command-line
@@ -26,9 +27,8 @@ java -jar plantuml.jar -o "c:/outputPng" "c:/directory2"
 -txmi                          Generate XMI file for class diagram
 """
 
-from src.core import ChangeHandler
-from pathlib import Path
+from try_all_img2eps import AutoTester
 
-src_pl = Path("fig_src/test_puml.puml")
-dst_pl = Path("fig_dst/test_puml.eps")
-ChangeHandler.conv_plantuml(src_pl=src_pl, dst_pl=dst_pl)
+a = AutoTester()
+# a.start(to_fmt=".eps", target_exts=[".png"])
+a.start(to_fmt=".png", target_exts=[".pu", ".puml"])
