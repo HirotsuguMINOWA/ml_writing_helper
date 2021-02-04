@@ -126,7 +126,7 @@ class Tool:
         """
 
 
-class ChangeHandler(FileSystemEventHandler):
+class Monitor(FileSystemEventHandler):
     """
     - Part:
         - event receiver : start trigger to convert
@@ -1521,7 +1521,7 @@ def convert():
     if not src_pl.is_absolute():
         src_pl = Path(os.getcwd()).joinpath(sys.argv[1])
     print("fname_str_or_pl:%s" % src_pl)
-    ChangeHandler.convert(
+    Monitor.convert(
         src_file_apath=src_pl.as_posix(), dst_dir_apath=sys.argv[2], to_fmt=sys.argv[3]
     )  # , is_crop=sys.argv[4])
     print("END-END-END")
@@ -1534,7 +1534,7 @@ def convert():
 
 
 if __name__ in "__main__":
-    ins = ChangeHandler(
+    ins = Monitor(
         monitoring_dir="app_single/_fig_src", output_dir="app_single/figs"
     )
     ins.convert()
