@@ -1287,9 +1287,12 @@ class Monitor(FileSystemEventHandler):
                 if platform.system() == "Darwin":
                     """convert NDF to NFC """
                     converted = unicodedata.normalize("NFC", key_path[0].as_posix())
+                    tmp_src_path=unicodedata.normalize("NFC",event.src_path)
                 else:
                     converted = key_path[0].as_posix()
-                if converted in event.src_path:  # 0: src_path, 1:dst_path
+                    tmp_src_path=event.src_path
+                # if converted in event.src_path:  # 0: src_path, 1:dst_path
+                if converted in tmp_src_path:  # 0: src_path, 1:dst_path
                     if event.event_type == "moved":
                         src_path = event.dest_path
                     else:
