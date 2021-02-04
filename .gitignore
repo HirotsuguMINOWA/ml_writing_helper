@@ -1,6 +1,7 @@
 ## Added by me
 #.idea/*
-**/fig_gen/*
+**/fig_gen
+**/_fig_gen
 sample/fig_srcぽぺび/*
 **/.history
 
