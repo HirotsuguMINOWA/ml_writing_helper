@@ -8,6 +8,7 @@
 
 import os
 import shlex
+
 # import ftplib
 import shutil
 import sys
@@ -22,9 +23,10 @@ import platform
 from PIL import Image
 from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
-import numpy as np
-import matplotlib
-import magic  # python-magic
+
+# import numpy as np
+# import matplotlib
+# import magic  # python-magic
 
 wait_sec = 1
 # coding:utf-8
@@ -75,6 +77,7 @@ logger = get_logger(__name__)
 
 # 出力がepsの場合、監視folderにpngなど画像ファイルが書き込まれたらepsへ変換するコードをかけ
 
+
 class Tool:
     def pdfcrop(self, src_pl, dst_pl):
         """
@@ -111,20 +114,30 @@ class ChangeHandler(FileSystemEventHandler):
         - convert sub methods
         - check_external_sub_modules: this checkes exists and proposes to install sub modules. e.g.: gs, pdf2eps and so on.
     """
+
     msg_event_start = "-------------------  Start Event  -------------------"
     app_in = (".jpeg", ".jpg", ".png")  # 本アプリのinput拡張子
-    imagic_fmt_conv_in = (".png", ".jpg", ".jpeg", ".png", ".eps", ".svg", ".pdf")  # inにPDFはOK # TODO: 共通クラス化しろ
+    imagic_fmt_conv_in = (
+        ".png",
+        ".jpg",
+        ".jpeg",
+        ".png",
+        ".eps",
+        ".svg",
+        ".pdf",
+    )  # inにPDFはOK # TODO: 共通クラス化しろ
     imagic_fmt_conv_out = (".png", ".jpg", ".jpeg", ".png", ".eps", ".svg")
     mermaid_fmt_in = (".svg", ".png", ".pdf")
     plantuml_fmt_out = (".png", ".svg", ".pdf", ".eps", ".html", ".txt", ".tex")
     # FIXME: 下記２つのsofficeのlistは要整理
-    paths_soffice = ['soffice',  # pathが通っている前提の場合
-                     '/Applications/LibreOffice.app/Contents/MacOS/soffice',
-                     # '/Applications/LibreOffice Vanilla.app/Contents/MacOS/soffice' # srcがないと言われる
-                     ]
+    paths_soffice = [
+        "soffice",  # pathが通っている前提の場合
+        "/Applications/LibreOffice.app/Contents/MacOS/soffice",
+        # '/Applications/LibreOffice Vanilla.app/Contents/MacOS/soffice' # srcがないと言われる
+    ]
     _ppaths_soffice = [
-        Path('soffice'),
-        Path('/Applications/LibreOffice.app/Contents/MacOS/soffice')
+        Path("soffice"),
+        Path("/Applications/LibreOffice.app/Contents/MacOS/soffice"),
     ]
     _ext_pluntuml = [".pu", ".puml"]
 
@@ -200,7 +213,9 @@ class ChangeHandler(FileSystemEventHandler):
     #         return False, ""
 
     @staticmethod
-    def util_manage_tmp_path(path: Path, is_remove_tmp_str=False, suffix_new=None) -> Path:
+    def util_manage_tmp_path(
+        path: Path, is_remove_tmp_str=False, suffix_new=None
+    ) -> Path:
         """
         「共通」したtempファイルpath返却
         :param is_remove_tmp_str: 付記したtmpを示す文字列を削除するか否か
@@ -285,7 +300,9 @@ class ChangeHandler(FileSystemEventHandler):
             cmd_name = shutil.which("pdfcrop")
             if cmd_name is None:
                 logger.error("pdfcrop not found")
-            cmd = "{cmd_name} {path_in} {path_out}".format(cmd_name=cmd_name, path_in=src_img_pl, path_out=dst_pl)
+            cmd = "{cmd_name} {path_in} {path_out}".format(
+                cmd_name=cmd_name, path_in=src_img_pl, path_out=dst_pl
+            )
             # rename cropped pdf(*_crop.pdf) to dst_pl
             res_msg = cls._run_cmd(cmd, short_msg="Cropping CMD:")
             if res_msg:
@@ -298,11 +315,7 @@ class ChangeHandler(FileSystemEventHandler):
         #     shutil.copy(src_pl, dst_pl)
         #     cmd = "magick mogrify -format pdf -define pdf:use-trimbox=true {dst_path}".format(dst_path=dst_pl)
         elif src_img_pl.suffix in (".png", ".jpg", ".jpeg", ".eps"):  # pdfのcropはできない
-            cls.conv_manipulation_img(
-                src_pl=src_img_pl,
-                dst_pl=dst_pl
-                , do_trim=True
-            )
+            cls.conv_manipulation_img(src_pl=src_img_pl, dst_pl=dst_pl, do_trim=True)
             # dst_im = Image.open(src_img_pl.as_posix())
             # dst_im = img_crop(image=dst_im)
             # dst_im.save(dst_pl)
@@ -366,10 +379,10 @@ class ChangeHandler(FileSystemEventHandler):
         Taken from https://stackoverflow.com/a/35859141/7444782
         """
         # Only process if image has transparency (http://stackoverflow.com/a/1963146)
-        if im.mode in ('RGBA', 'LA') or (im.mode == 'P' and 'transparency' in im.info):
+        if im.mode in ("RGBA", "LA") or (im.mode == "P" and "transparency" in im.info):
 
             # Need to convert to RGBA if LA format due to a bug in PIL (http://stackoverflow.com/a/1963146)
-            alpha = im.convert('RGBA').split()[-1]
+            alpha = im.convert("RGBA").split()[-1]
 
             # Create a new background image of our matt color.
             # Must be RGBA because paste requires both images have the same format
@@ -431,13 +444,17 @@ class ChangeHandler(FileSystemEventHandler):
             return
 
         if dst_pl.suffix == ".eps":
-            if dst_im.mode in ('RGBA', 'LA'):
+            if dst_im.mode in ("RGBA", "LA"):
                 """ 透過画像を解除? """
                 # https://pillow.readthedocs.io/en/stable/handbook/image-file-formats.html?highlight=eps#eps
-                print('Current figure mode "{}" cannot be directly saved to .eps and should be converted (e.g. to "RGB")'.format(dst_im.mode))
+                print(
+                    'Current figure mode "{}" cannot be directly saved to .eps and should be converted (e.g. to "RGB")'.format(
+                        dst_im.mode
+                    )
+                )
                 dst_im = cls.remove_transparency(dst_im)
                 # dst_im = dst_im[:, :, 0:2]
-                dst_im = dst_im.convert('RGB')
+                dst_im = dst_im.convert("RGB")
 
         if gray:
             """ Convert to gray img """
@@ -543,20 +560,29 @@ class ChangeHandler(FileSystemEventHandler):
     @classmethod
     def conv_plantuml(cls, src_pl: Path, dst_pl: Path) -> None:
         logger.debug("Start converting plantuml")
+        # to abs. path
+        dst_pl = dst_pl.resolve()
         cls._cmd_plantuml = "plantuml"
+        # FIXME: dst_plにfullPATHであるかのチェックをする必要がある
         path_cmd = shutil.which(cls._cmd_plantuml)
         if path_cmd is None:
-            logger.error("%s not found. Can't convert from PlantUML" % cls._cmd_plantuml)
+            logger.error(
+                "%s not found. Can't convert from PlantUML" % cls._cmd_plantuml
+            )
             return
         if dst_pl.suffix not in cls.plantuml_fmt_out:
             logger.error("Indicated Formatは未対応 in converting with plantuml")
             return
+        # FIXME: dst_pathがない場合、再帰的に生成する様に要修正
         # cmd = "{cmd_pu} -o {dst_abs_dir_only} -t{fmt} {src}".format(
         #     cmd_pu=cls._cmd_plantuml,
         #     src=src_pl.as_posix(),
         #     dst_abs_dir_only=dst_pl.parent,
         #     fmt=dst_pl.suffix[1:]
         # )
+        """注意
+        - `-o`: 絶対PATHなら問題なさそうだが、相対PATHでは、srcファイルからの相対PATHとなる模様。よって、dst_plを絶対PATHに変更する必要がある
+        """
         cmd = f"{cls._cmd_plantuml} -o {dst_pl.parent} -t{dst_pl.suffix[1:]} {src_pl.as_posix()}"
         res = cls._run_cmd(cmd=cmd, short_msg="Converting with %s" % cls._cmd_plantuml)
         # Move generated file to dst_pl
@@ -569,7 +595,15 @@ class ChangeHandler(FileSystemEventHandler):
             logger.info("Finished with msg: %s" % res)
 
     @classmethod
-    def mgr_conv_slide(cls, src_pl: Path, dst_pl: Path, gray, is_crop=True, via_ext=".png", div_proc=(".pdf", ".eps")):
+    def mgr_conv_slide(
+        cls,
+        src_pl: Path,
+        dst_pl: Path,
+        gray,
+        is_crop=True,
+        via_ext=".png",
+        div_proc=(".pdf", ".eps"),
+    ):
         """
         スライドの変換を制御するマネージャ
         TODO: mgr_conv_slideメソッドに統一すべき。
@@ -623,17 +657,18 @@ class ChangeHandler(FileSystemEventHandler):
             if p_soffice.exists():
                 cmd = "'{path_soffice}' --headless --convert-to {dst_ext} --outdir '{out_dir}' '{path_src}'".format(
                     # cmd = "'{path_soffice}' --headless --convert-to {dst_ext} {path_src}".format(
-                    path_soffice=p_soffice
-                    , dst_ext=dst_pl.suffix[1:],  # eliminate first "."
+                    path_soffice=p_soffice,
+                    dst_ext=dst_pl.suffix[1:],  # eliminate first "."
                     # , out_dir=dir_dst
-                    out_dir=dst_pl.parent.as_posix()
-                    , path_src=src_pl
+                    out_dir=dst_pl.parent.as_posix(),
+                    path_src=src_pl,
                 )
                 break
 
         if src_pl.suffix in (".pptx", ".ppt"):
             logger.warning(
-                msg="(Math) symbols may be VANISH!!!!. Please confirm generated product not to disappear symbols")
+                msg="(Math) symbols may be VANISH!!!!. Please confirm generated product not to disappear symbols"
+            )
         # output = cls._run_cmd(cmd)
         output = cls._run_cmd(cmd, "CMD(slide2img): ")
         # logger.debug("CMD(slide2img):" + cmd)
@@ -671,16 +706,20 @@ class ChangeHandler(FileSystemEventHandler):
             return
         # if dst_pl.is_dir():
         #     dst_pl = dst_pl.joinpath(src_pl.name)  # if the path is dir, set src_filename_stem converted
-        if src_pl.suffix in cls.imagic_fmt_conv_in \
-                and dst_pl.suffix in cls.imagic_fmt_conv_out \
-                and dst_pl.suffix not in (".pdf", ".eps"):
+        if (
+            src_pl.suffix in cls.imagic_fmt_conv_in
+            and dst_pl.suffix in cls.imagic_fmt_conv_out
+            and dst_pl.suffix not in (".pdf", ".eps")
+        ):
             """
             - (in,out)共にpdfのcropはできない. epsのin?,outは可
             - 処理対象
                 - 一般画像(jpeg, epsなど)
                 - pdf: inのみ。
             """
-            cls.conv_manipulation_img(src_pl=src_pl, dst_pl=dst_pl, do_trim=False, gray=gray)
+            cls.conv_manipulation_img(
+                src_pl=src_pl, dst_pl=dst_pl, do_trim=False, gray=gray
+            )
             cls._crop_all_fmt(dst_pl, dst_pl)
         else:
             """
@@ -692,7 +731,9 @@ class ChangeHandler(FileSystemEventHandler):
                 http://would-be-astronomer.hatenablog.com/entry/2015/03/26/214633
             pdfcrop機能しない事が多い？img_magickと併用でcropする事
             """
-            cls.conv_manipulation_img(src_pl, dst_pl, do_trim=True, gray=gray)  # TODO: 現状ImgMagickの-trimでPDFもcropされている！！
+            cls.conv_manipulation_img(
+                src_pl, dst_pl, do_trim=True, gray=gray
+            )  # TODO: 現状ImgMagickの-trimでPDFもcropされている！！
             # cls._crop_all_fmt(dst_pl, dst_pl)
         # else:
         #     logger.error("_conv_with_crop_bothがCalled.しかし何も変換せず。src:%s,dst:%s" % (src_pl, dst_pl))
@@ -729,11 +770,10 @@ class ChangeHandler(FileSystemEventHandler):
                 - URL: https://tex.stackexchange.com/questions/22063/how-to-fix-eps-with-incorrect-bounding-box
                 """
                 # gs -dNOPAUSE -dBATCH -q -sDEVICE=bbox file.eps
-                cmd = "{gs} -dNOPAUSE -dBATCH -q -sDEVICE=bbox {src}".format(gs=path_cmd_gs, src=src_pl)
-                out_msg = cls._run_cmd(
-                    cmd=cmd
-                    , short_msg="Repair .eps by Ghost Script"
+                cmd = "{gs} -dNOPAUSE -dBATCH -q -sDEVICE=bbox {src}".format(
+                    gs=path_cmd_gs, src=src_pl
                 )
+                out_msg = cls._run_cmd(cmd=cmd, short_msg="Repair .eps by Ghost Script")
                 if out_msg != "":
                     logger.info(out_msg)  # 生成したbbox情報など呈示
                     return None
@@ -744,9 +784,17 @@ class ChangeHandler(FileSystemEventHandler):
             path_pdftops = "pdftops"
             path_epstopdf = shutil.which(path_epstopdf)
             path_pdftops = shutil.which(path_pdftops)
-            if path_epstopdf is None or path_epstopdf == "" or path_pdftops is None or path_pdftops == "":
+            if (
+                path_epstopdf is None
+                or path_epstopdf == ""
+                or path_pdftops is None
+                or path_pdftops == ""
+            ):
                 # Failed due to †commands are absent
-                logger.error(".epsファイルを修正しようとしましたが、%sのコマンドにPATHが非存在/通ってません。" % (path_pdftops, path_epstopdf))
+                logger.error(
+                    ".epsファイルを修正しようとしましたが、%sのコマンドにPATHが非存在/通ってません。"
+                    % (path_pdftops, path_epstopdf)
+                )
                 return None
 
             # Generate tmp
@@ -758,25 +806,17 @@ class ChangeHandler(FileSystemEventHandler):
                 path_epstopdf=path_epstopdf,
                 # path_pdftops=path_pdftops,
                 tmp=tmp_pl,
-                src=src_pl
+                src=src_pl,
             )
-            out_msg = cls._run_cmd(
-                cmd=cmd
-                , short_msg="Repair1/2(.eps->.pdf):"
-            )
+            out_msg = cls._run_cmd(cmd=cmd, short_msg="Repair1/2(.eps->.pdf):")
             if out_msg != "":
                 logger.error(out_msg)
                 return None
 
             cmd = "{path_pdftops} -eps {tmp} {src}".format(
-                path_pdftops=path_pdftops,
-                tmp=tmp_pl,
-                src=src_pl
+                path_pdftops=path_pdftops, tmp=tmp_pl, src=src_pl
             )
-            out_msg = cls._run_cmd(
-                cmd=cmd
-                , short_msg="Repair2/2(.pdf->.eps):"
-            )
+            out_msg = cls._run_cmd(cmd=cmd, short_msg="Repair2/2(.pdf->.eps):")
             # if out_msg != "":
             #     logger.error(out_msg)
             #     return None
@@ -902,13 +942,10 @@ class ChangeHandler(FileSystemEventHandler):
         cmd = "{cmd_mmdc} -i {src_path} -o {dst_fullpath_ok}".format(
             cmd_mmdc=cmd_name_mermaid,
             dst_fullpath_ok=dst_pl,
-            src_path=src_pl.as_posix()
+            src_path=src_pl.as_posix(),
         )
         # FIXME:
-        out_msg = cls._run_cmd(
-            cmd=cmd
-            , short_msg="Converting mermaid file"
-        )
+        out_msg = cls._run_cmd(cmd=cmd, short_msg="Converting mermaid file")
         # # Move generated file
         # gen_path = src_pl.with_name(dst_pl.name)
         # shutil.move(gen_path, dst_pl)
@@ -932,10 +969,14 @@ class ChangeHandler(FileSystemEventHandler):
             logger.error("command %s was not found" % cmd_pandoc)
             return None
         # pandoc is exists after here
-        cmd = cmd_pandoc + "-N -TOC-F pandoc-citeproc -F pandoc-crossref {src}".format(src=src)
+        cmd = cmd_pandoc + "-N -TOC-F pandoc-citeproc -F pandoc-crossref {src}".format(
+            src=src
+        )
 
     @classmethod
-    def conv_mermaid_with_crop(cls, src_pl: Path, dst_pl: Path, gray=False) -> Tuple[bool, Path]:
+    def conv_mermaid_with_crop(
+        cls, src_pl: Path, dst_pl: Path, gray=False
+    ) -> Tuple[bool, Path]:
         """
         mermaid markdownを変換 及び 特定のformatへ変換する
         :param src_pl:
@@ -951,9 +992,7 @@ class ChangeHandler(FileSystemEventHandler):
         # dst_fname = base_dst_pl.stem
         # dst_pl_full, _ = cls.util_update_dst_path(base_dst_pl=dst_pl, fname_str_or_pl=src_pl, fmt=tmp_fmt)
         # Conversion
-        res, tmp_dst_pl = cls.conv_mermaid(
-            src_pl=src_pl,
-            dst_pl=dst_pl)  # ,
+        res, tmp_dst_pl = cls.conv_mermaid(src_pl=src_pl, dst_pl=dst_pl)  # ,
         # to_fmt=tmp_fmt)
         """ Conversion: mermaid """
         if not res:
@@ -968,13 +1007,17 @@ class ChangeHandler(FileSystemEventHandler):
             return True, tmp_dst_pl
 
         """ Image conversion"""
-        tmp_dst_pl = cls.conv_manipulation_img(src_pl=tmp_dst_pl, dst_pl=dst_pl, gray=gray)
+        tmp_dst_pl = cls.conv_manipulation_img(
+            src_pl=tmp_dst_pl, dst_pl=dst_pl, gray=gray
+        )
         if tmp_dst_pl is None:
             return False, None
         else:
             return True, tmp_dst_pl
 
-    def convert(self, src_file_apath, dst_dir_apath, to_fmt=".png", is_crop=True, gray=False):  # , _to_fmt="pdf"):
+    def convert(
+        self, src_file_apath, dst_dir_apath, to_fmt=".png", is_crop=True, gray=False
+    ):  # , _to_fmt="pdf"):
         """
         ppt->pdf->cropping
         :param src_file_apath:
@@ -988,8 +1031,12 @@ class ChangeHandler(FileSystemEventHandler):
         # FIXME: Pathしか受け付けないように要修正
         src_pl = Path(src_file_apath)  # pathlibのインスタンス
         """ 無視すべき拡張子 """
-        if src_pl.name.startswith("~") or src_pl.name.startswith(".") or src_pl.suffix in (".part", ".tmp") or \
-                src_pl.stem.endswith("~"):  # for bibdesk
+        if (
+            src_pl.name.startswith("~")
+            or src_pl.name.startswith(".")
+            or src_pl.suffix in (".part", ".tmp")
+            or src_pl.stem.endswith("~")
+        ):  # for bibdesk
             logger.info("Ignored: %s" % src_pl.name)
             return
         if not src_pl.is_absolute():
@@ -1010,11 +1057,16 @@ class ChangeHandler(FileSystemEventHandler):
         """ チェック """
         # to_fmt = cls._validated_fmt(to_fmt=to_fmt, src_pl=src_pl)
         if src_pl.suffix is None or src_pl.suffix == "":
-            logger.error("Stop conversion because the indicated extension of source was wrong(file:%s)." % src_pl.name)
+            logger.error(
+                "Stop conversion because the indicated extension of source was wrong(file:%s)."
+                % src_pl.name
+            )
             return
         if dst_pl.suffix is None or dst_pl.suffix == "":
             logger.error(
-                "Stop conversion because the indicated extension of destination was wrong(file:%s)." % dst_pl.name)
+                "Stop conversion because the indicated extension of destination was wrong(file:%s)."
+                % dst_pl.name
+            )
             return
 
         # 下記不要？
@@ -1047,11 +1099,15 @@ class ChangeHandler(FileSystemEventHandler):
             """
             .pdfへの変換
             """
-            dst_pl = self.conv_manipulation_img(src_pl, dst_pl, do_trim=True, gray=gray)  # TODO: 現状ImgMagickの-trimでPDFもcropされている！！
+            dst_pl = self.conv_manipulation_img(
+                src_pl, dst_pl, do_trim=True, gray=gray
+            )  # TODO: 現状ImgMagickの-trimでPDFもcropされている！！
             dst_pl = self._crop_all_fmt(dst_pl, dst_pl)
             # FIXME: 下記fixは不要なのでは。
             dst_pl = self.fix_eps(dst_pl)
-        elif src_pl.suffix in (".ppt", ".pptx", ".odp") and not src_pl.name.startswith("~"):
+        elif src_pl.suffix in (".ppt", ".pptx", ".odp") and not src_pl.name.startswith(
+            "~"
+        ):
             """ Slide Conversion """
             self.mgr_conv_slide(src_pl, dst_pl, gray=gray)
         elif dst_pl.suffix == ".md" and src_pl.name.endswith("_pdc"):
@@ -1079,9 +1135,15 @@ class ChangeHandler(FileSystemEventHandler):
             logger.info("Copied %s to %s" % (src_pl, dst_pl))
         elif src_pl.suffix in self._ext_pluntuml:
             self.conv_plantuml(src_pl=src_pl, dst_pl=dst_pl)
-        elif src_pl.name.endswith("_mermaid") and src_pl.suffix == ".md" or src_pl.suffix == ".mmd":
+        elif (
+            src_pl.name.endswith("_mermaid")
+            and src_pl.suffix == ".md"
+            or src_pl.suffix == ".mmd"
+        ):
             print("[Info] Mermaid conversion:%s" % src_pl)
-            self.conv_mermaid_with_crop(src_pl=src_pl, dst_pl=dst_pl, gray=gray)  # , to_fmt=to_fmt)
+            self.conv_mermaid_with_crop(
+                src_pl=src_pl, dst_pl=dst_pl, gray=gray
+            )  # , to_fmt=to_fmt)
         else:
             logger.info("未処理ファイル:%s" % src_pl)
 
@@ -1126,12 +1188,15 @@ class ChangeHandler(FileSystemEventHandler):
         """
         if self._monitors and not event.is_directory:
             # print(f"event.src_path:{self.is_nfd(event.src_path)},{event.src_path}")
-            for key_path, closure in self._monitors.items():  # type:Tuple[Path,Path],function
+            for (
+                key_path,
+                closure,
+            ) in self._monitors.items():  # type:Tuple[Path,Path],function
                 # print(f"key_path:{self.is_nfd(key_path[0].as_posix())},{event.src_path}")
                 """ Check the env. applied NDF or not"""
-                if platform.system() == 'Darwin':
+                if platform.system() == "Darwin":
                     """convert NDF to NFC """
-                    converted = unicodedata.normalize('NFC', key_path[0].as_posix())
+                    converted = unicodedata.normalize("NFC", key_path[0].as_posix())
                 else:
                     converted = key_path[0].as_posix()
                 if converted in event.src_path:  # 0: src_path, 1:dst_path
@@ -1151,7 +1216,7 @@ class ChangeHandler(FileSystemEventHandler):
         filepath = event.src_path
         filename = os.path.basename(filepath)
         print(self.msg_event_start)
-        logger.info('Created: %s' % filename)
+        logger.info("Created: %s" % filename)
         # cls.convert(src_file_apath=event.src_path, dst_dir_apath=cls._dst_pl, fmt_if_dst_without_ext=cls._to_fmt)  # , _to_fmt="png")
         self._road_balancer(event=event)
 
@@ -1160,14 +1225,14 @@ class ChangeHandler(FileSystemEventHandler):
         filepath = event.src_path
         filename = os.path.basename(filepath)
         print(self.msg_event_start)
-        logger.info('Modified:%s' % filename)
+        logger.info("Modified:%s" % filename)
         self._road_balancer(event=event)
 
     def on_deleted(self, event):
         filepath = event.src_path
         filename = os.path.basename(filepath)
         print("\n\n")
-        logger.info('Deleted:%s' % filename)
+        logger.info("Deleted:%s" % filename)
         # cls._road_balancer(event=event)
 
     def on_moved(self, event):
@@ -1181,7 +1246,7 @@ class ChangeHandler(FileSystemEventHandler):
         filepath = event.src_path
         filename = os.path.basename(filepath)
         print(self.msg_event_start)
-        logger.info('Moved:%s' % filename)
+        logger.info("Moved:%s" % filename)
         # cls.convert(src_file_apath=event.dest_path, dst_dir_apath=cls._dst_pl,fmt_if_dst_without_ext=cls._to_fmt)  # , _to_fmt="png")
         self._road_balancer(event=event)
 
@@ -1229,7 +1294,9 @@ class ChangeHandler(FileSystemEventHandler):
         elif isinstance(path, Path):
             path_pl = path
         else:
-            raise Exception("%s %s is not type str or Path(pathlib)" % (head_comment, path))
+            raise Exception(
+                "%s %s is not type str or Path(pathlib)" % (head_comment, path)
+            )
         """convert to absolute path"""
         if not path_pl.is_absolute():
             # if relative path, convert into absolute
@@ -1263,13 +1330,7 @@ class ChangeHandler(FileSystemEventHandler):
     #     except Exception as e:
     #         raise Exception("Current path: %s" % pathlib.Path.cwd())
 
-    def _get_monitor_func(self
-                          , src_pl
-                          , dst_pl
-                          , to_fmt_in
-                          , is_crop=True
-                          , gray=False
-                          ):
+    def _get_monitor_func(self, src_pl, dst_pl, to_fmt_in, is_crop=True, gray=False):
         """
         closure type func return
         :param src_pl:
@@ -1280,7 +1341,13 @@ class ChangeHandler(FileSystemEventHandler):
 
         # async def moniko(sel
         def moniko(path_updated_file):
-            self.convert(src_file_apath=path_updated_file, dst_dir_apath=dst_pl, to_fmt=to_fmt_in, is_crop=is_crop, gray=gray)
+            self.convert(
+                src_file_apath=path_updated_file,
+                dst_dir_apath=dst_pl,
+                to_fmt=to_fmt_in,
+                is_crop=is_crop,
+                gray=gray,
+            )
             # loop = asyncio.get_event_loop()
             # print(f'start:  {sec}秒待つよ')
             # await loop.run_in_executor(None, time.sleep, sec)
@@ -1289,12 +1356,7 @@ class ChangeHandler(FileSystemEventHandler):
         # return moniko(fname_str_or_pl=fname_str_or_pl, dst_dir_apath=dst_dir_apath, fmt_if_dst_without_ext=fmt_if_dst_without_ext, is_crop=is_crop)
         return moniko
 
-    def set_monitor(self
-                    , src_dir
-                    , dst_dir
-                    , to_fmt
-                    , gray=False
-                    , is_crop=True):
+    def set_monitor(self, src_dir, dst_dir, to_fmt, gray=False, is_crop=True):
         """
 
         :param src_dir:
@@ -1307,13 +1369,15 @@ class ChangeHandler(FileSystemEventHandler):
         src_pl = self._get_internal_deal_path(path=src_dir)
         dst_pl = self._get_internal_deal_path(path=dst_dir)
         to_fmt_in = self._validated_fmt(to_fmt=to_fmt, src_pl=src_pl)
-        self._monitors[src_pl, dst_pl] = self._get_monitor_func(src_pl=src_pl, dst_pl=dst_pl,
-                                                                to_fmt_in=to_fmt_in,
-                                                                is_crop=is_crop,
-                                                                gray=gray)
+        self._monitors[src_pl, dst_pl] = self._get_monitor_func(
+            src_pl=src_pl,
+            dst_pl=dst_pl,
+            to_fmt_in=to_fmt_in,
+            is_crop=is_crop,
+            gray=gray,
+        )
 
-    def start_monitors(self
-                       , sleep_sec=1):
+    def start_monitors(self, sleep_sec=1):
         """
         Start monitoring change on FS according to set
         :param sleep_sec:
@@ -1398,8 +1462,9 @@ def convert():
     if not src_pl.is_absolute():
         src_pl = Path(os.getcwd()).joinpath(sys.argv[1])
     print("fname_str_or_pl:%s" % src_pl)
-    ChangeHandler.convert(src_file_apath=src_pl.as_posix(), dst_dir_apath=sys.argv[2],
-                          to_fmt=sys.argv[3])  # , is_crop=sys.argv[4])
+    ChangeHandler.convert(
+        src_file_apath=src_pl.as_posix(), dst_dir_apath=sys.argv[2], to_fmt=sys.argv[3]
+    )  # , is_crop=sys.argv[4])
     print("END-END-END")
     # if len(sys.argv) == 5:
     #     print("[Debug] sys.argv:%s" % sys.argv)
@@ -1409,6 +1474,8 @@ def convert():
     #     sys.exit(1)
 
 
-if __name__ in '__main__':
-    ins = ChangeHandler(monitoring_dir="app_single/_fig_src", output_dir="app_single/figs")
+if __name__ in "__main__":
+    ins = ChangeHandler(
+        monitoring_dir="app_single/_fig_src", output_dir="app_single/figs"
+    )
     ins.convert()
