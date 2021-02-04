@@ -211,11 +211,34 @@ class ChangeHandler(FileSystemEventHandler):
     #         return True, res
     #     else:
     #         return False, ""
+    @staticmethod
+    def preprocess(src_pl: Path, dst_pl: Path):
+        """
+        各変換前に通すべき前処理。
+        :param src_pl:
+        :param dst_pl:
+        :return:
+        """
+        try:
+            # チェックPATH
+            src_pl = src_pl.resolve()
+            # check src path
+            if not src_pl.is_file():
+                msg = "dst_plはfile pathか"
+                raise FileNotFoundError(msg)
+            # abs. path
+            dst_pl = dst_pl.resolve()
+            # pathがあるか否か
+            if not dst_pl.is_file():
+                msg = "dst_plはfile pathか"
+                raise FileNotFoundError(msg)
+            return src_pl, dst_pl
+        except FileNotFoundError as e:
+            logger.error(e)
+            exit(1)
 
     @staticmethod
-    def util_manage_tmp_path(
-        path: Path, is_remove_tmp_str=False, suffix_new=None
-    ) -> Path:
+    def util_manage_tmp_path(path: Path, is_remove_tmp_str=False, suffix_new=None) -> Path:
         """
         「共通」したtempファイルpath返却
         :param is_remove_tmp_str: 付記したtmpを示す文字列を削除するか否か
@@ -558,8 +581,17 @@ class ChangeHandler(FileSystemEventHandler):
     #     return pl_dst_dir
 
     @classmethod
-    def conv_plantuml(cls, src_pl: Path, dst_pl: Path) -> None:
+    def conv_plantuml(cls, src_pl: Path, dst_pl: Path, need_preproc=False) -> None:
+        """PlantUML
+
+        :param src_pl:
+        :param dst_pl:
+        :param done_preproc:
+        :return:
+        """
         logger.debug("Start converting plantuml")
+        if need_preproc:
+            src_pl, dst_pl = cls.preprocess(src_pl, dst_pl)
         # to abs. path
         dst_pl = dst_pl.resolve()
         cls._cmd_plantuml = "plantuml"
@@ -596,13 +628,13 @@ class ChangeHandler(FileSystemEventHandler):
 
     @classmethod
     def mgr_conv_slide(
-        cls,
-        src_pl: Path,
-        dst_pl: Path,
-        gray,
-        is_crop=True,
-        via_ext=".png",
-        div_proc=(".pdf", ".eps"),
+            cls,
+            src_pl: Path,
+            dst_pl: Path,
+            gray,
+            is_crop=True,
+            via_ext=".png",
+            div_proc=(".pdf", ".eps"),
     ):
         """
         スライドの変換を制御するマネージャ
@@ -707,9 +739,9 @@ class ChangeHandler(FileSystemEventHandler):
         # if dst_pl.is_dir():
         #     dst_pl = dst_pl.joinpath(src_pl.name)  # if the path is dir, set src_filename_stem converted
         if (
-            src_pl.suffix in cls.imagic_fmt_conv_in
-            and dst_pl.suffix in cls.imagic_fmt_conv_out
-            and dst_pl.suffix not in (".pdf", ".eps")
+                src_pl.suffix in cls.imagic_fmt_conv_in
+                and dst_pl.suffix in cls.imagic_fmt_conv_out
+                and dst_pl.suffix not in (".pdf", ".eps")
         ):
             """
             - (in,out)共にpdfのcropはできない. epsのin?,outは可
@@ -785,10 +817,10 @@ class ChangeHandler(FileSystemEventHandler):
             path_epstopdf = shutil.which(path_epstopdf)
             path_pdftops = shutil.which(path_pdftops)
             if (
-                path_epstopdf is None
-                or path_epstopdf == ""
-                or path_pdftops is None
-                or path_pdftops == ""
+                    path_epstopdf is None
+                    or path_epstopdf == ""
+                    or path_pdftops is None
+                    or path_pdftops == ""
             ):
                 # Failed due to †commands are absent
                 logger.error(
@@ -912,11 +944,11 @@ class ChangeHandler(FileSystemEventHandler):
         cmd_name_mermaid = shutil.which(cmd_name_mermaid)
         if cmd_name_mermaid == "":
             msg = """
-                mermaidコマンドに当たるmmdcにpathが通っていません。
-                要PATH通し/インスト（下記参考）
-                npm install -g mermaid
-                npm install -g mermaid.cli
-                """
+                    mermaidコマンドに当たるmmdcにpathが通っていません。
+                    要PATH通し/インスト（下記参考）
+                    npm install -g mermaid
+                    npm install -g mermaid.cli
+                    """
             logger.error(msg)
             return
 
@@ -974,9 +1006,7 @@ class ChangeHandler(FileSystemEventHandler):
         )
 
     @classmethod
-    def conv_mermaid_with_crop(
-        cls, src_pl: Path, dst_pl: Path, gray=False
-    ) -> Tuple[bool, Path]:
+    def conv_mermaid_with_crop(cls, src_pl: Path, dst_pl: Path, gray=False) -> Tuple[bool, Path]:
         """
         mermaid markdownを変換 及び 特定のformatへ変換する
         :param src_pl:
@@ -1015,9 +1045,7 @@ class ChangeHandler(FileSystemEventHandler):
         else:
             return True, tmp_dst_pl
 
-    def convert(
-        self, src_file_apath, dst_dir_apath, to_fmt=".png", is_crop=True, gray=False
-    ):  # , _to_fmt="pdf"):
+    def convert(self, src_file_apath, dst_dir_apath, to_fmt=".png", is_crop=True, gray=False):  # , _to_fmt="pdf"):
         """
         ppt->pdf->cropping
         :param src_file_apath:
@@ -1032,11 +1060,12 @@ class ChangeHandler(FileSystemEventHandler):
         src_pl = Path(src_file_apath)  # pathlibのインスタンス
         """ 無視すべき拡張子 """
         if (
-            src_pl.name.startswith("~")
-            or src_pl.name.startswith(".")
-            or src_pl.suffix in (".part", ".tmp")
-            or src_pl.stem.endswith("~")
-        ):  # for bibdesk
+                src_pl.name.startswith("~")
+                or src_pl.name.startswith(".")
+                or src_pl.suffix in (".part", ".tmp")
+                or src_pl.stem.endswith("~")
+        ):
+            # for bibdesk
             logger.info("Ignored: %s" % src_pl.name)
             return
         if not src_pl.is_absolute():
@@ -1106,7 +1135,7 @@ class ChangeHandler(FileSystemEventHandler):
             # FIXME: 下記fixは不要なのでは。
             dst_pl = self.fix_eps(dst_pl)
         elif src_pl.suffix in (".ppt", ".pptx", ".odp") and not src_pl.name.startswith(
-            "~"
+                "~"
         ):
             """ Slide Conversion """
             self.mgr_conv_slide(src_pl, dst_pl, gray=gray)
@@ -1134,12 +1163,11 @@ class ChangeHandler(FileSystemEventHandler):
             shutil.copy(src_pl, dst_pl)
             logger.info("Copied %s to %s" % (src_pl, dst_pl))
         elif src_pl.suffix in self._ext_pluntuml:
+            """PlantUML
+            """
+            logger.debug("Start converting: plantUML")
             self.conv_plantuml(src_pl=src_pl, dst_pl=dst_pl)
-        elif (
-            src_pl.name.endswith("_mermaid")
-            and src_pl.suffix == ".md"
-            or src_pl.suffix == ".mmd"
-        ):
+        elif src_pl.name.endswith("_mermaid") and src_pl.suffix == ".md" or src_pl.suffix == ".mmd":
             print("[Info] Mermaid conversion:%s" % src_pl)
             self.conv_mermaid_with_crop(
                 src_pl=src_pl, dst_pl=dst_pl, gray=gray
@@ -1169,8 +1197,8 @@ class ChangeHandler(FileSystemEventHandler):
             return res
         else:
             msg = """
-            Mac: brew isntall ghostscript
-            """
+                Mac: brew isntall ghostscript
+                """
             logger.error(msg)
 
     @staticmethod
@@ -1189,8 +1217,8 @@ class ChangeHandler(FileSystemEventHandler):
         if self._monitors and not event.is_directory:
             # print(f"event.src_path:{self.is_nfd(event.src_path)},{event.src_path}")
             for (
-                key_path,
-                closure,
+                    key_path,
+                    closure,
             ) in self._monitors.items():  # type:Tuple[Path,Path],function
                 # print(f"key_path:{self.is_nfd(key_path[0].as_posix())},{event.src_path}")
                 """ Check the env. applied NDF or not"""
@@ -1419,7 +1447,6 @@ class ChangeHandler(FileSystemEventHandler):
         except Exception as e:
             raise Exception("Current path: %s" % Path.cwd())
 
-
 @classmethod
 def cli_watch():
     """
@@ -1431,7 +1458,6 @@ def cli_watch():
     :return:
     """
     pass
-
 
 def convert():
     """

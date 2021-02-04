@@ -2,11 +2,12 @@ from core import ChangeHandler
 
 o = ChangeHandler()
 
-dst_dir = "sample/fig_genだぱがぼ"
+src_dir = "fig_src"
+dst_dir = "fig_gen"
 
 # 監視１つ目: pptxをepsら画像へ
 o.set_monitor(
-    src_dir="sample/fig_srcぽぺび"
+    src_dir=src_dir
     , dst_dir=dst_dir
     # , fmt_if_dst_without_ext="png"
     # , to_fmt=".png"
