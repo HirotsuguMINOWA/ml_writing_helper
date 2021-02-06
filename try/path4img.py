@@ -1,3 +1,6 @@
+"""
+Pillowで対応する。不要。
+"""
 import pathlib
 import os
 from typing import Tuple
@@ -7,7 +10,6 @@ from PIL import Image
 
 class PathWithImg(pathlib.Path):
     """
-
     - ImageMagic変換用にサイズ指定のため、ソースで画像情報取得可能にする
     - Ref
         - https://stackoverflow.com/questions/29850801/subclass-pathlib-path-fails or zotero
