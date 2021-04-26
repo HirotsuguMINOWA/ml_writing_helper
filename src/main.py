@@ -334,7 +334,7 @@ class Converter:
             logger.error("Failed crop: %s" % src_pl)
             return False, None
 
-        if src_pl.suffix == dst_pl.suffix:
+        if src_pl.suffix.lower() == dst_pl.suffix.lower():
             return True, tmp_dst_pl
 
         """ Image conversion"""
@@ -707,7 +707,7 @@ class Monitor(FileSystemEventHandler):
         """
         # if not src_pl.exists():
         #     raise Exception(f"指定ファイルが存在しない:{src_pl.as_posix()}")
-        if do_trim and src_pl.suffix == dst_pl.suffix:
+        if do_trim and src_pl.suffix.lower() == dst_pl.suffix:
             logger.warning("ImageMagick変換において、Trim(Crop)付きで別Formatへ変換すると、Crop失敗する可能性あり")
         # # TODO: in,outのfmtの要チェック?いらんかも
         # conv_name = "convert"
@@ -736,7 +736,7 @@ class Monitor(FileSystemEventHandler):
         """
         下記は「Imageクラス」で画像データを処理を実施する
         """
-        if src_pl.suffix == ".pdf":
+        if src_pl.suffix.lower() == ".pdf":
             Converter.pdf2img(src_pl=src_pl, dst_pl=dst_pl)
         else:
             """ Conversion other than pdf """
@@ -744,7 +744,7 @@ class Monitor(FileSystemEventHandler):
             if do_trim:
                 dst_im = img_crop(image=dst_im)
 
-            if src_pl.suffix == dst_pl.suffix:
+            if src_pl.suffix.lower() == dst_pl.suffix.lower:
                 logger.info("同一拡張子なので画像変換はしません。trimは実施するかも")
                 return
 
@@ -933,7 +933,7 @@ class Monitor(FileSystemEventHandler):
                 )
                 break
 
-        if src_pl.suffix in (".pptx", ".ppt"):
+        if src_pl.suffix.lower() in (".pptx", ".ppt"):
             logger.warning(
                 msg="(Math) symbols may be VANISH!!!!. Please confirm generated product not to disappear symbols"
             )
@@ -975,7 +975,7 @@ class Monitor(FileSystemEventHandler):
         # if dst_pl.is_dir():
         #     dst_pl = dst_pl.joinpath(src_pl.name)  # if the path is dir, set src_filename_stem converted
         if (
-                src_pl.suffix in cls.imagic_fmt_conv_in
+                src_pl.suffix.lower() in cls.imagic_fmt_conv_in
                 and dst_pl.suffix in cls.imagic_fmt_conv_out
                 and dst_pl.suffix not in (".pdf", ".eps")
         ):
@@ -1161,7 +1161,7 @@ class Monitor(FileSystemEventHandler):
             if (
                     src_pl.name.startswith("~")
                     or src_pl.name.startswith(".")
-                    or src_pl.suffix in (".part", ".tmp")
+                    or src_pl.suffix.lower() in (".part", ".tmp")
                     or src_pl.stem.endswith("~")
             ):
                 # for bibdesk
@@ -1184,7 +1184,7 @@ class Monitor(FileSystemEventHandler):
 
             """ チェック """
             # to_fmt = cls._validated_fmt(to_fmt=to_fmt, src_pl=src_pl)
-            if src_pl.suffix is None or src_pl.suffix == "":
+            if src_pl.suffix is None or src_pl.suffix.lower() == "":
                 logger.error(
                     "Stop conversion because the indicated extension of source was wrong(file:%s)."
                     % src_pl.name
@@ -1212,7 +1212,7 @@ class Monitor(FileSystemEventHandler):
 
             ####### 拡張子毎に振り分け
             logger.info(f"src file ext is {src_pl.suffix}")
-            if src_pl.suffix in (".png", ".jpg", ".jpeg", ".ai", ".eps"):
+            if src_pl.suffix.lower() in (".png", ".jpg", ".jpeg", ".ai", ".eps"):
                 """Image Cropping and Conversion
                 - [条件] ImageMagicが対応しているFOrmatのみ. Only the format which corresponded to ImageMagick
                 - files entered in src_folder, converted into dst_pl which cropping. and conv to eps
@@ -1227,7 +1227,7 @@ class Monitor(FileSystemEventHandler):
                 # _ = self.conv_manipulation_img(src_pl=src_pl, dst_pl=dst_pl, do_trim=is_crop, gray=gray)
                 # _ = cls._conv_and_crop(src_pl=src_pl, dst_pl=dst_pl)
                 self.conv_manipulation_img(src_pl=src_pl, dst_pl=dst_pl, gray=gray)
-            elif src_pl.suffix in ".pdf":
+            elif src_pl.suffix.lower() in ".pdf":
                 """
                 .pdfへの変換
                 """
@@ -1237,7 +1237,7 @@ class Monitor(FileSystemEventHandler):
                 dst_pl = self._crop_all_fmt(src_pl, dst_pl)
                 # FIXME: 下記fixは不要なのでは。
                 # dst_pl = self.fix_eps(dst_pl)
-            elif src_pl.suffix in (".ppt", ".pptx", ".odp") and not src_pl.name.startswith(
+            elif src_pl.suffix.lower() in (".ppt", ".pptx", ".odp") and not src_pl.name.startswith(
                     "~"
             ):
                 """ Slide Conversion """
@@ -1254,7 +1254,7 @@ class Monitor(FileSystemEventHandler):
                 """
                 pass
 
-            elif src_pl.suffix == ".bib":  # and fmt_if_dst_without_ext == ".bib":
+            elif src_pl.suffix.lower() == ".bib":  # and fmt_if_dst_without_ext == ".bib":
                 """
                 .bibファイルのコピー
                 注意).bib.partが生成されるが、瞬間的に.bibになる。それを捉えて該当フォルダへコピーしている
@@ -1266,12 +1266,12 @@ class Monitor(FileSystemEventHandler):
                 shutil.copy(src_pl, dst_pl)
                 logger.info("Copied %s to %s" % (src_pl, dst_pl))
 
-            elif src_pl.suffix in self._ext_pluntuml:
+            elif src_pl.suffix.lower() in self._ext_pluntuml:
                 """PlantUML
                 """
                 logger.debug("Start converting: plantUML")
                 Converter.plantuml2img(src_pl=src_pl, dst_pl=dst_pl)
-            elif src_pl.name.endswith("_mermaid") and src_pl.suffix == ".md" or src_pl.suffix == ".mmd":
+            elif src_pl.name.endswith("_mermaid") and src_pl.suffix.lower() == ".md" or src_pl.suffix.lower() == ".mmd":
                 print("[Info] Mermaid conversion:%s" % src_pl)
                 Converter.conv_mermaid_with_crop(
                     src_pl=src_pl, dst_pl=dst_pl, gray=gray
