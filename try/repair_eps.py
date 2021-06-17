@@ -30,5 +30,5 @@ images = convert_from_path(tmp_path.as_posix())
 
 i = 0
 for image in images:
-    image.save('test{}.png'.format(i), 'png')
+    image.save('try2{}.png'.format(i), 'png')
     i += 1
