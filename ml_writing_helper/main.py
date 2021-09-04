@@ -65,7 +65,7 @@ wait_sec = 1
 # # 3.loggerにhandlerをセット
 # # --------------------------------
 # logger.addHandler(stream_handler)
-from img_crop import img_crop
+from ml_writing_helper.img_crop import img_crop
 
 
 # from logger_getter import get_logger
