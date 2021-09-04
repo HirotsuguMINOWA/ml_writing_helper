@@ -1,3 +1,6 @@
+"""
+- FIXME: 停止は、変換が終わった事を目視で確認し、手動で停止させる事が必要
+"""
 # Caution
 # Set src dir as source folder in projectPref.
 # You can import by "from core import ChangeHandler"
@@ -34,7 +37,8 @@ class AutoTester:
         :param excludes:
         :return:
         """
-        cls.main(sample=Path(sample), src=Path(src), dst=Path(dst), to_fmt=to_fmt, target_exts=target_exts, excludes=excludes)
+        cls.main(sample=Path(sample), src=Path(src), dst=Path(dst), to_fmt=to_fmt, target_exts=target_exts,
+                 excludes=excludes)
 
     @classmethod
     def start_monitoring(cls, src, dst, to_fmt):
@@ -67,7 +71,10 @@ class AutoTester:
         return pattern
 
     @classmethod
-    def task_copy_src_files(cls, smpl: Path, src: Path, target_ext: List[str], excludes: List[str] = None):
+    def task_copy_src_files(cls, smpl: Path, src: Path,
+                            target_ext: List[str],
+                            excludes: List[str] = None,
+                            sleep_sec: int = 10):
         """Copy sample dir's file to src dir"""
 
         msg = "Copy Task"
@@ -89,7 +96,10 @@ class AutoTester:
                 print("copy %s to %s" % (fn.resolve().as_posix(), src.resolve().as_posix()))
                 shutil.copy(fn, src.as_posix())
         cls._complete_copy = True
-        print("End " + msg)
+        logger.info(f"End: {msg}")
+        # MEMO: ここでexit(0)しても、このスレッドが終わるだけで、別スレッドが終わらない。         # logger.info(f"Exit after Sleep({sleep_sec}sec)")
+        # time.sleep(sleep_sec)
+        # exit(0)
 
     # @staticmethod
     # def copy(a_file: Path, src: Path, excludes):
@@ -123,7 +133,8 @@ class AutoTester:
         logger.info("cp1 task_copy_src_files")
 
     @classmethod
-    def main(cls, sample: Path, src: Path, dst: Path, to_fmt: str, target_exts: List[str] = [], excludes: List[str] = [], maxsize: int = 10):
+    def main(cls, sample: Path, src: Path, dst: Path, to_fmt: str, target_exts: List[str] = [],
+             excludes: List[str] = [], maxsize: int = 10):
         logger.info("Main start")
         cls.init_dirs(src, dst)
         # files = sample.glob("*")
@@ -132,8 +143,10 @@ class AutoTester:
             e_task2 = executor.submit(cls.task_copy_src_files, sample, src, target_exts, excludes)
             #
             states = queue.Queue(maxsize=maxsize)
-            time.sleep(2)
+            # time.sleep(2)
             while True:
+                time.sleep(0.5)
+                """Taskが終了しようという仕組み。ただし、今は機能していない"""
                 if len(states.queue) >= maxsize and all(states.queue) and e_task2.done():
                     # print("Enter break")
                     e_task1.cancel()
