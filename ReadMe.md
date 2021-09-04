@@ -69,4 +69,8 @@ o.start_monitors()
    - pdfへはしない方がよい。crop失敗するから？
 2. `.png`化したファイルをmonitoringしているフォルダからMove&Restore。
 
-
+## PowerPointファイルから画像化(PDF含む)の画質が低い
+1. MacOS: LibreOfficeVanillaを使っている
+   1. このソフトは変換機能が除去されているらしい
+2. MacOS: LibreOfficeのアプリ検証が終わってない？
+   1. Homebrewからインスト後、アプリ検証終わってないまま利用すると画質が低い。

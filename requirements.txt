@@ -7,6 +7,7 @@ Pillow
 # python-magic
 # python-magic
 pdf2image
+loguru
 ###python-magic-bin
 #必須: brew install libmagic
 # for win::: python-magic-bin

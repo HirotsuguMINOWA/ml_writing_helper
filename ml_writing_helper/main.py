@@ -7,20 +7,22 @@
 ###############################################################
 
 import os
+import platform
+import shlex
 # import ftplib
 import shutil
 import sys
 import time
+import traceback
 import unicodedata  # for MacOS NDF
+from enum import Enum, auto
 from pathlib import Path
 from subprocess import check_output, STDOUT
-
-import platform
-import shlex
-from PIL import Image
-from enum import Enum, auto
-from pdf2image import convert_from_path
 from typing import Tuple
+
+from PIL import Image
+from loguru import logger
+from pdf2image import convert_from_path
 from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
 
@@ -64,9 +66,11 @@ wait_sec = 1
 # # --------------------------------
 # logger.addHandler(stream_handler)
 from img_crop import img_crop
-from logger_getter import get_logger
 
-logger = get_logger(__name__)
+
+# from logger_getter import get_logger
+
+# logger = get_logger(__name__)
 
 
 # --------------------------------
@@ -121,16 +125,16 @@ class Converter:
                 page.save(str(image_path), dst_pl.suffix)
 
     @classmethod
-    def plantuml2img(cls, src_pl: Path, dst_pl: Path, need_preproc=False) -> None:
+    def plantuml2img(cls, src_pl: Path, dst_pl: Path, need_pre_proc: bool = False) -> None:
         """PlantUML
 
         :param src_pl:
         :param dst_pl:
-        :param done_preproc:
+        :param need_pre_proc:
         :return:
         """
         logger.debug("Start converting plantuml")
-        if need_preproc:
+        if need_pre_proc:
             src_pl, dst_pl = cls.preprocess(src_pl, dst_pl)
         # to abs. path
         dst_pl = dst_pl.resolve()
@@ -457,9 +461,9 @@ class Monitor(FileSystemEventHandler):
         self._monitors = {}
         self._state = StateMonitor.wait
         self._ppaths_soffice = [Path(x) for x in self.paths_soffice]
-        if log_level_console is not None:
-            global logger
-            logger = get_logger(name=__name__, level_console=log_level_console)
+        # if log_level_console is not None:
+        #     global logger
+        #     logger = get_logger(name=__name__, level_console=log_level_console)
         # #
         # # 拡張子チェック
         # #
@@ -571,10 +575,10 @@ class Monitor(FileSystemEventHandler):
         """
         PDFとimage(png,jpeg,eps?)をcroppingする
         - 必要。なぜならImage系はPillowのImageクラスで扱えるが、PDFはファイル単位で操作しなくてはならない
-        :param p_src:
+        :param src_img_pl:
         :param dst_pl:
         :return: 変換後のpath名
-        :rtype: pathlib.Path
+        :rtype: Path
         """
         """ Calc path of base_dst_pl """
         # path_dst = pathlib.Path(dir_dst) / fname_str_or_pl.name
@@ -772,96 +776,6 @@ class Monitor(FileSystemEventHandler):
                 dst_im.save(dst_pl.as_posix())
             return dst_pl
 
-    # @classmethod
-    # # def _conv2img(cls, src_pl: Path, dst_pl: Path, fmt_if_dst_without_ext=None, decode="utf8") -> Path:
-    # def _conv2img(cls, src_pl: Path, dst_pl: Path, decode="utf8") -> Path:
-    #     """
-    #     [要廃棄]Image magick等による画像変換
-    #         - 代わりにimg_magickメソッドを使え
-    #     - FIXME: 要廃止。cropメソッドでImageMagickを使えるのなら、そちらでcropと変換の両方を実現できるから！！！！
-    #     - IN: jpeg, png, pdf
-    #     - OUT: jpeg, png, eps, pdf
-    #     :param src_pl:
-    #     :param dst_pl:
-    #     :param fmt_if_dst_without_ext: pl_dst_or_dirがdirの場合、出力先に生成するPATHのファイルの拡張子になる。
-    #     :return:
-    #     """
-    #
-    #     # Check src file exists
-    #     if not src_pl.exists():
-    #         raise Exception("Input image not exists:%s" % src_pl)
-    #     # dst_pl, _ = cls.util_update_dst_path(base_dst_pl=dst_pl, fname_str_or_pl=src_pl,
-    #     #                                      fmt=fmt_if_dst_without_ext)
-    #     # if dst_pl.is_dir():
-    #     #     dst_pl = dst_pl / src_pl.stem.join(fmt_if_dst_without_ext)
-    #     #################################################
-    #     # 同一FormatはIgnore
-    #     if src_pl.suffix == dst_pl.suffix:
-    #         logger.info("同一formatなので画像変換はせず、コピーだけ行う(srcとdstが同じでなければ)")
-    #         if src_pl != dst_pl:
-    #             shutil.copy(src_pl, dst_pl)
-    #         return dst_pl
-    #
-    #     need_conv = True
-    #     # cmd_conv = "pdftops"
-    #     # if src_pl.suffix == dst_pl.suffix:
-    #     #     if shutil.which(cmd_conv) != "":
-    #     #         logger.info("pdftopsで変換します")
-    #     #         cmd = "{cmd_conv} -eps {src} {dst}".format(
-    #     #             cmd_conv=cmd_conv,
-    #     #             src=src_pl,
-    #     #             dst=dst_pl
-    #     #         )
-    #     #         need_conv = False
-    #     #     else:
-    #     #         logger.info("pdf->epsへの変換はpdftopsコマンドを推奨。pdftopsコマンドへpathが通ってません")
-    #     if need_conv:
-    #         #     cmd_conv = "convert"
-    #         #     logger.info("ImageMagickで変換します")
-    #         #     if dst_pl.suffix == ".eps":
-    #         #         head = "eps2:"
-    #         #     else:
-    #         #         head = ""
-    #         #     cmd = "{cmd_conv} {src} {head}{dst}".format(
-    #         #         cmd_conv=cmd_conv
-    #         #         , head=head
-    #         #         , src=src_pl
-    #         #         , dst=dst_pl
-    #         #     )
-    #         # logger.debug("CMD(%s): %s" % (cmd_conv, cmd))
-    #         # tokens = shlex.split(cmd)
-    #         # # subprocess.run(tokens)
-    #         # output = check_output(tokens, stderr=STDOUT).decode(decode)
-    #         # logger.debug("Output: %s" % output)
-    #         dst_pl = cls.conv_manipulation_img(src_pl, dst_pl)
-    #     return dst_pl
-
-    # @classmethod
-    # def _conv2eps(cls, src_pl: Path, pl_dst_dir: Path, del_src=True) -> Path:
-    #     """
-    #
-    #     :param src_pl:
-    #     :param pl_dst_dir: directoryのみ
-    #     :param del_src: del src of as tmp
-    #     :return: 変換後のPATH
-    #     """
-    #     if src_pl.suffix not in (".jpeg", ".jpg", ".png", ".pdf"):
-    #         return
-    #     print("[Info] Convert to eps")
-    #
-    #     if pl_dst_dir.is_dir():
-    #         pl_dst_dir = pl_dst_dir.joinpath(src_pl.stem + ".eps")
-    #     # else:
-    #     #     raise Exception("ディレクトリ指定して下さい。")
-    #     elif pl_dst_dir.suffix != ".eps":
-    #         # raise Exception("出力ファイルの拡張子も.epsにして下さい")
-    #         print("[Warning]出力拡張子を.epsに変えました")
-    #         pl_dst_dir = pl_dst_dir.with_suffix(".eps")
-    #     pl_dst_dir = cls._conv2img(src_pl, pl_dst_dir, fmt_if_dst_without_ext="png")
-    #     if del_src:
-    #         src_pl.unlink()
-    #     return pl_dst_dir
-
     @classmethod
     def mgr_conv_slide(
             cls,
@@ -891,7 +805,7 @@ class Monitor(FileSystemEventHandler):
             #   [Warning] スライドにはPowerPoint形式(.pptx)に変換して使ってください。
             #   """
             # # print(warn)
-            logger.warning(f".ppt(x)/.odpから{div_proc}への変換は%s経由で変換します。" % via_ext)
+            logger.warning(f".ppt(x)/.odpから{div_proc}への変換は{via_ext}経由で変換します。")
             # 他のフォーマット経由で変換する
             is_mediate = True
             dst_tmp_pl = dst_pl.parent.joinpath(dst_pl.stem + "_tmp" + via_ext)
@@ -934,9 +848,7 @@ class Monitor(FileSystemEventHandler):
                 break
 
         if src_pl.suffix.lower() in (".pptx", ".ppt"):
-            logger.warning(
-                msg="(Math) symbols may be VANISH!!!!. Please confirm generated product not to disappear symbols"
-            )
+            logger.warning("(Math) symbols may be VANISH!!!!. Please confirm generated product not to disappear symbols")
         # output = cls._run_cmd(cmd)
         output = cls._run_cmd(cmd, "CMD(slide2img): ")
         # logger.debug("CMD(slide2img):" + cmd)
@@ -963,6 +875,7 @@ class Monitor(FileSystemEventHandler):
         - ほぼ、ImageMagickだけでよく、PDF-Outのみ別分岐処理となった
         :param src_pl:
         :param dst_pl:
+        :param gray:
         :return: 変換後のpath名
         :rtype: pathlib.Path
         """
@@ -1211,7 +1124,7 @@ class Monitor(FileSystemEventHandler):
             # os.chdir(dst_pl.parent)  # important!
 
             ####### 拡張子毎に振り分け
-            logger.info(f"src file ext is {src_pl.suffix}")
+            logger.debug(f"src file ext is {src_pl.suffix}")
             if src_pl.suffix.lower() in (".png", ".jpg", ".jpeg", ".ai", ".eps"):
                 """Image Cropping and Conversion
                 - [条件] ImageMagicが対応しているFOrmatのみ. Only the format which corresponded to ImageMagick
@@ -1294,7 +1207,7 @@ class Monitor(FileSystemEventHandler):
         #         tokens = shlex.split(cmd)
         #         subprocess.run(tokens)
         except Exception as e:
-            logger.error(e)
+            logger.error(f"{e}@{traceback.format_exc()}")
 
     @staticmethod
     def check_ghostscript(cmd="gs"):

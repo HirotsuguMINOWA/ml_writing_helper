@@ -2,7 +2,6 @@
 # Set src dir as source folder in projectPref.
 # You can import by "from core import ChangeHandler"
 # and need set working dir at prj root(ml_writing_helper)
-import os
 import queue
 import re
 import shutil
@@ -12,12 +11,16 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import List
 
-sys.path.append("../src")
-from main import Monitor, StateMonitor
+sys.path.append("../ml_writing_helper")
+from ml_writing_helper.main import Monitor, StateMonitor
+from loguru import logger
 
 
 class AutoTester:
     _monitor: Monitor = None
+
+    def __init__(self):
+        self._standby_monitoring = False
 
     @classmethod
     def start(cls, sample="fig_sample", src="fig_src", dst="fig_gen", to_fmt=".eps", target_exts=[], excludes=[]):
@@ -34,17 +37,18 @@ class AutoTester:
         cls.main(sample=Path(sample), src=Path(src), dst=Path(dst), to_fmt=to_fmt, target_exts=target_exts, excludes=excludes)
 
     @classmethod
-    def task1(cls, src, dst, to_fmt):
-        print("start task1: Monitoring dirs")
+    def start_monitoring(cls, src, dst, to_fmt):
+        print("Start start_monitoring: Start Monitoring dirs")
         cls._monitor = Monitor()
         cls._monitor.set_monitor(
             src_dir=src
             , dst_dir=dst
             , to_fmt=to_fmt
         )
+        cls._standby_monitoring = True
         print("スタンバイ monitoring")
         cls._monitor.start_monitors()
-        print("End task1")
+        print("End start_monitoring")
 
     @classmethod
     def pattener(cls, target_ext: List[str]) -> str:
@@ -63,10 +67,13 @@ class AutoTester:
         return pattern
 
     @classmethod
-    def task2(cls, smpl: Path, src: Path, target_ext: List[str], excludes: List[str]):
+    def task_copy_src_files(cls, smpl: Path, src: Path, target_ext: List[str], excludes: List[str] = None):
         """Copy sample dir's file to src dir"""
+
         msg = "Copy Task"
         print("Start " + msg)
+        while not cls._standby_monitoring:
+            time.sleep(1)
         # 　monitorに投げるファイルPATHの抽出
         if len(target_ext) > 0:
             pattern = cls.pattener(target_ext)
@@ -75,10 +82,11 @@ class AutoTester:
             files = [p for p in smpl.glob('*') if re.search('.' + pattern, str(p))]
         else:
             files = smpl.glob('**/*')
-        print("files:", list(files))
+        files = list(files)
+        print(f"files to copy: {files}")
         for fn in files:
-            if fn.suffix not in excludes:
-                print("copy %s to %s" % (fn, src.as_posix()))
+            if excludes is None or len(excludes) == 0 or fn.suffix not in excludes:
+                print("copy %s to %s" % (fn.resolve().as_posix(), src.resolve().as_posix()))
                 shutil.copy(fn, src.as_posix())
         cls._complete_copy = True
         print("End " + msg)
@@ -100,11 +108,11 @@ class AutoTester:
         :return:
         """
         msg = "Task2: Copy files to src dir"
-        print("start " + msg)
+        logger.info(f"start: {msg}")
         # src,dst dir内のfiles削除
 
         for a_path in (src, dst):
-            print(f"Init: {a_path}")
+            logger.info(f"Init: {a_path}")
             p_tmp = Path(a_path)
             files = p_tmp.glob('**/*')
             for a_file in files:
@@ -112,17 +120,17 @@ class AutoTester:
             # if os.path.exists(a_path):
             #     shutil.rmtree(a_path)
             # os.mkdir(a_path)
-        print("cp1 task2")
+        logger.info("cp1 task_copy_src_files")
 
     @classmethod
-    def main(cls, sample: Path, src: Path, dst: Path, to_fmt: str, target_exts: List[str] = [], excludes: List[str] = []):
-        print("main start")
+    def main(cls, sample: Path, src: Path, dst: Path, to_fmt: str, target_exts: List[str] = [], excludes: List[str] = [], maxsize: int = 10):
+        logger.info("Main start")
         cls.init_dirs(src, dst)
         # files = sample.glob("*")
         with ThreadPoolExecutor(max_workers=2, thread_name_prefix="thread") as executor:
-            e_task1 = executor.submit(cls.task1, src, dst, to_fmt)
-            e_task2 = executor.submit(cls.task2, sample, src, target_exts, excludes)
-            maxsize = 3
+            e_task1 = executor.submit(cls.start_monitoring, src, dst, to_fmt)
+            e_task2 = executor.submit(cls.task_copy_src_files, sample, src, target_exts, excludes)
+            #
             states = queue.Queue(maxsize=maxsize)
             time.sleep(2)
             while True:
@@ -146,11 +154,11 @@ class AutoTester:
 
                 # if i > 5000:
 
-            print("main end")
-            os._exit(0)  # スレッドを強制終了
+            logger.info("Main End")
+            exit(0)  # スレッドを強制終了
             # exit(0)
 
 
 if __name__ == "__main__":
     # AutoTester.start(target_exts=[".png"])
-    AutoTester.start(to_fmt=".eps", target_exts=[".puml"])
+    AutoTester.start(to_fmt=".eps", target_exts=[])
