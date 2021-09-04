@@ -12,7 +12,7 @@
 from ml_writing_helper.main import Monitor
 from pathlib import Path
 manu_path = Path(__file__).resolve().parent # manuscript_path as hiro_watcher
-o=ChangeHandler()
+o=Monitor()
 
 o.set_monitor(
  src_dir=manu_path.joinpath("fig_src")
