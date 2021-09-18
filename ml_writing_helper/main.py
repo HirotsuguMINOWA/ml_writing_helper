@@ -730,7 +730,7 @@ class Monitor(FileSystemEventHandler):
             return im
 
     @classmethod
-    def conv_manipulation_img(cls, src_pl, dst_pl, do_trim=True, gray=False, eps_ver=2) -> None:
+    def conv_manipulation_img(cls, src_pl, dst_pl, do_trim=True, gray=False, eps_ver=2) -> Path:
         """
         Manipulation (Convert/Crop/Gray) Image
         :param src_pl:
@@ -1187,12 +1187,13 @@ class Monitor(FileSystemEventHandler):
                 """
                 if dst_pl is None:
                     raise ValueError("Noneであるのはおかしい")
+                dst_pl = self._crop_all_fmt(src_pl, dst_pl)
                 dst_pl = self.conv_manipulation_img(
                     src_pl, dst_pl, do_trim=True, gray=gray
                 )  # TODO: 現状ImgMagickの-trimでPDFもcropされている！！
                 if dst_pl is None:
                     raise ValueError("Noneであるのはおかしい")
-                dst_pl = self._crop_all_fmt(src_pl, dst_pl)
+
                 # FIXME: 下記fixは不要なのでは。
                 # dst_pl = self.fix_eps(dst_pl)
             elif src_pl.suffix.lower() in (".ppt", ".pptx", ".odp") and not src_pl.name.startswith("~"):
