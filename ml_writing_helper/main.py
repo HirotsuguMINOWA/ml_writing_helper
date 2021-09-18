@@ -572,6 +572,45 @@ class Monitor(FileSystemEventHandler):
     #         return base_dst_pl, None
 
     @classmethod
+    def _crop_pdf_by_PDFCropMargin(cls, src_pl: Path, dst_pl: Path, margin=0) -> Path:
+        """
+        PDFをcropする。autocropも対応
+        -p: margin %
+        -s: input path
+        -o: output path
+        :param src_pl:
+        :param dst_pl:
+        :param margin:
+        :return:
+        """
+        from pdfCropMargins import crop
+
+        crop(["-p", f"{margin}", "-s", f"{src_pl}", "-o", f"{dst_pl}"])
+        return dst_pl
+
+    @classmethod
+    def _crop_pdf_by_pdfcrop(cls, src_pl: Path, dst_pl: Path, margin=0) -> Path:
+        """
+        PDFをcropする。autocropも対応
+        - 別CLIのpdfcropを使用する
+        :param src_pl:
+        :param dst_pl:
+        :param margin:
+        :return:
+        """
+        cmd_name = shutil.which("pdfcrop")
+        if cmd_name is None:
+            logger.error("pdfcrop not found")
+        cmd = "{cmd_name} {path_in} {path_out}".format(
+            cmd_name=cmd_name, path_in=src_pl, path_out=dst_pl
+        )
+        # rename cropped pdf(*_crop.pdf) to dst_pl
+        res_msg = cls._run_cmd(cmd, short_msg="Cropping CMD:")
+        if res_msg:
+            logger.info(res_msg)
+        return dst_pl
+
+    @classmethod
     def _crop_all_fmt(cls, src_img_pl: Path, dst_pl: Path) -> Path:
         """
         PDFとimage(png,jpeg,eps?)をcroppingする
@@ -602,16 +641,7 @@ class Monitor(FileSystemEventHandler):
              - pdfcrop: AutoCrop可能. 引数にdstは指定しない、指定したsrc名+"-crop"が生成される
              - http://would-be-astronomer.hatenablog.com/entry/2015/03/26/214633
             """
-            cmd_name = shutil.which("pdfcrop")
-            if cmd_name is None:
-                logger.error("pdfcrop not found")
-            cmd = "{cmd_name} {path_in} {path_out}".format(
-                cmd_name=cmd_name, path_in=src_img_pl, path_out=dst_pl
-            )
-            # rename cropped pdf(*_crop.pdf) to dst_pl
-            res_msg = cls._run_cmd(cmd, short_msg="Cropping CMD:")
-            if res_msg:
-                logger.info(res_msg)
+            cls._crop_pdf_by_PDFCropMargin(src_pl=src_img_pl, dst_pl=dst_pl)
             # if dst_pl.exists():
             #     dst_pl.unlink()
             # shutil.move(src=src_img_pl.with_name(src_img_pl.stem + "-crop.pdf"), dst=dst_pl)
