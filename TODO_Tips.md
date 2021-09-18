@@ -1,14 +1,18 @@
 # TODO
+
 1. [ ] 白黒出力モードのサポート
-    - 科研なんかで白黒で判断したい画像もあるため。船の小火をAIが火災と判断している率を%で表示するため。
+   - 科研なんかで白黒で判断したい画像もあるため。船の小火をAIが火災と判断している率を%で表示するため。
 2. [ ] 徐々にPillow/OpenCV+Numpyに置き換える事!!
    - ~~Pillowは2MB, OpenCVは約50MB. Pillowも少しなれるか。cropにもPillow使えるので問題ない？~~
    - Pillow: OpenCVと重複する。OpenCVになれる事にする。
-- [ ] PythonMagicなるライブラリがあるらしい。使う？
-    - `python-magic`
+3. [ ] PDFCropMarginをつかってみる
+   1. PythonからPDFの余白を除去できる
+      1. https://pypi.org/project/pdfCropMargins/
+- ~~PythonMagicなるライブラリがあるらしい。使う？~~
+  - `python-magic`
 - [ ] ~~.aiを.eps/.pngへ変換可能へ~~
 - [ ] mermaidを画像化
-- [x] 出力時の日時datetimeを併記
+- [X] 出力時の日時datetimeを併記
 - [ ] raise Exceptionを全て排除。エラーでいちいち留めない。例外処理を追加して
 - [ ] bin(soffice, imagemagick'convert and so on)の存在確認
 - [ ] pdfは透過png?が黒くなるためデフォルトはpng

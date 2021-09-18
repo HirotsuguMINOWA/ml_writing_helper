@@ -521,6 +521,7 @@ class Monitor(FileSystemEventHandler):
     @staticmethod
     def util_manage_tmp_path(path: Path, is_remove_tmp_str=False, suffix_new=None) -> Path:
         """
+        TODO: モジュールtempを使った方が良くないか？
         「共通」したtempファイルpath返却
         :param is_remove_tmp_str: 付記したtmpを示す文字列を削除するか否か
         :param path:
@@ -734,8 +735,8 @@ class Monitor(FileSystemEventHandler):
         # )
         # cls._run_cmd(cmd, "Convert by ImageMagic")
         # FIXME: 中間生成ファイルを変換しようとして失敗している模様
-        print("[Info_p] src:", src_pl.as_posix())
-        print("[Info_p] dst:", dst_pl.as_posix())
+        logger.debug(f"src: {src_pl.as_posix()}")
+        logger.debug(f"dst: {dst_pl.as_posix()}")
 
         """
         下記は「Imageクラス」で画像データを処理を実施する
@@ -756,14 +757,16 @@ class Monitor(FileSystemEventHandler):
                 if dst_im.mode in ("RGBA", "LA"):
                     """ 透過画像を解除? """
                     # https://pillow.readthedocs.io/en/stable/handbook/image-file-formats.html?highlight=eps#eps
-                    print(
-                        'Current figure mode "{}" cannot be directly saved to .eps and should be converted (e.g. to "RGB")'.format(
-                            dst_im.mode
-                        )
-                    )
+                    logger.warning(
+                        f'[Try conversion] Current figure mode "{dst_im.mode}" cannot be directly saved to .eps and should be converted (e.g. to "RGB")')
                     dst_im = cls.remove_transparency(dst_im)
                     # dst_im = dst_im[:, :, 0:2]
                     dst_im = dst_im.convert("RGB")
+                if dst_im.mode in ("RGBA", "LA"):
+                    logger.error(
+                        f'Failed: Current img mode "{dst_im.mode}" cannot be directly saved to .eps and tried to be converted (e.g. to "RGB")')
+                else:
+                    logger.info(f"Succeed? to RGB")
 
             if gray:
                 """ Convert to gray img """
@@ -774,7 +777,7 @@ class Monitor(FileSystemEventHandler):
                 dst_im.save(dst_pl.as_posix(), lossless=True)
             else:
                 dst_im.save(dst_pl.as_posix())
-            return dst_pl
+        return dst_pl
 
     @classmethod
     def mgr_conv_slide(
@@ -837,7 +840,7 @@ class Monitor(FileSystemEventHandler):
         """
         for p_soffice in cls._ppaths_soffice:  # type: Path
             if p_soffice.exists():
-                cmd = "'{path_soffice}' --headless --convert-to {dst_ext} --outdir '{out_dir}' '{path_src}'".format(
+                cmd = "'{path_soffice}' --headless --norestore --convert-to {dst_ext} --outdir '{out_dir}' '{path_src}'".format(
                     # cmd = "'{path_soffice}' --headless --convert-to {dst_ext} {path_src}".format(
                     path_soffice=p_soffice,
                     dst_ext=dst_pl.suffix[1:],  # eliminate first "."
@@ -848,7 +851,8 @@ class Monitor(FileSystemEventHandler):
                 break
 
         if src_pl.suffix.lower() in (".pptx", ".ppt"):
-            logger.warning("(Math) symbols may be VANISH!!!!. Please confirm generated product not to disappear symbols")
+            logger.warning(
+                "(Math) symbols may be VANISH!!!!. Please confirm generated product not to disappear symbols")
         # output = cls._run_cmd(cmd)
         output = cls._run_cmd(cmd, "CMD(slide2img): ")
         # logger.debug("CMD(slide2img):" + cmd)
@@ -1054,7 +1058,8 @@ class Monitor(FileSystemEventHandler):
             raise Exception(f"srcのpath指定が対応外のタイプ(f{type(a_path)})出す")
         return src_pl
 
-    def convert(self, src_file_apath, dst_dir_apath, to_fmt=".png", is_crop=True, gray=False):  # , _to_fmt="pdf"):
+    def convert(self, src_file_apath: Path, dst_dir_apath: Path, to_fmt=".png", is_crop=True,
+                gray=False):  # , _to_fmt="pdf"):
         """
         単一ファイル変換
         ppt->pdf->cropping
@@ -1085,7 +1090,11 @@ class Monitor(FileSystemEventHandler):
             del src_file_apath
             # src_file_apath = None  # 誤って参照しないように
 
-            tmp_dst = Path(dst_dir_apath)
+            if isinstance(dst_dir_apath, Path):
+                tmp_dst = dst_dir_apath
+            else:
+                tmp_dst = Path(dst_dir_apath)
+
             if tmp_dst.is_dir():
                 dst_pl = tmp_dst.joinpath(src_pl.stem + to_fmt)
             else:
@@ -1094,7 +1103,8 @@ class Monitor(FileSystemEventHandler):
             # dst_dir_apath = None  # Prevent Trouble
             # del to_fmt # 消すな. .bibコピー失敗するから. #FIXME: 要修正
             # to_fmt = None  # Prevent Trouble
-
+            if dst_pl is None:
+                raise ValueError("Noneであるのはおかしい")
             """ チェック """
             # to_fmt = cls._validated_fmt(to_fmt=to_fmt, src_pl=src_pl)
             if src_pl.suffix is None or src_pl.suffix.lower() == "":
@@ -1112,7 +1122,8 @@ class Monitor(FileSystemEventHandler):
 
             # preprocee - 前処理で解決
             src_pl, dst_pl = self.preprocess(src_pl=src_pl, dst_pl=dst_pl)
-
+            if dst_pl is None:
+                raise ValueError("Noneであるのはおかしい")
             # 下記不要？
             if not src_pl.exists() and not dst_pl.suffix == ".bib":
                 raise Exception("src path(1st-arg:%s)が見つかりません、訂正して下さい" % src_pl.as_posix())
@@ -1144,15 +1155,17 @@ class Monitor(FileSystemEventHandler):
                 """
                 .pdfへの変換
                 """
+                if dst_pl is None:
+                    raise ValueError("Noneであるのはおかしい")
                 dst_pl = self.conv_manipulation_img(
                     src_pl, dst_pl, do_trim=True, gray=gray
                 )  # TODO: 現状ImgMagickの-trimでPDFもcropされている！！
+                if dst_pl is None:
+                    raise ValueError("Noneであるのはおかしい")
                 dst_pl = self._crop_all_fmt(src_pl, dst_pl)
                 # FIXME: 下記fixは不要なのでは。
                 # dst_pl = self.fix_eps(dst_pl)
-            elif src_pl.suffix.lower() in (".ppt", ".pptx", ".odp") and not src_pl.name.startswith(
-                    "~"
-            ):
+            elif src_pl.suffix.lower() in (".ppt", ".pptx", ".odp") and not src_pl.name.startswith("~"):
                 """ Slide Conversion """
                 self.mgr_conv_slide(src_pl, dst_pl, gray=gray)
             elif dst_pl.suffix == ".md" and src_pl.name.endswith("_pdc"):
@@ -1185,7 +1198,7 @@ class Monitor(FileSystemEventHandler):
                 logger.debug("Start converting: plantUML")
                 Converter.plantuml2img(src_pl=src_pl, dst_pl=dst_pl)
             elif src_pl.name.endswith("_mermaid") and src_pl.suffix.lower() == ".md" or src_pl.suffix.lower() == ".mmd":
-                print("[Info] Mermaid conversion:%s" % src_pl)
+                logger.info(f"Mermaid conversion: {src_pl}")
                 Converter.conv_mermaid_with_crop(
                     src_pl=src_pl, dst_pl=dst_pl, gray=gray
                 )  # , to_fmt=to_fmt)
@@ -1267,6 +1280,7 @@ class Monitor(FileSystemEventHandler):
         if start:
             self._road_balancer(event=event)
             self._state = StateMonitor.wait
+        print("------------- End Event --------------------")
 
     def on_created(self, event):
         """

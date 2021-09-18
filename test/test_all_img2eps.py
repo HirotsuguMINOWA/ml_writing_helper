@@ -83,6 +83,7 @@ class AutoTester:
             time.sleep(1)
         # 　monitorに投げるファイルPATHの抽出
         if len(target_ext) > 0:
+            """Exportするextをえらぶ"""
             pattern = cls.pattener(target_ext)
             # print("pattern: " + pattern)
             # print("files_tmp", list(smpl.glob('*')))
@@ -96,7 +97,7 @@ class AutoTester:
                 print("copy %s to %s" % (fn.resolve().as_posix(), src.resolve().as_posix()))
                 shutil.copy(fn, src.as_posix())
         cls._complete_copy = True
-        logger.info(f"End: {msg}")
+        logger.info(f"End of Copy: {msg}")
         # MEMO: ここでexit(0)しても、このスレッドが終わるだけで、別スレッドが終わらない。         # logger.info(f"Exit after Sleep({sleep_sec}sec)")
         # time.sleep(sleep_sec)
         # exit(0)
@@ -135,7 +136,7 @@ class AutoTester:
     @classmethod
     def main(cls, sample: Path, src: Path, dst: Path, to_fmt: str, target_exts: List[str] = [],
              excludes: List[str] = [], maxsize: int = 10):
-        logger.info("Main start")
+        logger.info("Test Main: start")
         cls.init_dirs(src, dst)
         # files = sample.glob("*")
         with ThreadPoolExecutor(max_workers=2, thread_name_prefix="thread") as executor:
@@ -167,7 +168,7 @@ class AutoTester:
 
                 # if i > 5000:
 
-            logger.info("Main End")
+            logger.info("Test Main: End")
             exit(0)  # スレッドを強制終了
             # exit(0)
 
