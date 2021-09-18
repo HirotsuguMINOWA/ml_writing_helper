@@ -74,5 +74,6 @@ o.start_monitors()
    1. このソフトは変換機能が除去されているらしい
 2. その.pttxをLibreOfficeで開いても画質落ちていませんか？
    1. PowerPoint上では画質下がってなくても、LibreOfficeで開くと画質が下がっている場合があり、資料の作り直しで解決できるだろう。
+   2. PowerPointファイルをPowerPointでPNG化して、それを本スクリプトでeps化できる。
 3. MacOS: LibreOfficeのアプリ検証が終わってない？
    1. Homebrewからインスト後、アプリ検証終わってないまま利用すると画質が低い。
