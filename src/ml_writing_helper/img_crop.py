@@ -72,8 +72,8 @@ def img_crop(image: Image, debug=False) -> Image:
 
 
 if __name__ == '__main__':
-    # src_img = Path('/Users/hirots-m/Documents/PyCharmProjects/ml_writing_helper/sample/fig_sample/test_jpg.jpg')
-    # src_img = Path('/Users/hirots-m/Documents/PyCharmProjects/ml_writing_helper/sample/fig_sample/test_png.png')
+    # src_img = Path('/Users/hirots-m/Documents/PyCharmProjects/src/sample/fig_sample/test_jpg.jpg')
+    # src_img = Path('/Users/hirots-m/Documents/PyCharmProjects/src/sample/fig_sample/test_png.png')
     src_img = Path('/Users/hirots-m/Documents/PyCharmProjects/ml_writing_helper/sample/fig_sample/test_large.png')
     # dst_path = Path(Path.cwd().joinpath(src_img.name))
     src_im = Image.open(src_img)

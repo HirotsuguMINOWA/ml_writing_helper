@@ -18,54 +18,21 @@ import unicodedata  # for MacOS NDF
 from enum import Enum, auto
 from pathlib import Path
 from subprocess import check_output, STDOUT
-from typing import Tuple
+# from typing import Tuple
+import typing as ty
 
 from PIL import Image
 from loguru import logger
 from pdf2image import convert_from_path
 from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
-
+from img_crop import img_crop
 # import numpy as np
 # import matplotlib
 # import magic  # python-magic
 
 wait_sec = 1
-# coding:utf-8
 
-# # ログのライブラリ
-# import logging
-# from logging import getLogger, StreamHandler, Formatter
-#
-# # --------------------------------
-# # 1.loggerの設定
-# # --------------------------------
-# # loggerオブジェクトの宣言
-# logger = getLogger("LogTest")
-#
-# # loggerのログレベル設定(ハンドラに渡すエラーメッセージのレベル)
-# logger.setLevel(logging.DEBUG)
-#
-# # --------------------------------
-# # 2.handlerの設定
-# # --------------------------------
-# # handlerの生成
-# stream_handler = StreamHandler()
-#
-# # handlerのログレベル設定(ハンドラが出力するエラーメッセージのレベル)
-# stream_handler.setLevel(logging.DEBUG)
-#
-# # ログ出力フォーマット設定
-# # handler_format = Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-# # handler_format = Formatter('%(asctime)-15s - %(name)s - %(levelname)s - %(message)s')
-# handler_format = Formatter('%(asctime)s[%(levelname)s] %(message)s', datefmt='%H:%M:%S')
-# stream_handler.setFormatter(handler_format)
-#
-# # --------------------------------
-# # 3.loggerにhandlerをセット
-# # --------------------------------
-# logger.addHandler(stream_handler)
-from ml_writing_helper.img_crop import img_crop
 
 
 # from logger_getter import get_logger
@@ -229,7 +196,7 @@ class Converter:
 
     @classmethod
     # def conv_mermaid(cls, src_pl: Path, dst_pl: Path, to_fmt=".svg") -> Tuple[bool, Path]:
-    def conv_mermaid(cls, src_pl: Path, dst_pl: Path) -> Tuple[bool, Path]:
+    def conv_mermaid(cls, src_pl: Path, dst_pl: Path) -> ty.Tuple[bool, Path]:
         """
         Mermaid(*_mermaid.md) Conversion
         mermaid markdownを変換
@@ -311,7 +278,7 @@ class Converter:
         )
 
     @classmethod
-    def conv_mermaid_with_crop(cls, src_pl: Path, dst_pl: Path, gray=False) -> Tuple[bool, Path]:
+    def conv_mermaid_with_crop(cls, src_pl: Path, dst_pl: Path, gray=False) -> ty.Tuple[bool, Path]:
         """
         mermaid markdownを変換 及び 特定のformatへ変換する
         :param src_pl:
@@ -1392,7 +1359,7 @@ class Monitor(FileSystemEventHandler):
             return to_fmt
 
     @staticmethod
-    def _get_internal_deal_path(path: (str, Path), pl_cwd=Path.cwd(), head_comment=""):
+    def _get_internal_deal_path(path: ty.Tuple[str, Path], pl_cwd=Path.cwd(), head_comment=""):
         """
         src and base_dst_pl pathの読み込みを代理
         :param path:
