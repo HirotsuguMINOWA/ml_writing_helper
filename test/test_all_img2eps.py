@@ -4,7 +4,7 @@
 # Caution
 # Set src dir as source folder in projectPref.
 # You can import by "from core import ChangeHandler"
-# and need set working dir at prj root(ml_writing_helper)
+# and need set working dir at prj root(src)
 import queue
 import re
 import shutil

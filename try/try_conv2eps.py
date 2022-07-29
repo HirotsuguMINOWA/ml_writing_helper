@@ -4,7 +4,7 @@ PillowでPNGをepsに変換。
 """
 from PIL import Image
 
-image_png = '/Users/hirots-m/Documents/PyCharmProjects/ml_writing_helper/try2/res_comp_force.png'
+image_png = 'src/try2/res_comp_force.png'
 
 im = Image.open(image_png)
 print(im.mode)
