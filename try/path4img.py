@@ -79,7 +79,7 @@ class PathWithImg(pathlib.Path):
 
 
 if __name__ == '__main__':
-    im = PathWithImg("/Users/hirots-m/Documents/PyCharmProjects/ml_writing_helper/sample/fig_sample/test_jpg.jpg")
+    im = PathWithImg("src/sample/fig_sample/test_jpg.jpg")
     if not im.exists():
         raise Exception("ファイルが見つかりません")
     print(im.dpi)
