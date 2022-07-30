@@ -138,18 +138,18 @@ class Converter:
             logger.info("Finished with msg: %s" % res)
 
     # @classmethod
-    # def _conv_and_crop(cls, src_pl: Path, dst_pl: Path) -> Path:
-    #     """
-    #     イメージを変換して、cropする。
-    #     - Step by Stepな変換。もし、変換, cropの両方を_conv_with_crop_bothメソッドで行え
-    #     - (注意) img変換とcropを同時にimagemagickで実現する別methodを設けた
-    #     :param cls:
     #     :param src_pl:
     #     :param dst_pl:
     #     :param to_fmt:
     #     :return:
     #     """
-    #     need_conv = True
+    #     need_conv = Tru
+    # def _conv_and_crop(cls, src_pl: Path, dst_pl: Path) -> Path:
+    #     """
+    #     イメージを変換して、cropする。
+    #     - Step by Stepな変換。もし、変換, cropの両方を_conv_with_crop_bothメソッドで行え
+    #     - (注意) img変換とcropを同時にimagemagickで実現する別methodを設けた
+    #     :param cls:e
     #     # path_dst = cls.mgr_conv_img(src_pl=src_pl, dst_pl=dst_pl)  # conv both crop and imgconv stimulatelly
     #     # if path_dst:
     #     #     need_conv = False
