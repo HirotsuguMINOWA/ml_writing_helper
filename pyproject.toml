@@ -1,0 +1,28 @@
+[tool.poetry]
+name = "ml_writing_helper"
+version = "0.1.0"
+description = ""
+authors = ["H.MINOWA <minowa@gmail.com>"]
+
+[tool.poetry.dependencies]
+python = ">=3.9,<4.0"
+loguru = ">=0.5.3"
+pillow = ">=8.2.0"
+watchdog = ">=2.1.9"
+pdf2image = ">=1.16.0"
+strenum = ">=0.4.8"
+
+[tool.poetry.dev-dependencies]
+pytest = ">=5.2"
+pip-versions = ">=0.1.0"
+mypy = ">0.960"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+
+#[tool.poetry.scripts]
+# 特定のコマンドを実行出来るようにする
+#howoldru = "howoldru:main"
+#ml_writing_helper="src.ml_writing_helper.main:"
