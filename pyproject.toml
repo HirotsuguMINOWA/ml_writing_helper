@@ -16,6 +16,8 @@ strenum = ">=0.4.8"
 pytest = ">=5.2"
 pip-versions = ">=0.1.0"
 mypy = ">0.960"
+flake8 = ">=5.0.0"
+pylint = ">=2.17.0"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
