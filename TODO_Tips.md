@@ -1,5 +1,14 @@
 # TODO
-
+1. [ ] .bibファイル内にコピー時にurl欄を"\url{}"でラップする事。するとURL内で改行できる。
+   2. Ref: https://texfaq.org/FAQ-citeURL
+   ```latex
+   @misc{...,
+   ...,
+   howpublished = "\url{http://...}"
+   }
+   ```
+1. [ ] Folder(fig_src/figなど)なければ生成確認(yes/no)。→強制作成モード(CLIパラに指定する方法が)が必要。VSCodeではY/N選べない。
+2. [ ] .bibの同期において、.bibファイルがなければ、最初はCOPYする事
 1. [ ] 白黒出力モードのサポート
    - 科研なんかで白黒で判断したい画像もあるため。船の小火をAIが火災と判断している率を%で表示するため。
 2. [ ] 徐々にPillow/OpenCV+Numpyに置き換える事!!
