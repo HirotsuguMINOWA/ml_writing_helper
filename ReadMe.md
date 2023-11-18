@@ -46,6 +46,18 @@ o.start_monitors()
     - convert, matplotlib, matlab?の生成.epsはよくずれる...
 - Markdownには`.png`へ変換がよい
 
+# Usage(Sample)
+
+## Using VSCode
+実際に使う事を想定したサンプルコード
+
+1. `pip install dist/MLWritingHelper-0.0.1.tar.gz`をインストする
+2. 本プロジェクトのsampleコードと同じフォルダ構成を作る。
+3. VSCodeで下記をインストールする
+    1. `vscode-runner`
+4. VSCodeで本プロジェクトのsampleフォルダ内の`start_watcher.py`を開き、Alt+Ctrl+Nを押し、`vscode-runner`経由でpythonを実行する。
+5. sampleコード通りだと`fig_src`を監視し、そのフォルダに保存/更新したファイルを`.eps`形式に変換して`fig_gen`に保存される。
+6. 
 
 # 未整理
 
