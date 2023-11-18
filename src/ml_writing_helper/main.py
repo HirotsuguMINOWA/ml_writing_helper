@@ -18,8 +18,7 @@ import unicodedata  # for MacOS NDF
 from enum import Enum, auto
 from pathlib import Path
 from subprocess import check_output, STDOUT
-# from typing import Tuple
-import typing as ty
+from typing import Tuple, Final
 
 from PIL import Image
 from loguru import logger
@@ -27,12 +26,12 @@ from pdf2image import convert_from_path
 from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
 from .img_crop import img_crop
+
 # import numpy as np
 # import matplotlib
 # import magic  # python-magic
 
 wait_sec = 1
-
 
 
 # from logger_getter import get_logger
@@ -196,7 +195,7 @@ class Converter:
 
     @classmethod
     # def conv_mermaid(cls, src_pl: Path, dst_pl: Path, to_fmt=".svg") -> Tuple[bool, Path]:
-    def conv_mermaid(cls, src_pl: Path, dst_pl: Path) -> ty.Tuple[bool, Path]:
+    def conv_mermaid(cls, src_pl: Path, dst_pl: Path) -> Tuple[bool, Path]:
         """
         Mermaid(*_mermaid.md) Conversion
         mermaid markdownを変換
@@ -278,7 +277,7 @@ class Converter:
         )
 
     @classmethod
-    def conv_mermaid_with_crop(cls, src_pl: Path, dst_pl: Path, gray=False) -> ty.Tuple[bool, Path]:
+    def conv_mermaid_with_crop(cls, src_pl: Path, dst_pl: Path, gray=False) -> Tuple[bool, Path]:
         """
         mermaid markdownを変換 及び 特定のformatへ変換する
         :param src_pl:
@@ -377,11 +376,13 @@ class Monitor(FileSystemEventHandler):
     paths_soffice = [
         "soffice",  # pathが通っている前提の場合
         "/Applications/LibreOffice.app/Contents/MacOS/soffice",
+        r"C:\Program Files\LibreOffice\program\soffice.exe"
         # '/Applications/LibreOffice Vanilla.app/Contents/MacOS/soffice' # srcがないと言われる
     ]
-    _ppaths_soffice = [
+    _ppaths_soffice: Final[Path] = [
         Path("soffice"),
         Path("/Applications/LibreOffice.app/Contents/MacOS/soffice"),
+        Path(r"C:\Program Files\LibreOffice\program\soffice.exe")
     ]
     _ext_pluntuml = (".pu", ".puml")
 
@@ -658,7 +659,7 @@ class Monitor(FileSystemEventHandler):
     @staticmethod
     def _run_cmd(cmd: str, short_msg="", is_print=True) -> str:
         """
-        コマンド(CLI)の実行
+        コマンド(CLI)の実行Helper
         - TODO: Monitorクラスのこのメソッドは将来削除しろ。Converクラスへ移行済みなので消して良い
         :param cmd:
         :param is_print:
@@ -846,6 +847,8 @@ class Monitor(FileSystemEventHandler):
                     path_src=src_pl,
                 )
                 break
+        else:
+            logger.warning(f"LibreOfficeが見つかりません。探索したPATH:{cls._ppaths_soffice}")
 
         if src_pl.suffix.lower() in (".pptx", ".ppt"):
             logger.warning(
@@ -1359,7 +1362,7 @@ class Monitor(FileSystemEventHandler):
             return to_fmt
 
     @staticmethod
-    def _get_internal_deal_path(path: ty.Tuple[str, Path], pl_cwd=Path.cwd(), head_comment=""):
+    def _get_internal_deal_path(path: Tuple[str, Path], pl_cwd=Path.cwd(), head_comment=""):
         """
         src and base_dst_pl pathの読み込みを代理
         :param path:
