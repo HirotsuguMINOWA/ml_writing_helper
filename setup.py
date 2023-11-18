@@ -21,7 +21,8 @@ setup(
         ]
     },
     classifiers=[
-        'Programming Language :: Python :: 3.4',
+        'Programming Language :: Python :: 3.9',
     ],
-    package_data={'requirement': ['requirements.txt'], "poetry": ["poetry.toml"]},
+    # package_data={'requirement': ['requirements.txt'], "poetry": ["poetry.toml"]},
+    package_data={'requirement': ['requirements.txt']},
 )
