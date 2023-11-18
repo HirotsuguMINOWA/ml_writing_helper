@@ -26,7 +26,7 @@ from loguru import logger
 from pdf2image import convert_from_path
 from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
-from img_crop import img_crop
+from .img_crop import img_crop
 # import numpy as np
 # import matplotlib
 # import magic  # python-magic
