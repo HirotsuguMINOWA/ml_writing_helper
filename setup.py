@@ -8,7 +8,7 @@ def requirements_from_file(file_name):
 
 setup(
     name="MLWritingHelper",
-    version="0.0.1",
+    version="0.0.2",
     description="Helper library to write markup language of LaTeX and Markdown",
     author="Hirotsugu Minowa",
     packages=find_packages("src"),

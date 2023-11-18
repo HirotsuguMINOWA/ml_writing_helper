@@ -373,17 +373,17 @@ class Monitor(FileSystemEventHandler):
     imagic_fmt_conv_out = (".png", ".jpg", ".jpeg", ".png", ".eps", ".svg")
 
     # FIXME: 下記２つのsofficeのlistは要整理
-    paths_soffice = [
+    _paths_soffice = [
         "soffice",  # pathが通っている前提の場合
         "/Applications/LibreOffice.app/Contents/MacOS/soffice",
         r"C:\Program Files\LibreOffice\program\soffice.exe"
         # '/Applications/LibreOffice Vanilla.app/Contents/MacOS/soffice' # srcがないと言われる
     ]
-    _ppaths_soffice: Final[Path] = [
-        Path("soffice"),
-        Path("/Applications/LibreOffice.app/Contents/MacOS/soffice"),
-        Path(r"C:\Program Files\LibreOffice\program\soffice.exe")
-    ]
+
+    @classmethod
+    def _ppaths_soffice(cls) -> list[Path]:
+        return [Path(x) for x in cls._paths_soffice]
+
     _ext_pluntuml = (".pu", ".puml")
 
     # def __init__(cls
@@ -428,7 +428,7 @@ class Monitor(FileSystemEventHandler):
         self._to_fmt = None
         self._monitors = {}
         self._state = StateMonitor.wait
-        self._ppaths_soffice = [Path(x) for x in self.paths_soffice]
+        self._ppaths_soffice = [Path(x) for x in self._paths_soffice]
         # if log_level_console is not None:
         #     global logger
         #     logger = get_logger(name=__name__, level_console=log_level_console)
@@ -836,7 +836,7 @@ class Monitor(FileSystemEventHandler):
         :param dst_pl: ファイル/folderまでのPATH.場合分けが必要
         :return:
         """
-        for p_soffice in cls._ppaths_soffice:  # type: Path
+        for p_soffice in [Path(x) for x in cls._paths_soffice]:  # type: Path
             if p_soffice.exists():
                 cmd = "'{path_soffice}' --headless --norestore --convert-to {dst_ext} --outdir '{out_dir}' '{path_src}'".format(
                     # cmd = "'{path_soffice}' --headless --convert-to {dst_ext} {path_src}".format(
@@ -848,7 +848,7 @@ class Monitor(FileSystemEventHandler):
                 )
                 break
         else:
-            logger.warning(f"LibreOfficeが見つかりません。探索したPATH:{cls._ppaths_soffice}")
+            logger.warning(f"LibreOfficeが見つかりません。探索したPATH:{cls._paths_soffice}")
 
         if src_pl.suffix.lower() in (".pptx", ".ppt"):
             logger.warning(
