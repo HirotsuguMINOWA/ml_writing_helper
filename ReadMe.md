@@ -51,7 +51,10 @@ o.start_monitors()
    1. codeRUnner1.1.2
 2. Setting
    1. `.vscode/settings.json`
-3. Step 1 SetupStep 1-1. PlugIn”CodeRunner”Step 2 SettingsStep 2-1. .vscode/settings.json1
+3. Step 1 Setup
+   1. Step 1-1. PlugIn”CodeRunner(`formulahendry.code-runner`)”
+4. Step 2 Settings
+   1. Step 2-1. `.vscode/settings.json`
 
 `philfontaine.autolaunch`と組み合わせると自動で実行できる？
 
