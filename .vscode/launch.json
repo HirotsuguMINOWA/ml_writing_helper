@@ -1,0 +1,48 @@
+{
+    "configurations": [
+        {
+            "name": "Install by setup.py",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/setup.py",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "args": [
+                "install"
+            ]
+        },
+        {
+            "name": "sample-start_watcher For PDF",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/sample/start_watcher.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--ext",
+                "pdf"
+            ]
+        },
+        {
+            "name": "sample-start_watcher For PNG",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/sample/start_watcher.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--ext",
+                "png"
+            ]
+        },
+        {
+            "name": "sample-start_watcher For EPS",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/sample/start_watcher",
+            "console": "integratedTerminal",
+            "args": [
+                "--ext",
+                "eps"
+            ]
+        },
+    ]
+}
