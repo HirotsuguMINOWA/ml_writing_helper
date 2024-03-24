@@ -1,5 +1,11 @@
 # ML Writing Helper
 
+## Setup
+### Requirements
+Please install the following software before using this package.
+1. LibreOffice
+2. ImageMagick
+
 ## CLI(未実装)
 - 書式: `convert4ml src_path dst_dir to_fmt is_crop`
 
@@ -28,6 +34,13 @@ o.set_monitor(
 
 o.start_monitors()
 ```
+
+### Use on VSCode
+1. Setup
+   1. codeRUnner1.1.2
+2. Setting
+   1. `.vscode/settings.json`
+3. Step 1 SetupStep 1-1. PlugIn”CodeRunner”Step 2 SettingsStep 2-1. .vscode/settings.json1
 
 ## Caution
 
