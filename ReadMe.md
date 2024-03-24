@@ -53,6 +53,8 @@ o.start_monitors()
    1. `.vscode/settings.json`
 3. Step 1 SetupStep 1-1. PlugIn”CodeRunner”Step 2 SettingsStep 2-1. .vscode/settings.json1
 
+`philfontaine.autolaunch`と組み合わせると自動で実行できる？
+
 ## Caution
 
 ## 複数の連番ファイル(file-0.eps,file-1.eps,...)で出力される
