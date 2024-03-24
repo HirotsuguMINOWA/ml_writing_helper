@@ -1,5 +1,16 @@
 # ML Writing Helper
 
+# Summry
+
+
+# Function
+1. conversion
+2. Monitoring specific folders and copy if inside files are changed
+3. Crop
+3. Grayscale
+
+
+
 ## Setup
 ### Requirements
 Please install the following software before using this package.
