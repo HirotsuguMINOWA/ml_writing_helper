@@ -71,11 +71,8 @@ def img_crop(image: Image, debug=False) -> Image:
     return cropped
 
 
-if __name__ == '__main__':
-    # src_img = Path('/Users/hirots-m/Documents/PyCharmProjects/src/sample/fig_sample/test_jpg.jpg')
-    # src_img = Path('/Users/hirots-m/Documents/PyCharmProjects/src/sample/fig_sample/test_png.png')
-    src_img = Path('/Users/hirots-m/Documents/PyCharmProjects/ml_writing_helper/sample/fig_sample/test_large.png')
-    # dst_path = Path(Path.cwd().joinpath(src_img.name))
+def test_img_crop():
+    src_img = Path('sample/fig_sample/test_large.png')
     src_im = Image.open(src_img)
     convd_im = img_crop(src_im)
     convd_im.show()
