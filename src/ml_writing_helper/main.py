@@ -1058,7 +1058,10 @@ class Monitor(FileSystemEventHandler):
             raise Exception(f"srcのpath指定が対応外のタイプ(f{type(a_path)})出す")
         return src_pl
 
-    def convert(self, src_file_apath: Path, dst_dir_apath: Path, to_fmt=".png", is_crop=True,
+    def convert(self,
+                src_file_apath: Path,
+                dst_dir_apath: Path,
+                to_fmt=".png", is_crop=True,
                 gray=False):  # , _to_fmt="pdf"):
         """
         単一ファイル変換
@@ -1362,7 +1365,7 @@ class Monitor(FileSystemEventHandler):
             return to_fmt
 
     @staticmethod
-    def _get_internal_deal_path(path: Tuple[str, Path], pl_cwd=Path.cwd(), head_comment=""):
+    def _get_internal_deal_path(path: Tuple[str, Path], pl_cwd=Path.cwd(), head_comment="") -> Path:
         """
         src and base_dst_pl pathの読み込みを代理
         :param path:
@@ -1436,9 +1439,16 @@ class Monitor(FileSystemEventHandler):
         # return moniko(fname_str_or_pl=fname_str_or_pl, dst_dir_apath=dst_dir_apath, fmt_if_dst_without_ext=fmt_if_dst_without_ext, is_crop=is_crop)
         return moniko
 
-    def set_monitor(self, src_dir, dst_dir, to_fmt, gray=False, is_crop=True):
+    def set_monitor(self,
+                    src_dir,
+                    dst_dir,
+                    to_fmt,
+                    gray: bool = False,
+                    is_crop: bool = True,
+                    mk_dst_dir: bool = True):
         """
-
+        Set monitoring path
+        :param mk_dst_dir: Make dest dir if not exists
         :param src_dir:
         :param dst_dir:
         :param to_fmt:
@@ -1448,6 +1458,14 @@ class Monitor(FileSystemEventHandler):
         """
         src_pl = self._get_internal_deal_path(path=src_dir)
         dst_pl = self._get_internal_deal_path(path=dst_dir)
+        if mk_dst_dir and not dst_pl.exists():
+            try:
+                dst_pl.mkdir()
+                logger.info(f"Made dir:{dst_pl.as_posix()}")
+            except Exception as e:
+                logger.error(f"Failed to make dir:{dst_pl.as_posix()}")
+                raise e
+
         to_fmt_in = self._validated_fmt(to_fmt=to_fmt, src_pl=src_pl)
         self._monitors[src_pl, dst_pl] = self._get_monitor_func(
             src_pl=src_pl,
@@ -1543,16 +1561,15 @@ def convert():
     # print(args.accumulate(args.integers))
 
     # TODO: 下記argparseで書き直せ
-    # TODO: [Debug]ラインを消せ、if debugなら。
-    print("[Debug] sys.argv:%s" % sys.argv)
+    logger.debug("sys.argv:%s" % sys.argv)
     src_pl = Path(sys.argv[1])
     if not src_pl.is_absolute():
         src_pl = Path(os.getcwd()).joinpath(sys.argv[1])
-    print("fname_str_or_pl:%s" % src_pl)
+    logger.debug("fname_str_or_pl:%s" % src_pl)
     Monitor.convert(
         src_file_apath=src_pl.as_posix(), dst_dir_apath=sys.argv[2], to_fmt=sys.argv[3]
     )  # , is_crop=sys.argv[4])
-    print("END-END-END")
+    logger.debug("END-END-END")
     # if len(sys.argv) == 5:
     #     print("[Debug] sys.argv:%s" % sys.argv)
     #     ChangeHandler.convert(path_src=sys.argv[1], dir_dst=sys.argv[2], _to_fmt=sys.argv[3], is_crop=sys.argv[4])
