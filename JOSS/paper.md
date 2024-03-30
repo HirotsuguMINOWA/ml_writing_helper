@@ -58,7 +58,6 @@ The software is a way to alleviate some of the burdensome problems of writing pa
 
 
 : Comparison to word processors \label{table:word_processors} 
-<!-- []{label="table:word_processors"} -->
 
 | Func \textbackslash Product | MS(Microsoft)-Word                              | Other(General) Word Processor                                 | Conventional LaTeX                                  | LaTeX with MLWritingHelper |
 | --------------------------- | ----------------------------------------------- | ------------------------------------------------------------- | --------------------------------------------------- | -------------------------- |
