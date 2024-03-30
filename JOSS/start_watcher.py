@@ -14,11 +14,11 @@ o.set_monitor(
 )
 
 # Copy English bib file
-o.set_monitor(
-    src_dir="/Users/hirots-m/Documents/BibTex-mine4EN",
-    dst_dir=manuscript_root.joinpath("bib"),
-    to_fmt=".bib",
-)
+# o.set_monitor(
+#     src_dir="/Users/hirots-m/Documents/BibTex-mine4EN",
+#     dst_dir=manuscript_root.joinpath("bib"),
+#     to_fmt=".bib",
+# )
 
 # Start monitoring target folders
 o.start_monitors()
