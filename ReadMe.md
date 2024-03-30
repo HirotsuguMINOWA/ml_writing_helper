@@ -60,10 +60,16 @@ Please install the following software before using this package.
 ### Use on VSCode
 
 1. Step 1 Setup
-    1. Step 1-1. PlugIn "CodeRunner(`formulahendry.code-runner`)"
+    1. Install PlugIn "CodeRunner(`formulahendry.code-runner`)"
 2. Step 2 Settings
-    1. Step 2-1. setup path of python interpreter @ `.vscode/settings.json`
-
+    1. Setup path of python interpreter @ `.vscode/settings.json`
+      ```.vscode/settings.json
+      {
+        "code-runner.executorMap": {
+          "python": "/Users/YOUR_USER_ID/pyenv/ml_writing_helper/bin/python",
+        },
+      }
+      ```
 - Autorun if combines with `philfontaine.autolaunch`?
 
 # Troubleshooting / Tips
