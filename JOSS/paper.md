@@ -1,13 +1,11 @@
 ---
-title: 'ML Writing Helper: Tool boosts up writing by scientist and engineer'
+title: 'ML Writing Helper: Tool elucidates writing performance and boosts up writing for scientist and engineer'
 tags:
   - LaTeX
   - Markdown
   - HTML
   - Markup Language
   - engineering
-  - scientist
-  - engineer
   - Python
 authors:
   - name: Hirotsugu MINOWA
