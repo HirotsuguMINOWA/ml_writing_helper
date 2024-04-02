@@ -4,10 +4,15 @@
 
 # Function
 
-1. conversion
-2. Monitoring specific folders and copy if inside files are changed
-3. Crop
-4. Grayscale
+1. Conversion
+   1. This can convert .pptx/.ppt files created by Power Point or LibreOffice into image files such as .pdf, .png, .eps and so on.
+1. Crop
+   1. This can remove outliner white space in the above conversion.
+1. Monitoring specific folders and copy if inside files are changed
+   1. This can copy files such as .bib file exported from document manager to target folder by detecting their change or export and so on.
+1. Grayscale
+   1. This can convert to gray scale image.
+
 
 ## Setup
 
@@ -17,13 +22,13 @@ Please install the following software before using this package.
 
 1. LibreOffice
 
-## CLI(未実装)
+## CLI(Not Implemented yet)
 
-- ~~書式: `convert4ml src_path dst_dir to_fmt is_crop`~~
+- ~~Format: `convert4ml src_path dst_dir to_fmt is_crop`~~
 
 ### watcher
 
-- ~~書式: `mlhelper.watch`~~
+- ~~Format: `mlhelper.watch`~~
 
 ## Usage
 
@@ -77,9 +82,9 @@ Please install the following software before using this package.
 ## eps over pdf for LaTeX
 
 - Reason: displays at proper size
-    - In pdf, `\linewidth` does not fit in the width (multiple columns) correctly, probably because the size of pdf is not correctly obtained.
-        - Compared to png, it is easier to use eps or .xbb, because the bounding box is not necessary to specify the size.
-    - In IEICE templates, the above size acquisition failure may be the reason why the image is normally output as an image and buried in the text.
+- In pdf, `\linewidth` does not fit in the width (multiple columns) correctly, probably because the size of pdf is not correctly obtained.
+  - Compared to png, it is easier to use eps or .xbb, because the bounding box is not necessary to specify the size.
+  - In IEICE templates, the above size acquisition failure may be the reason why the image is normally output as an image and buried in the text.
 
 ## **Cropping(White space remove) failed**
 
