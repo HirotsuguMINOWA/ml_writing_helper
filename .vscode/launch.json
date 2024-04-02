@@ -12,6 +12,17 @@
             ]
         },
         {
+            "name": "SDist by setup.py",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/setup.py",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "args": [
+                "sdist"
+            ]
+        },
+        {
             "name": "sample-start_watcher For PDF",
             "type": "debugpy",
             "request": "launch",
