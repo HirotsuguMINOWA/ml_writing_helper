@@ -1,110 +1,98 @@
 # ML Writing Helper
 
-# Summary
-
-# Function
-
-1. Conversion
-   1. This can convert .pptx/.ppt files created by Power Point or LibreOffice into image files such as .pdf, .png, .eps and so on.
-1. Crop
-   1. This can remove outliner white space in the above conversion.
-1. Monitoring specific folders and copy if inside files are changed
-   1. This can copy files such as .bib file exported from document manager to target folder by detecting their change or export and so on.
-1. Grayscale
-   1. This can convert to gray scale image.
-
-
-## Setup
-
-### Requirements
-
-Please install the following software before using this package.
-
-1. LibreOffice
-
-## CLI(Not Implemented yet)
-
-- ~~Format: `convert4ml src_path dst_dir to_fmt is_crop`~~
+## CLI(未実装)
+- 書式: `convert4ml src_path dst_dir to_fmt is_crop`
 
 ### watcher
-
-- ~~Format: `mlhelper.watch`~~
+- 書式: `mlhelper.watch`
 
 ## Usage
 
-### Install
+```python
+from ml_writing_helper.main import Monitor
+from pathlib import Path
+manu_path = Path(__file__).resolve().parent # manuscript_path as hiro_watcher
+o=Monitor()
 
-1. Install requirements
-    1. LibreOffice
-2. `pip install -U git+https://github.com/HirotsuguMINOWA/ml_writing_helper.git`
+o.set_monitor(
+ src_dir=manu_path.joinpath("fig_src")
+ ,dst_dir=manu_path.joinpath("fig_gen")
+ ,to_fmt=".eps"
+)
 
-### Run at terminal
+o.set_monitor(
+  src_dir="/usr/<username>/Documents/BibTexExported"
+  ,dst_dir=manu_path
+  ,to_fmt=".bib"
+)
 
-1. `python [below code]`
-    ```python
-    from ml_writing_helper.main import Monitor
-    from pathlib import Path
-    manu_path = Path(__file__).resolve().parent # manuscript_path as hiro_watcher
-    o=Monitor()
+o.start_monitors()
+```
 
-    o.set_monitor(
-     src_dir=manu_path.joinpath("fig_src")
-     ,dst_dir=manu_path.joinpath("fig_gen")
-     ,to_fmt=".eps"
-    )
+## Caution
 
-    o.set_monitor(
-      src_dir="/usr/<username>/Documents/BibTexExported"
-      ,dst_dir=manu_path
-      ,to_fmt=".bib"
-    )
+## 複数の連番ファイル(file-0.eps,file-1.eps,...)で出力される
+- 解決方法: 1頁目以外非表示にする(@powerpointで確認)
+  - スライド(PowerPoint/odp too?)もLibreOffice 6.3.4?から1頁目以外も変換後pdfに含まれるようになってしまったので、
+  - .epsによく起こりがち？
 
-    o.start_monitors()
-    ```
+## 注意@Design
 
-### Use on VSCode
+- LaTeXには`.eps`
+  - 現在, pdfはcropができてない。cropできるならpdfの方がよいかも。
+  - eps変換は画質劣化が生じる。pdfからの変換
+  - epsズレ
+    - eps2pdf, pdf2psコマンドでrepairするmethod設けている。
+    - convert, matplotlib, matlab?の生成.epsはよくずれる...
+- Markdownには`.png`へ変換がよい
 
-1. Step 1 Setup
-    1. Install PlugIn "CodeRunner(`formulahendry.code-runner`)"
-2. Step 2 Settings
-    1. Setup path of python interpreter @ `.vscode/settings.json`
-      ```.vscode/settings.json
-      {
-        "code-runner.executorMap": {
-          "python": "/Users/YOUR_USER_ID/pyenv/ml_writing_helper/bin/python",
-        },
-      }
-      ```
-- Autorun if combines with `philfontaine.autolaunch`?
+# Usage(Sample)
 
-# Troubleshooting / Tips
+## Using VSCode
+実際に使う事を想定したサンプルコード
 
-## eps over pdf for LaTeX
+1. `pip install dist/MLWritingHelper-0.0.1.tar.gz`をインストする
+2. 本プロジェクトのsampleコードと同じフォルダ構成を作る。
+3. VSCodeで下記をインストールする
+    1. `vscode-runner`
+4. VSCodeで本プロジェクトのsampleフォルダ内の`start_watcher.py`を開き、Alt+Ctrl+Nを押し、`vscode-runner`経由でpythonを実行する。
+5. sampleコード通りだと`fig_src`を監視し、そのフォルダに保存/更新したファイルを`.eps`形式に変換して`fig_gen`に保存される。
+6. 
 
-- Reason: displays at proper size
-- In pdf, `\linewidth` does not fit in the width (multiple columns) correctly, probably because the size of pdf is not correctly obtained.
-  - Compared to png, it is easier to use eps or .xbb, because the bounding box is not necessary to specify the size.
-  - In IEICE templates, the above size acquisition failure may be the reason why the image is normally output as an image and buried in the text.
+# Development
 
-## **Cropping(White space remove) failed**
+## Setup
 
-### Cause
+- poetryを利用
+    - `poetry install`
 
-1. Invisible frame in the target image
+# 未整理
 
-## Slide-to-Img conversion failed
+- epsへの変換はpdfからする事
+  - pngからepsへ変換するとboudingbox取得失敗する？みたい
 
-### Cause
+## LaTeXにはpdfよりeps
+- 理由: 適切なサイズで表示される
+  - pdfでは、`\linewidth`で正しく幅(複数列)に収まらない,pdfのサイズが正しく取得できていないためと思われる。
+    - pngに比べbouindingboxの指定が不要bouindingboxは単なるサイズ指定ではないので、epsか.xbbを使う方が楽。
+  - IEICEのテンプレでは、上記サイズ取得の失敗のためか、普通に画像出力で、文字の中に埋もれた
 
-1. If you use format `pdf`, change to **`.png`**.
-    1. Current version fails to crop pdf files.
+# Troubleshooting
 
-## PowerPoint file to image(PDF included) has low quality
+## **Cropされない**
+- 見えない枠が対象画像にあるかと。
 
-1. MacOS: LibreOfficeVanilla is not verified?
-    1. This edition was removed the conversion function.
-2. is the image quality down when you open that .pttx in LibreOffice?
-    1. even if the image quality is not reduced on PowerPoint, the image quality may be reduced when opened in LibreOffice, which could be solved by reworking the document.
-    2. a PowerPoint file can be converted to PNG in PowerPoint and then converted to eps in this script.
-3. MacOS: LibreOffice application verification not finished?
-    1. after installing from Homebrew, if you use LibreOffice without completing the application validation, the image quality will be low.
+## スライドが正しく変換できてない
+- 手動で対応するしかない。
+1. スライドを**.png**へ。
+   - pdfへはしない方がよい。crop失敗するから？
+2. `.png`化したファイルをmonitoringしているフォルダからMove&Restore。
+
+## PowerPointファイルから画像化(PDF含む)の画質が低い
+1. MacOS: LibreOfficeVanillaを使っている
+   1. このソフトは変換機能が除去されているらしい
+2. その.pttxをLibreOfficeで開いても画質落ちていませんか？
+   1. PowerPoint上では画質下がってなくても、LibreOfficeで開くと画質が下がっている場合があり、資料の作り直しで解決できるだろう。
+   2. PowerPointファイルをPowerPointでPNG化して、それを本スクリプトでeps化できる。
+3. MacOS: LibreOfficeのアプリ検証が終わってない？
+   1. Homebrewからインスト後、アプリ検証終わってないまま利用すると画質が低い。
