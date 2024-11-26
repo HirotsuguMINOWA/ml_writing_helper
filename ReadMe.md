@@ -8,7 +8,7 @@ This package is a helper tool for writing documents and papers using Markup Lang
 
 ## Function
 
-1. Image insersion support 
+1. Image insertion support 
    1. This can convert .pptx/.ppt files created by PowerPoint or LibreOffice into image files such as .eps, .pdf, .png and so on.
 1. Cropping
    1. This can remove outline white space in the above conversion.
@@ -34,9 +34,7 @@ Please install the following software before using this package.
 
 - ~~Format: `mlhelper.watch`~~
 
-## Usage
-
-### Install
+## Install
 
 Install requirements
 1. LibreOffice
@@ -47,21 +45,28 @@ Install requirements
 2. this package:
    1. `pip install -U git+https://github.com/HirotsuguMINOWA/ml_writing_helper.git`
 
-### Run at terminal
 
+## Usage
+
+### Preparation
+
+- Make a rule file for support. 
+  - Save this code to ,for example, `start_watcher.py`
 1. `python [below code]`
     ```python
-    from ml_writing_helper.main import Monitor
+    from ml_writing_helper import Monitor
     from pathlib import Path
     manu_path = Path(__file__).resolve().parent # manuscript_path as hiro_watcher
     o=Monitor()
 
+    # Conversion .pptx in fig_src dir TO fig_gen dir.
     o.set_monitor(
      src_dir=manu_path.joinpath("fig_src")
      ,dst_dir=manu_path.joinpath("fig_gen")
-     ,to_fmt=".eps"
+     ,to_fmt=".eps" # .png, .pdf and so on.
     )
 
+    # Copy document manager(mendeley/zotero...) exported .bib is copied to manu_path
     o.set_monitor(
       src_dir="/usr/<username>/Documents/BibTexExported"
       ,dst_dir=manu_path
@@ -70,21 +75,27 @@ Install requirements
 
     o.start_monitors()
     ```
-
-### Use on VSCode
-
-1. Step 1 Setup
-    1. Install PlugIn "CodeRunner(`formulahendry.code-runner`)"
-2. Step 2 Settings
-    1. Setup path of python interpreter @ `.vscode/settings.json`
-      ```.vscode/settings.json
-      {
-        "code-runner.executorMap": {
-          "python": "/Users/YOUR_USER_ID/pyenv/ml_writing_helper/bin/python",
-        },
-      }
-      ```
-- Autorun if combines with `philfontaine.autolaunch`?
+   
+### Usage example from terminal
+1. Install this package.
+2. `python start_watcher.py`
+  
+### Usage example from Visual Studio SCode(VSC)
+1. Setup
+    1. Install PlugIn "CodeRunner(`formulahendry.code-runner`)" to VSC.
+2. Settings
+   1. Setup path of python interpreter @ `.vscode/settings.json`
+      - `.vscode/settings.json`
+        ```json
+        {
+          "code-runner.executorMap": {
+            "python": "/Users/YOUR_USER_ID/pyenv/ml_writing_helper/bin/python",
+          }
+        }
+        ```
+3. Run a rule file `start_watcher.py`
+   1. 'Cmd(Ctrl)+Opt(Alt)+N' to run `start_watcher.py`
+   2. Or autorun if combines with `philfontaine.autolaunch`?
 
 # Troubleshooting / Tips
 
