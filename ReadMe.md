@@ -1,13 +1,17 @@
 # ML Writing Helper
 
-# Summary
+## Summary
 
-# Function
+This package is a helper tool for writing documents and papers using Markup Language (ML) such as LaTeX, HTML, or Markdown.
 
-1. Conversion
-   1. This can convert .pptx/.ppt files created by Power Point or LibreOffice into image files such as .pdf, .png, .eps and so on.
-1. Crop
-   1. This can remove outliner white space in the above conversion.
+
+
+## Function
+
+1. Image insersion support 
+   1. This can convert .pptx/.ppt files created by PowerPoint or LibreOffice into image files such as .eps, .pdf, .png and so on.
+1. Cropping
+   1. This can remove outline white space in the above conversion.
 1. Monitoring specific folders and copy if inside files are changed
    1. This can copy files such as .bib file exported from document manager to target folder by detecting their change or export and so on.
 1. Grayscale
@@ -34,9 +38,14 @@ Please install the following software before using this package.
 
 ### Install
 
-1. Install requirements
-    1. LibreOffice
-2. `pip install -U git+https://github.com/HirotsuguMINOWA/ml_writing_helper.git`
+Install requirements
+1. LibreOffice
+   1. Windows10 or above: `winget install LibreOffice`
+   2. MacOS: `brew install --cask libreoffice`
+   3. Linux: `sudo apt-get install libreoffice`
+   4. Manual install...
+2. this package:
+   1. `pip install -U git+https://github.com/HirotsuguMINOWA/ml_writing_helper.git`
 
 ### Run at terminal
 
