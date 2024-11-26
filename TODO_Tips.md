@@ -1,4 +1,7 @@
 # TODO
+
+- [ ] 下位の階層に`fig_src`といった登録フォルダ名があれば、絶対PATH関係なく、そのフォルダにdest`fig_gen`を生成し、変換画像を保存するようにせよ
+  - ラボ教科書の階層構造でルール定義を容易にするため。
 1. [ ] .bibファイル内にコピー時にurl欄を"\url{}"でラップする事。するとURL内で改行できる。
    2. Ref: https://texfaq.org/FAQ-citeURL
    ```latex
@@ -19,6 +22,7 @@
       1. https://pypi.org/project/pdfCropMargins/
 - ~~PythonMagicなるライブラリがあるらしい。使う？~~
   - `python-magic`
+
 - [ ] ~~.aiを.eps/.pngへ変換可能へ~~
 - [ ] mermaidを画像化
 - [X] 出力時の日時datetimeを併記
