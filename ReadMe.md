@@ -48,8 +48,6 @@ Install requirements
 
 ## Usage
 
-![usage instruction gif](attachment/usage70.gif)
-
 ### Preparation
 
 - Make a rule file for support. 
