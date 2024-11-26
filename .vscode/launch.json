@@ -54,16 +54,6 @@
                 "--ext",
                 "eps"
             ]
-        },
-        {
-            "name": "build JOSS paper",
-            "type": "f5anything",
-            "request": "launch",
-            "command": "docker run --rm -it -v $PWD:/data -u $(id -u):$(id -g) openjournals/inara -o pdf,crossref JOSS/paper.md",
-            "terminalName": "Build JOSS paper",
-            "terminalIndex": -1,
-            "showTerminal": true,
-            "vscCommand": ""
-        },
+        }
     ]
 }
