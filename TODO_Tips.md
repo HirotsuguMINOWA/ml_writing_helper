@@ -1,4 +1,8 @@
 # TODO
+- Priority: High
+- Priority: Middle
+  - The .py files in fig_src folder will be run. The .py generated image file to the fig and its is converted to .eps into fig_gen
+- Priority: Low
 
 - [ ] 下位の階層に`fig_src`といった登録フォルダ名があれば、絶対PATH関係なく、そのフォルダにdest`fig_gen`を生成し、変換画像を保存するようにせよ
   - ラボ教科書の階層構造でルール定義を容易にするため。
