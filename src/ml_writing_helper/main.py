@@ -6,6 +6,7 @@
 
 ###############################################################
 
+import argparse
 import os
 import platform
 import shlex
@@ -18,13 +19,34 @@ import unicodedata  # for MacOS NDF
 from enum import Enum, auto
 from pathlib import Path
 from subprocess import check_output, STDOUT
-from typing import Tuple, Final
+from typing import Final
 
 from PIL import Image
 from loguru import logger
 from pdf2image import convert_from_path
 from watchdog.events import FileSystemEventHandler
-from watchdog.observers import Observer
+from watchdog.observers.polling import PollingObserver
+
+try:
+    from watchdog.observers.fsevents import FSEventsObserver
+except Exception:
+    FSEventsObserver = None
+
+try:
+    from watchdog.observers.inotify import InotifyObserver
+except Exception:
+    InotifyObserver = None
+
+try:
+    from watchdog.observers.kqueue import KqueueObserver
+except Exception:
+    KqueueObserver = None
+
+try:
+    from watchdog.observers.read_directory_changes import WindowsApiObserver
+except Exception:
+    WindowsApiObserver = None
+
 from .img_crop import img_crop
 
 # import numpy as np
@@ -32,6 +54,53 @@ from .img_crop import img_crop
 # import magic  # python-magic
 
 wait_sec = 1
+DEFAULT_OBSERVER_BACKEND = "polling"
+
+
+def _normalize_observer_backend(observer_backend: str) -> str:
+    return observer_backend.strip().lower().replace("-", "_")
+
+
+def _build_observer(observer_backend: str = DEFAULT_OBSERVER_BACKEND):
+    observer_backend = _normalize_observer_backend(observer_backend)
+    if observer_backend in ("poll", "polling"):
+        return PollingObserver()
+
+    system_name = platform.system()
+    if observer_backend in ("native", "auto", "os"):
+        if system_name == "Darwin":
+            if FSEventsObserver is not None:
+                return FSEventsObserver()
+            if KqueueObserver is not None:
+                return KqueueObserver()
+        elif system_name == "Linux":
+            if InotifyObserver is not None:
+                return InotifyObserver()
+        elif system_name == "Windows":
+            if WindowsApiObserver is not None:
+                return WindowsApiObserver()
+    elif observer_backend == "fsevents" and FSEventsObserver is not None:
+        return FSEventsObserver()
+    elif observer_backend == "kqueue" and KqueueObserver is not None:
+        return KqueueObserver()
+    elif observer_backend == "inotify" and InotifyObserver is not None:
+        return InotifyObserver()
+    elif observer_backend in ("windows", "windowsapi") and WindowsApiObserver is not None:
+        return WindowsApiObserver()
+
+    supported = ["polling", "native"]
+    if FSEventsObserver is not None:
+        supported.append("fsevents")
+    if KqueueObserver is not None:
+        supported.append("kqueue")
+    if InotifyObserver is not None:
+        supported.append("inotify")
+    if WindowsApiObserver is not None:
+        supported.append("windowsapi")
+    raise ValueError(
+        "Unsupported observer backend: %s. Available: %s"
+        % (observer_backend, ", ".join(supported))
+    )
 
 
 # from logger_getter import get_logger
@@ -194,8 +263,8 @@ class Converter:
     #     # return path_dst
 
     @classmethod
-    # def conv_mermaid(cls, src_pl: Path, dst_pl: Path, to_fmt=".svg") -> Tuple[bool, Path]:
-    def conv_mermaid(cls, src_pl: Path, dst_pl: Path) -> Tuple[bool, Path]:
+    # def conv_mermaid(cls, src_pl: Path, dst_pl: Path, to_fmt=".svg") -> tuple[bool, Path]:
+    def conv_mermaid(cls, src_pl: Path, dst_pl: Path) -> tuple[bool, Path | None] | None:
         """
         Mermaid(*_mermaid.md) Conversion
         mermaid markdownを変換
@@ -277,7 +346,7 @@ class Converter:
         )
 
     @classmethod
-    def conv_mermaid_with_crop(cls, src_pl: Path, dst_pl: Path, gray=False) -> Tuple[bool, Path]:
+    def conv_mermaid_with_crop(cls, src_pl: Path, dst_pl: Path, gray=False) -> tuple[bool, Path]:
         """
         mermaid markdownを変換 及び 特定のformatへ変換する
         :param src_pl:
@@ -391,14 +460,14 @@ class Monitor(FileSystemEventHandler):
     #              , output_dir=None
     #              , _to_fmt="png"
     #              , export_fmts=["png", "eps", "pdf"]):
-    def __init__(self, log_level_console=None):
+    def __init__(self, log_level_console=None, observer_backend: str = DEFAULT_OBSERVER_BACKEND):
         """[summary]
 
         Arguments:
             monitoring_dir {[type]} -- [description]
             _p_dst_dir {str} -- [description]
             export_fmts {list} -- 出力フォーマット。複数指定すると、その全てのフォーマットに出力。
-        
+
         Keyword Arguments:
             _to_fmt {str} -- [description] (default: {"png"})
         """
@@ -428,6 +497,7 @@ class Monitor(FileSystemEventHandler):
         self._to_fmt = None
         self._monitors = {}
         self._state = StateMonitor.wait
+        self._observer_backend = _normalize_observer_backend(observer_backend)
         self._ppaths_soffice = [Path(x) for x in self._paths_soffice]
         # if log_level_console is not None:
         #     global logger
@@ -444,7 +514,7 @@ class Monitor(FileSystemEventHandler):
         # TODO: 入力フォーマットか否か要チェック
 
     # @staticmethod
-    # def which(name) -> Tuple[bool, str]:
+    # def which(name) -> tuple[bool, str]:
     #     """
     #     which command wrapper on python
     #     :param name:
@@ -825,7 +895,7 @@ class Monitor(FileSystemEventHandler):
                 # croppingのみ
                 cls._crop_all_fmt(src_img_pl=dst_tmp_pl, dst_pl=dst_pl)
 
-        ### Del mediate file
+        # Del mediate file
         if is_mediate:
             dst_tmp_pl.unlink()
 
@@ -1137,7 +1207,7 @@ class Monitor(FileSystemEventHandler):
             #     raise Exception("dst_dir_apath(2nd-arg:%s)は、ファイルではなく、フォルダのPATHを指定して下さい" % dst_dir_apath)
             # os.chdir(dst_pl.parent)  # important!
 
-            ####### 拡張子毎に振り分け
+            # 拡張子毎に振り分け
             logger.debug(f"src file ext is {src_pl.suffix}")
             if src_pl.suffix.lower() in (".png", ".jpg", ".jpeg", ".ai", ".eps"):
                 """Image Cropping and Conversion
@@ -1174,7 +1244,7 @@ class Monitor(FileSystemEventHandler):
                 self.mgr_conv_slide(src_pl, dst_pl, gray=gray)
             elif dst_pl.suffix == ".md" and src_pl.name.endswith("_pdc"):
                 """PANDOCでpdf変換
-                
+
                 """
                 pass
                 # TODO: PdfにPWを印加できるように。必ずmethod化しろ、この処理は。
@@ -1255,7 +1325,7 @@ class Monitor(FileSystemEventHandler):
             for (
                     key_path,
                     closure,
-            ) in self._monitors.items():  # type:Tuple[Path,Path],function
+            ) in self._monitors.items():  # type:tuple[Path,Path],function
                 # print(f"key_path:{self.is_nfd(key_path[0].as_posix())},{event.src_path}")
                 """ Check the env. applied NDF or not"""
                 if platform.system() == "Darwin":
@@ -1365,7 +1435,7 @@ class Monitor(FileSystemEventHandler):
             return to_fmt
 
     @staticmethod
-    def _get_internal_deal_path(path: Tuple[str, Path], pl_cwd=Path.cwd(), head_comment="") -> Path:
+    def _get_internal_deal_path(path: tuple[str, Path], pl_cwd=Path.cwd(), head_comment="") -> Path:
         """
         src and base_dst_pl pathの読み込みを代理
         :param path:
@@ -1460,7 +1530,7 @@ class Monitor(FileSystemEventHandler):
         dst_pl = self._get_internal_deal_path(path=dst_dir)
         if mk_dst_dir and not dst_pl.exists():
             try:
-                dst_pl.mkdir()
+                dst_pl.mkdir(parents=True, exist_ok=True)
                 logger.info(f"Made dir:{dst_pl.as_posix()}")
             except Exception as e:
                 logger.error(f"Failed to make dir:{dst_pl.as_posix()}")
@@ -1475,7 +1545,7 @@ class Monitor(FileSystemEventHandler):
             gray=gray,
         )
 
-    def start_monitors(self, sleep_sec=1):
+    def start_monitors(self, sleep_sec=1, observer_backend: str | None = None):
         """
         Start monitoring change on FS according to set
         :param sleep_sec:
@@ -1483,7 +1553,13 @@ class Monitor(FileSystemEventHandler):
         """
         try:
             event_handler = self
-            observer = Observer()
+            backend = (
+                self._observer_backend
+                if observer_backend is None
+                else _normalize_observer_backend(observer_backend)
+            )
+            observer = _build_observer(backend)
+            logger.info(f"Using watchdog observer backend: {backend}")
             for src_pl, dst_pl in self._monitors.keys():  # type: Path,Path
 
                 # Check src path
@@ -1498,7 +1574,7 @@ class Monitor(FileSystemEventHandler):
                     while res not in ("y", "n", "Y", "N"):
                         res = input("make dir?(y/n)")
                     if res in ("y", "Y"):
-                        dst_pl.mkdir()
+                        dst_pl.mkdir(parents=True, exist_ok=True)
                     else:
                         raise Exception("[Error] dst_pathが存在しないので終了しました")
                 print("[Info] Set exporting Path:%s" % dst_pl)
@@ -1509,14 +1585,15 @@ class Monitor(FileSystemEventHandler):
             observer.start()
             # print("[Info] Start Monitoring")
             logger.info("Start Monitoring")
-            while True:
+            while observer.is_alive():
                 try:
                     time.sleep(sleep_sec)
                 except KeyboardInterrupt:
                     observer.stop()
-                observer.join()
+                    break
+            observer.join()
         except Exception as e:
-            raise Exception("Current path: %s" % Path.cwd())
+            raise Exception("Current path: %s" % Path.cwd()) from e
 
     @property
     def state(self):
@@ -1524,61 +1601,118 @@ class Monitor(FileSystemEventHandler):
         return self._state
 
 
-@classmethod
-def monitor():
-    """
-    監視を開始する
-    - CLI用Entrypoint
-    :param src_path:
-    :param dst_dir_apath:
-    :param _to_fmt:
-    :param is_crop:
-    :return:
-    """
-    pass
+def _available_observer_backends() -> list[str]:
+    backends = ["polling", "native"]
+    if FSEventsObserver is not None:
+        backends.append("fsevents")
+    if KqueueObserver is not None:
+        backends.append("kqueue")
+    if InotifyObserver is not None:
+        backends.append("inotify")
+    if WindowsApiObserver is not None:
+        backends.append("windowsapi")
+    return backends
 
 
-def convert():
-    """
-    CLI entry point:
-    :param src_path:
-    :param dst_dir_apath:
-    :param _to_fmt:
-    :param is_crop:
-    :return:
-    """
-    # import argparse
-    #
-    # parser = argparse.ArgumentParser(description='Markuplanguage(.md, .tex) Helper', epilog="詳しい説明")
-    # parser.add_argument('integers', metavar='N', type=int, nargs='+',
-    #                     help='an integer for the accumulator')
-    # parser.add_argument('--sum', dest='accumulate', action='store_const',
-    #                     const=sum, default=max,
-    #                     help='sum the integers (default: find the max)')
-    # parser.add_argument()
-    #
-    # args = parser.parse_args()
-    # print(args.accumulate(args.integers))
+def _build_cli_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description="Markuplanguage(.md, .tex) Helper",
+        epilog="watchdog observerは既定でpollingです。クラウドストレージの変更追従を優先します。",
+    )
+    subparsers = parser.add_subparsers(dest="command")
 
-    # TODO: 下記argparseで書き直せ
-    logger.debug("sys.argv:%s" % sys.argv)
-    src_pl = Path(sys.argv[1])
+    convert_parser = subparsers.add_parser("convert", help="convert a single file")
+    convert_parser.add_argument("src_path", help="source file path")
+    convert_parser.add_argument("dst_dir_apath", help="destination directory or file path")
+    convert_parser.add_argument("to_fmt", help="destination format such as png or .png")
+    convert_parser.add_argument("--gray", action="store_true", help="convert image to grayscale when supported")
+    convert_parser.add_argument("--no-crop", action="store_true", help="disable cropping during conversion")
+
+    monitor_parser = subparsers.add_parser("monitor", help="watch a directory and convert changed files")
+    monitor_parser.add_argument("src_dir", help="source directory to monitor")
+    monitor_parser.add_argument("dst_dir", help="destination directory")
+    monitor_parser.add_argument("to_fmt", help="destination format such as png or .png")
+    monitor_parser.add_argument("--gray", action="store_true", help="convert image to grayscale when supported")
+    monitor_parser.add_argument("--no-crop", action="store_true", help="disable cropping during conversion")
+    monitor_parser.add_argument(
+        "--observer",
+        default=DEFAULT_OBSERVER_BACKEND,
+        choices=_available_observer_backends(),
+        help="watchdog observer backend. polling is cloud-storage friendly; native is lighter on local file systems.",
+    )
+    monitor_parser.add_argument(
+        "--sleep-sec",
+        type=float,
+        default=1.0,
+        help="polling interval and main loop sleep time in seconds",
+    )
+    return parser
+
+
+def _parse_cli_args(argv=None) -> argparse.Namespace:
+    parser = _build_cli_parser()
+    args_in = list(sys.argv[1:] if argv is None else argv)
+    if args_in and args_in[0] not in ("convert", "monitor", "-h", "--help"):
+        args_in = ["convert", *args_in]
+    args = parser.parse_args(args_in)
+    if args.command is None:
+        parser.print_help()
+        raise SystemExit(1)
+    return args
+
+
+def _run_convert_cli(args: argparse.Namespace) -> int:
+    src_pl = Path(args.src_path)
     if not src_pl.is_absolute():
-        src_pl = Path(os.getcwd()).joinpath(sys.argv[1])
+        src_pl = Path.cwd().joinpath(src_pl)
     logger.debug("fname_str_or_pl:%s" % src_pl)
-    Monitor.convert(
-        src_file_apath=src_pl.as_posix(), dst_dir_apath=sys.argv[2], to_fmt=sys.argv[3]
-    )  # , is_crop=sys.argv[4])
+    monitor_ins = Monitor()
+    monitor_ins.convert(
+        src_file_apath=src_pl.as_posix(),
+        dst_dir_apath=args.dst_dir_apath,
+        to_fmt=args.to_fmt,
+        is_crop=not args.no_crop,
+        gray=args.gray,
+    )
     logger.debug("END-END-END")
-    # if len(sys.argv) == 5:
-    #     print("[Debug] sys.argv:%s" % sys.argv)
-    #     ChangeHandler.convert(path_src=sys.argv[1], dir_dst=sys.argv[2], _to_fmt=sys.argv[3], is_crop=sys.argv[4])
-    # else:
-    #     print('please specify 4 arguments', file=sys.stderr)
-    #     sys.exit(1)
+    return 0
 
-# if __name__ == "__main__":
-#     # ins = Monitor(
-#     #     monitoring_dir="app_single/_fig_src", output_dir="app_single/figs"
-#     # )
-#     # ins.convert()
+
+def _run_monitor_cli(args: argparse.Namespace) -> int:
+    monitor_ins = Monitor(observer_backend=args.observer)
+    monitor_ins.set_monitor(
+        src_dir=args.src_dir,
+        dst_dir=args.dst_dir,
+        to_fmt=args.to_fmt,
+        is_crop=not args.no_crop,
+        gray=args.gray,
+        mk_dst_dir=True,
+    )
+    monitor_ins.start_monitors(
+        sleep_sec=args.sleep_sec,
+        observer_backend=args.observer,
+    )
+    return 0
+
+
+def main(argv=None) -> int:
+    args = _parse_cli_args(argv=argv)
+    if args.command == "monitor":
+        return _run_monitor_cli(args)
+    return _run_convert_cli(args)
+
+
+def monitor(argv=None) -> int:
+    args_in = list(sys.argv[1:] if argv is None else argv)
+    if not args_in or args_in[0] != "monitor":
+        args_in = ["monitor", *args_in]
+    return main(args_in)
+
+
+def convert(argv=None) -> int:
+    logger.debug("sys.argv:%s" % sys.argv)
+    return main(argv)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
