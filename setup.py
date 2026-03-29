@@ -1,12 +1,14 @@
 from setuptools import setup, find_packages
 
 # with open('requirements.txt') as requirements_file:
-    # install_requirements = requirements_file.read().splitlines()
+# install_requirements = requirements_file.read().splitlines()
 
-def requirements_from_file(file_name):
+
+def requirements_from_file(file_name: str):
     return open(file_name).read().splitlines()
 
-setup(
+
+_ = setup(
     name="ml_writing_helper",
     version="0.0.3",
     description="Helper tool to insert created diagrams to markup language such as LaTeX, Markdown and HTML and so on.",
