@@ -10,7 +10,7 @@ def requirements_from_file(file_name: str):
 
 _ = setup(
     name="ml_writing_helper",
-    version="0.0.3",
+    version="0.0.4",
     description="Helper tool to insert created diagrams to markup language such as LaTeX, Markdown and HTML and so on.",
     author="Hirotsugu Minowa",
     packages=find_packages("src"),

@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ml_writing_helper"
+version = "0.0.4"
+description = "Helper tool to insert created diagrams to markup language such as LaTeX, Markdown and HTML and so on."
+authors = [
+    { name = "Hirotsugu Minowa" }
+]
+requires-python = ">=3.9"
+dependencies = [
+    "loguru",
+    "pdf2image",
+    "Pillow",
+    "StrEnum",
+    "watchdog",
+    "pdfCropMargins",
+]
+
+[project.optional-dependencies]
+dev = [
+    "click",
+    "build"
+]
+
+[project.scripts]
+convert4ml = "ml_writing_helper.main:convert"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
