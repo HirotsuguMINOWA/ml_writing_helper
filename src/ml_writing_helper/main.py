@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 
-
 # target_dir = "app_single/_fig_src"
 # _p_dst_dir = "app_single/figs"
 
@@ -16,15 +15,22 @@ import sys
 import time
 import traceback
 import unicodedata  # for MacOS NDF
+from collections.abc import Callable
 from enum import Enum, auto
 from pathlib import Path
-from subprocess import check_output, STDOUT
+from subprocess import STDOUT, check_output
 from typing import Final
-
+from pdfCropMargins import crop
 from PIL import Image
 from loguru import logger
 from pdf2image import convert_from_path
-from watchdog.events import FileSystemEventHandler
+from watchdog.events import (
+    DirMovedEvent,
+    FileMovedEvent,
+    FileSystemEvent,
+    FileSystemEventHandler,
+)
+from watchdog.observers.api import BaseObserver
 from watchdog.observers.polling import PollingObserver
 
 try:
@@ -53,15 +59,16 @@ from .img_crop import img_crop
 # import matplotlib
 # import magic  # python-magic
 
-wait_sec = 1
-DEFAULT_OBSERVER_BACKEND = "polling"
+wait_sec: int = 1
+DEFAULT_OBSERVER_BACKEND: Final[str] = "polling"
+MonitorCallback = Callable[[str], None]
 
 
 def _normalize_observer_backend(observer_backend: str) -> str:
     return observer_backend.strip().lower().replace("-", "_")
 
 
-def _build_observer(observer_backend: str = DEFAULT_OBSERVER_BACKEND):
+def _build_observer(observer_backend: str = DEFAULT_OBSERVER_BACKEND) -> BaseObserver:
     observer_backend = _normalize_observer_backend(observer_backend)
     if observer_backend in ("poll", "polling"):
         return PollingObserver()
@@ -120,11 +127,12 @@ class Converter:
     """1対1formatでの直接画像変換用クラス
     - フォーマット変換のclassmethodが主のクラス
     """
-    plantuml_fmt_out = (".png", ".svg", ".pdf", ".eps", ".html", ".txt", ".tex")
-    mermaid_fmt_in = (".svg", ".png", ".pdf")
+
+    plantuml_fmt_out: tuple[str, ...] = (".png", ".svg", ".pdf", ".eps", ".html", ".txt", ".tex")
+    mermaid_fmt_in: tuple[str, ...] = (".svg", ".png", ".pdf")
 
     @staticmethod
-    def _run_cmd(cmd: str, short_msg="", is_print=True) -> str:
+    def _run_cmd(cmd: str, short_msg: str = "", is_print: bool = True) -> str:
         """
         コマンド(CLI)の実行
         :param cmd:
@@ -144,7 +152,7 @@ class Converter:
         return output
 
     @classmethod
-    def pdf2img(cls, src_pl, dst_pl, dpi=150):
+    def pdf2img(cls, src_pl: Path, dst_pl: Path, dpi: int = 150) -> None:
         # PDF -> Image に変換（150dpi）
         pages = convert_from_path(src_pl.as_posix(), dpi)
 
@@ -329,7 +337,7 @@ class Converter:
             return True, dst_pl
 
     @classmethod
-    def conv_pandoc(cls, src: Path, dst: Path):
+    def conv_pandoc(cls, src: Path, dst: Path) -> None:
         """
         Pandocを用いた変換
         :param src:
@@ -346,7 +354,12 @@ class Converter:
         )
 
     @classmethod
-    def conv_mermaid_with_crop(cls, src_pl: Path, dst_pl: Path, gray=False) -> tuple[bool, Path]:
+    def conv_mermaid_with_crop(
+        cls,
+        src_pl: Path,
+        dst_pl: Path,
+        gray: bool = False,
+    ) -> tuple[bool, Path | None]:
         """
         mermaid markdownを変換 及び 特定のformatへ変換する
         :param src_pl:
@@ -387,7 +400,7 @@ class Converter:
 
 
 class Tool:
-    def pdfcrop(self, src_pl, dst_pl):
+    def pdfcrop(self, src_pl: Path, dst_pl: Path) -> None:
         """
 
         :param src_pl:
@@ -396,7 +409,7 @@ class Tool:
         """
         pass
 
-    def img_magick(self, src_pl, dst_pl):
+    def img_magick(self, src_pl: Path, dst_pl: Path) -> None:
         """
 
         :param src_pl:
@@ -405,13 +418,14 @@ class Tool:
         """
         pass
 
-    def _conv_raw_img(self, src_pl, dst_pl):
+    def _conv_raw_img(self, src_pl: Path, dst_pl: Path) -> None:
         """
         ラスタ型?(png, jpeg)の画像変換
         :param src_pl:
         :param dst_pl:
         :return:
         """
+        pass
 
 
 class StateMonitor(Enum):
@@ -428,9 +442,9 @@ class Monitor(FileSystemEventHandler):
         - check_external_sub_modules: this checkes exists and proposes to install sub modules. e.g.: gs, pdf2eps and so on.
     """
 
-    msg_event_start = "-------------------  Start Event  -------------------"
-    app_in = (".jpeg", ".jpg", ".png")  # 本アプリのinput拡張子
-    imagic_fmt_conv_in = (
+    msg_event_start: str = "-------------------  Start Event  -------------------"
+    app_in: tuple[str, ...] = (".jpeg", ".jpg", ".png")
+    imagic_fmt_conv_in: tuple[str, ...] = (
         ".png",
         ".jpg",
         ".jpeg",
@@ -438,29 +452,26 @@ class Monitor(FileSystemEventHandler):
         ".eps",
         ".svg",
         ".pdf",
-    )  # inにPDFはOK # TODO: 共通クラス化しろ
-    imagic_fmt_conv_out = (".png", ".jpg", ".jpeg", ".png", ".eps", ".svg")
+    )
+    imagic_fmt_conv_out: tuple[str, ...] = (".png", ".jpg", ".jpeg", ".png", ".eps", ".svg")
 
-    # FIXME: 下記２つのsofficeのlistは要整理
-    _paths_soffice = [
-        "soffice",  # pathが通っている前提の場合
+    _paths_soffice: list[str] = [
+        "soffice",
         "/Applications/LibreOffice.app/Contents/MacOS/soffice",
         r"C:\Program Files\LibreOffice\program\soffice.exe"
-        # '/Applications/LibreOffice Vanilla.app/Contents/MacOS/soffice' # srcがないと言われる
     ]
 
     @classmethod
     def _ppaths_soffice(cls) -> list[Path]:
         return [Path(x) for x in cls._paths_soffice]
 
-    _ext_pluntuml = (".pu", ".puml")
+    _ext_pluntuml: tuple[str, ...] = (".pu", ".puml")
 
-    # def __init__(cls
-    #              , monitoring_dir
-    #              , output_dir=None
-    #              , _to_fmt="png"
-    #              , export_fmts=["png", "eps", "pdf"]):
-    def __init__(self, log_level_console=None, observer_backend: str = DEFAULT_OBSERVER_BACKEND):
+    def __init__(
+        self,
+        log_level_console: str | int | None = None,
+        observer_backend: str = DEFAULT_OBSERVER_BACKEND,
+    ) -> None:
         """[summary]
 
         Arguments:
@@ -492,13 +503,13 @@ class Monitor(FileSystemEventHandler):
         #     cls._p_dst_dir = Path(output_dir)
         # else:
         #     cls._p_dst_dir = Path(monitoring_dir).joinpath(output_dir)
-        self._src_pl = None
-        self._dst_pl = None
-        self._to_fmt = None
-        self._monitors = {}
-        self._state = StateMonitor.wait
-        self._observer_backend = _normalize_observer_backend(observer_backend)
-        self._ppaths_soffice = [Path(x) for x in self._paths_soffice]
+        self._src_pl: Path | None = None
+        self._dst_pl: Path | None = None
+        self._to_fmt: str | None = None
+        self._monitors: dict[tuple[Path, Path], MonitorCallback] = {}
+        self._state: StateMonitor = StateMonitor.wait
+        self._observer_backend: str = _normalize_observer_backend(observer_backend)
+        self._ppaths_soffice: list[Path] = [Path(x) for x in self._paths_soffice]
         # if log_level_console is not None:
         #     global logger
         #     logger = get_logger(name=__name__, level_console=log_level_console)
@@ -528,7 +539,7 @@ class Monitor(FileSystemEventHandler):
     #     else:
     #         return False, ""
     @staticmethod
-    def preprocess(src_pl: Path, dst_pl: Path):
+    def preprocess(src_pl: Path, dst_pl: Path) -> tuple[Path, Path]:
         """
         各変換前に通すべき前処理。
         :param src_pl:
@@ -557,7 +568,11 @@ class Monitor(FileSystemEventHandler):
             exit(1)
 
     @staticmethod
-    def util_manage_tmp_path(path: Path, is_remove_tmp_str=False, suffix_new=None) -> Path:
+    def util_manage_tmp_path(
+        path: Path,
+        is_remove_tmp_str: bool = False,
+        suffix_new: str | None = None,
+    ) -> Path:
         """
         TODO: モジュールtempを使った方が良くないか？
         「共通」したtempファイルpath返却
@@ -577,40 +592,13 @@ class Monitor(FileSystemEventHandler):
             # tmp印加
             return path.with_name(path.stem + tmp_str + suffix_new)
 
-    # @staticmethod
-    # def util_update_dst_path(base_dst_pl: Path, fname_str_or_pl, fmt) -> Path:
-    #     """
-    #     Destination path modifier
-    #     - base_dst_plがfilename,extを含んでいれば何もしない
-    #     - bast_dst_plが上記含んでなければ追加して完全系へ。
-    #     :param base_dst_pl: dst_plを基本設定
-    #     :param fname_str_or_pl: ファイル名.多くはsrc_plをそのまま渡せばよい
-    #     :type fname_str_or_pl: Path | str
-    #     :param fmt: dst_pathに付記したい拡張子
-    #     :return: dst_path, tmp_dst_path
-    #     :rtype: Path
-    #     """
-    #     if not base_dst_pl.is_dir():
-    #         return base_dst_pl
-    #
-    #     base_dst_pl = base_dst_pl.resolve()  # 相対PATH-> abs. path
-    #     if isinstance(fname_str_or_pl, Path):
-    #         # conv path to str
-    #         filename = fname_str_or_pl.stem
-    #
-    #     if base_dst_pl.is_dir():
-    #         base_dst_pl = base_dst_pl.joinpath(filename + fmt)
-    #     # else:
-    #     #     base_dst_pl = base_dst_pl.with_suffix(fmt)
-    #
-    #     if is_tmp:
-    #         # Tempolized
-    #         return base_dst_pl, base_dst_pl.with_name(base_dst_pl.stem + "_tmp")
-    #     else:
-    #         return base_dst_pl, None
-
     @classmethod
-    def _crop_pdf_by_PDFCropMargin(cls, src_pl: Path, dst_pl: Path, margin=0) -> Path:
+    def _crop_pdf_by_PDFCropMargin(
+        cls,
+        src_pl: Path,
+        dst_pl: Path,
+        margin: int | float = 0,
+    ) -> Path:
         """
         PDFをcropする。autocropも対応
         -p: margin %
@@ -621,13 +609,17 @@ class Monitor(FileSystemEventHandler):
         :param margin:
         :return:
         """
-        from pdfCropMargins import crop
 
         crop(["-p", f"{margin}", "-s", f"{src_pl}", "-o", f"{dst_pl}"])
         return dst_pl
 
     @classmethod
-    def _crop_pdf_by_pdfcrop(cls, src_pl: Path, dst_pl: Path, margin=0) -> Path:
+    def _crop_pdf_by_pdfcrop(
+        cls,
+        src_pl: Path,
+        dst_pl: Path,
+        margin: int | float = 0,
+    ) -> Path:
         """
         PDFをcropする。autocropも対応
         - 別CLIのpdfcropを使用する
@@ -727,7 +719,7 @@ class Monitor(FileSystemEventHandler):
         return dst_pl
 
     @staticmethod
-    def _run_cmd(cmd: str, short_msg="", is_print=True) -> str:
+    def _run_cmd(cmd: str, short_msg: str = "", is_print: bool = True) -> str:
         """
         コマンド(CLI)の実行Helper
         - TODO: Monitorクラスのこのメソッドは将来削除しろ。Converクラスへ移行済みなので消して良い
@@ -748,7 +740,10 @@ class Monitor(FileSystemEventHandler):
         return output
 
     @staticmethod
-    def remove_transparency(im: Image, bg_color=(255, 255, 255)) -> Image:
+    def remove_transparency(
+        im: Image.Image,
+        bg_color: tuple[int, int, int] = (255, 255, 255),
+    ) -> Image.Image:
         """
         Taken from https://stackoverflow.com/a/35859141/7444782
         """
@@ -768,7 +763,14 @@ class Monitor(FileSystemEventHandler):
             return im
 
     @classmethod
-    def conv_manipulation_img(cls, src_pl, dst_pl, do_trim=True, gray=False, eps_ver=2) -> Path:
+    def conv_manipulation_img(
+        cls,
+        src_pl: Path,
+        dst_pl: Path,
+        do_trim: bool = True,
+        gray: bool = False,
+        eps_ver: int = 2,
+    ) -> Path | None:
         """
         Manipulation (Convert/Crop/Gray) Image
         :param src_pl:
@@ -849,14 +851,14 @@ class Monitor(FileSystemEventHandler):
 
     @classmethod
     def mgr_conv_slide(
-            cls,
-            src_pl: Path,
-            dst_pl: Path,
-            gray,
-            is_crop=True,
-            via_ext=".png",
-            div_proc=(".pdf", ".eps"),
-    ):
+        cls,
+        src_pl: Path,
+        dst_pl: Path,
+        gray: bool,
+        is_crop: bool = True,
+        via_ext: str = ".png",
+        div_proc: tuple[str, ...] = (".pdf", ".eps"),
+    ) -> None:
         """
         スライドの変換を制御するマネージャ
         TODO: mgr_conv_slideメソッドに統一すべき。
@@ -900,7 +902,7 @@ class Monitor(FileSystemEventHandler):
             dst_tmp_pl.unlink()
 
     @classmethod
-    def _conv_slide(cls, src_pl: Path, dst_pl: Path):
+    def _conv_slide(cls, src_pl: Path, dst_pl: Path) -> None:
         """
         :param src_pl:
         :param dst_pl: ファイル/folderまでのPATH.場合分けが必要
@@ -940,7 +942,7 @@ class Monitor(FileSystemEventHandler):
         shutil.move(pl_out, dst_pl)
 
     @classmethod
-    def mgr_conv_img(cls, src_pl: Path, dst_pl: Path, gray=False):
+    def mgr_conv_img(cls, src_pl: Path, dst_pl: Path, gray=False) -> None:
         """
         Image Conversion with other(e.g. cropping)
         FIXME: _conv_imgやらと重複しており、機能もそちらに移動している。もう、こちらは不要
@@ -993,7 +995,7 @@ class Monitor(FileSystemEventHandler):
         # else:
         #     logger.error("_conv_with_crop_bothがCalled.しかし何も変換せず。src:%s,dst:%s" % (src_pl, dst_pl))
 
-    def show_warning_tool(self):
+    def show_warning_tool(self) -> None:
         """
         必要なツールの有無の確認？
         :return:
@@ -1001,7 +1003,7 @@ class Monitor(FileSystemEventHandler):
         # TODO: 面倒なんとか最も簡単な方法できないか
 
     @classmethod
-    def fix_eps(cls, src_pl: Path) -> Path:
+    def fix_eps(cls, src_pl: Path) -> Path | None:
         """
         Repair eps corruption
         - epsがlatex上でずれる問題の修正
@@ -1088,7 +1090,13 @@ class Monitor(FileSystemEventHandler):
                 logger.error("Failed:%s" % src_pl)
                 return None
 
-    def convert_all(self, src_dir: str, dst_dir: str, to_fmt=".eps", gray=False):
+    def convert_all(
+        self,
+        src_dir: str | Path,
+        dst_dir: str | Path,
+        to_fmt: str = ".eps",
+        gray: bool = False,
+    ) -> None:
         """
         指定したdirの対応拡張子を全て変換する
         :param src_dir:
@@ -1114,7 +1122,7 @@ class Monitor(FileSystemEventHandler):
             logger.error(e)
 
     @staticmethod
-    def _path_conv(a_path):
+    def _path_conv(a_path: str | Path) -> Path:
         """
         入力pathを適切な型変換する
         :param a_path:
@@ -1128,11 +1136,14 @@ class Monitor(FileSystemEventHandler):
             raise Exception(f"srcのpath指定が対応外のタイプ(f{type(a_path)})出す")
         return src_pl
 
-    def convert(self,
-                src_file_apath: Path,
-                dst_dir_apath: Path,
-                to_fmt=".png", is_crop=True,
-                gray=False):  # , _to_fmt="pdf"):
+    def convert(
+        self,
+        src_file_apath: str | Path,
+        dst_dir_apath: str | Path,
+        to_fmt: str = ".png",
+        is_crop: bool = True,
+        gray: bool = False,
+    ) -> None:
         """
         単一ファイル変換
         ppt->pdf->cropping
@@ -1169,7 +1180,7 @@ class Monitor(FileSystemEventHandler):
                 tmp_dst = Path(dst_dir_apath)
 
             if tmp_dst.is_dir():
-                dst_pl = tmp_dst.joinpath(src_pl.stem + to_fmt)
+                dst_pl:Path = tmp_dst.joinpath(src_pl.stem + to_fmt)
             else:
                 dst_pl = tmp_dst
             del dst_dir_apath
@@ -1308,13 +1319,13 @@ class Monitor(FileSystemEventHandler):
             logger.error(msg)
 
     @staticmethod
-    def is_nfd(line):
+    def is_nfd(line: str) -> bool:
         for char in line.strip():
             if unicodedata.combining(char) != 0:
                 return True
         return False
 
-    def _road_balancer(self, event):
+    def _road_balancer(self, event: FileSystemEvent) -> None:
         """
 
         :param event:
@@ -1343,7 +1354,11 @@ class Monitor(FileSystemEventHandler):
                         src_path = event.src_path
                     closure(src_path)  # run
 
-    def event_common(self, event, state_change, start: bool = True):
+    def event_common(self,
+                     event: FileSystemEvent,
+                     state_change: str,
+                     start: bool = True,
+                     ) -> None:
         if start:
             self._state = StateMonitor.convert
         filepath = event.src_path
@@ -1356,7 +1371,7 @@ class Monitor(FileSystemEventHandler):
             self._state = StateMonitor.wait
         print("------------- End Event --------------------")
 
-    def on_created(self, event):
+    def on_created(self, event: FileSystemEvent) -> None:
         """
 
         :param event:
@@ -1370,7 +1385,7 @@ class Monitor(FileSystemEventHandler):
         # # cls.convert(src_file_apath=event.src_path, dst_dir_apath=cls._dst_pl, fmt_if_dst_without_ext=cls._to_fmt)  # , _to_fmt="png")
         # self._road_balancer(event=event)
 
-    def on_modified(self, event):
+    def on_modified(self, event: FileSystemEvent) -> None:
         time.sleep(wait_sec)  # 画像生成まで少し待つ
         self.event_common(event, state_change="Modified")
         # filepath = event.src_path
@@ -1379,7 +1394,7 @@ class Monitor(FileSystemEventHandler):
         # logger.info("Modified:%s" % filename)
         # self._road_balancer(event=event)
 
-    def on_deleted(self, event):
+    def on_deleted(self, event: FileSystemEvent) -> None:
         self.event_common(event, state_change="Deleted", start=False)
         # filepath = event.src_path
         # filename = os.path.basename(filepath)
@@ -1387,7 +1402,7 @@ class Monitor(FileSystemEventHandler):
         # logger.info("Deleted:%s" % filename)
         # cls._road_balancer(event=event)
 
-    def on_moved(self, event):
+    def on_moved(self, event: FileMovedEvent | DirMovedEvent) -> None:
         """
         ファイル移動時のイベント
         - Medeneley変換では、event.dest_pathが移動後のPATHを示し、それを変換に使えないかと思う
@@ -1420,7 +1435,7 @@ class Monitor(FileSystemEventHandler):
     #         raise Exception("Current path: %s" % pathlib.Path.cwd())
 
     @staticmethod
-    def _validated_fmt(to_fmt, src_pl: Path):
+    def _validated_fmt(to_fmt: str, src_pl: Path) -> str:
         """
         変換用フォーマットのvalue check
         :param to_fmt:
@@ -1435,7 +1450,11 @@ class Monitor(FileSystemEventHandler):
             return to_fmt
 
     @staticmethod
-    def _get_internal_deal_path(path: tuple[str, Path], pl_cwd=Path.cwd(), head_comment="") -> Path:
+    def _get_internal_deal_path(
+        path: str | Path,
+        pl_cwd: Path = Path.cwd(),
+        head_comment: str = "",
+    ) -> Path:
         """
         src and base_dst_pl pathの読み込みを代理
         :param path:
@@ -1483,17 +1502,15 @@ class Monitor(FileSystemEventHandler):
     #     except Exception as e:
     #         raise Exception("Current path: %s" % pathlib.Path.cwd())
 
-    def _get_monitor_func(self, src_pl, dst_pl, to_fmt_in, is_crop=True, gray=False):
-        """
-        closure type func return
-        :param src_pl:
-        :param dst_pl:
-        :param is_crop:
-        :return:
-        """
-
-        # async def moniko(sel
-        def moniko(path_updated_file):
+    def _get_monitor_func(
+        self,
+        src_pl: Path,
+        dst_pl: Path,
+        to_fmt_in: str,
+        is_crop: bool = True,
+        gray: bool = False,
+    ) -> MonitorCallback:
+        def moniko(path_updated_file: str) -> None:
             self.convert(
                 src_file_apath=path_updated_file,
                 dst_dir_apath=dst_pl,
@@ -1501,21 +1518,18 @@ class Monitor(FileSystemEventHandler):
                 is_crop=is_crop,
                 gray=gray,
             )
-            # loop = asyncio.get_event_loop()
-            # print(f'start:  {sec}秒待つよ')
-            # await loop.run_in_executor(None, time.sleep, sec)
-            # print(f'finish: {sec}秒待つよ')
 
-        # return moniko(fname_str_or_pl=fname_str_or_pl, dst_dir_apath=dst_dir_apath, fmt_if_dst_without_ext=fmt_if_dst_without_ext, is_crop=is_crop)
         return moniko
 
-    def set_monitor(self,
-                    src_dir,
-                    dst_dir,
-                    to_fmt,
-                    gray: bool = False,
-                    is_crop: bool = True,
-                    mk_dst_dir: bool = True):
+    def set_monitor(
+        self,
+        src_dir: str | Path,
+        dst_dir: str | Path,
+        to_fmt: str,
+        gray: bool = False,
+        is_crop: bool = True,
+        mk_dst_dir: bool = True,
+    ) -> None:
         """
         Set monitoring path
         :param mk_dst_dir: Make dest dir if not exists
@@ -1545,7 +1559,7 @@ class Monitor(FileSystemEventHandler):
             gray=gray,
         )
 
-    def start_monitors(self, sleep_sec=1, observer_backend: str | None = None):
+    def start_monitors(self, sleep_sec: int | float = 1, observer_backend: str | None = None) -> None:
         """
         Start monitoring change on FS according to set
         :param sleep_sec:
@@ -1596,7 +1610,7 @@ class Monitor(FileSystemEventHandler):
             raise Exception("Current path: %s" % Path.cwd()) from e
 
     @property
-    def state(self):
+    def state(self) -> StateMonitor:
         """ return monitoring state """
         return self._state
 
@@ -1649,7 +1663,7 @@ def _build_cli_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _parse_cli_args(argv=None) -> argparse.Namespace:
+def _parse_cli_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = _build_cli_parser()
     args_in = list(sys.argv[1:] if argv is None else argv)
     if args_in and args_in[0] not in ("convert", "monitor", "-h", "--help"):
@@ -1695,21 +1709,21 @@ def _run_monitor_cli(args: argparse.Namespace) -> int:
     return 0
 
 
-def main(argv=None) -> int:
+def main(argv: list[str] | None = None) -> int:
     args = _parse_cli_args(argv=argv)
     if args.command == "monitor":
         return _run_monitor_cli(args)
     return _run_convert_cli(args)
 
 
-def monitor(argv=None) -> int:
+def monitor(argv: list[str] | None = None) -> int:
     args_in = list(sys.argv[1:] if argv is None else argv)
     if not args_in or args_in[0] != "monitor":
         args_in = ["monitor", *args_in]
     return main(args_in)
 
 
-def convert(argv=None) -> int:
+def convert(argv: list[str] | None = None) -> int:
     logger.debug("sys.argv:%s" % sys.argv)
     return main(argv)
 
