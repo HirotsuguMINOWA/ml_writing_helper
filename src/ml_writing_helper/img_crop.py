@@ -3,11 +3,12 @@
 - PNGはAチャンネルが邪魔でうまくいってない。RGBA->RGBに変えて処理するしかない。
 - Ref: https://triplepulu.blogspot.com/2015/03/pythonpil-pilautocrop.html
 """
-from PIL import Image, ImageChops
+from PIL import ImageChops, Image
+from PIL.Image import Image as ImageClsType
 from pathlib import Path
 
 
-def img_crop(image: Image, debug=False) -> Image:
+def img_crop(image: ImageClsType, debug: bool = False) -> ImageClsType:
     """
     画像を切り抜く
     - jpeg, pngは確認済み。おそらくbmpやgifも大丈夫
