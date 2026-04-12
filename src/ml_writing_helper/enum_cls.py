@@ -1,5 +1,4 @@
-from enum import auto
-from strenum import StrEnum
+from enum import Enum, auto, StrEnum
 from typing import Literal
 
 
@@ -24,6 +23,11 @@ class ImgConvType(StrEnum):
 class MethodToFixEPS(StrEnum):
     gs = "gs"
     eps_pdf_converter = "eps2pdf&pdf2eps"
+
+
+class StateMonitor(Enum):
+    wait = auto()
+    convert = auto()
 
 
 OutputExtTuple = tuple(['png', 'pdf', 'jpeg', 'jpg', 'bmp', 'gif', 'tiff', 'eps'])  # '.webp', '.svg',
