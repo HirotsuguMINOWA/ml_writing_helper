@@ -1,6 +1,16 @@
 {
     "configurations": [
         {
+            "name": "[ML Writing Helper] Python デバッガー: 現在のファイル",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}:${env:PYTHONPATH}"
+            },
+        },
+        {
             "name": "Install by setup.py",
             "type": "debugpy",
             "request": "launch",
