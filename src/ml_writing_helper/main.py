@@ -16,10 +16,10 @@ import time
 import traceback
 import unicodedata  # for MacOS NDF
 from collections.abc import Callable
-from enum import Enum, auto
+from enum import Enum, StrEnum, auto
 from pathlib import Path
 from subprocess import STDOUT, check_output
-from typing import Final
+from typing import Final, override
 from pdfCropMargins import crop
 from PIL import Image
 from loguru import logger
@@ -32,6 +32,8 @@ from watchdog.events import (
 )
 from watchdog.observers.api import BaseObserver
 from watchdog.observers.polling import PollingObserver
+
+from ml_writing_helper.extension import MethodToFixEPS
 
 try:
     from watchdog.observers.fsevents import FSEventsObserver
@@ -507,6 +509,7 @@ class Monitor(FileSystemEventHandler):
         self._dst_pl: Path | None = None
         self._to_fmt: str | None = None
         self._monitors: dict[tuple[Path, Path], MonitorCallback] = {}
+        self._monitor_fmts: dict[tuple[Path, Path], str] = {}
         self._state: StateMonitor = StateMonitor.wait
         self._observer_backend: str = _normalize_observer_backend(observer_backend)
         self._ppaths_soffice: list[Path] = [Path(x) for x in self._paths_soffice]
@@ -836,7 +839,7 @@ class Monitor(FileSystemEventHandler):
                     logger.error(
                         f'Failed: Current img mode "{dst_im.mode}" cannot be directly saved to .eps and tried to be converted (e.g. to "RGB")')
                 else:
-                    logger.info(f"Succeed? to RGB")
+                    logger.info("Succeed? to RGB")
 
             if gray:
                 """ Convert to gray img """
@@ -908,7 +911,7 @@ class Monitor(FileSystemEventHandler):
         :param dst_pl: ファイル/folderまでのPATH.場合分けが必要
         :return:
         """
-        for p_soffice in [Path(x) for x in cls._paths_soffice]:  # type: Path
+        for p_soffice in [Path(x) for x in cls._paths_soffice]:
             if p_soffice.exists():
                 cmd = "'{path_soffice}' --headless --norestore --convert-to {dst_ext} --outdir '{out_dir}' '{path_src}'".format(
                     # cmd = "'{path_soffice}' --headless --convert-to {dst_ext} {path_src}".format(
@@ -942,7 +945,7 @@ class Monitor(FileSystemEventHandler):
         shutil.move(pl_out, dst_pl)
 
     @classmethod
-    def mgr_conv_img(cls, src_pl: Path, dst_pl: Path, gray=False) -> None:
+    def mgr_conv_img(cls, src_pl: Path, dst_pl: Path, gray: bool = False) -> None:
         """
         Image Conversion with other(e.g. cropping)
         FIXME: _conv_imgやらと重複しており、機能もそちらに移動している。もう、こちらは不要
@@ -984,11 +987,11 @@ class Monitor(FileSystemEventHandler):
             出力がPDFの場合のみ2段階変換(conv,crop)を実施
             pdf->image: OK!!!
                 $ convert try2-crop.pdf eps2:try2-crop.eps
-                ＞＞ try2-crop.eps という、トリミングされたepsができる。
+                >> try2-crop.eps という、トリミングされたepsができる。
                 http://would-be-astronomer.hatenablog.com/entry/2015/03/26/214633
             pdfcrop機能しない事が多い？img_magickと併用でcropする事
             """
-            cls.conv_manipulation_img(
+            _ = cls.conv_manipulation_img(
                 src_pl, dst_pl, do_trim=True, gray=gray
             )  # TODO: 現状ImgMagickの-trimでPDFもcropされている！！
             # cls._crop_all_fmt(dst_pl, dst_pl)
@@ -1012,11 +1015,7 @@ class Monitor(FileSystemEventHandler):
         :return:
         """
 
-        class MethodToFixEPS(Enum):
-            gs = "gs"
-            eps_pdf_converter = "eps2pdf&pdf2eps"
-
-        method = MethodToFixEPS.eps_pdf_converter  # Current method
+        method: MethodToFixEPS = MethodToFixEPS.eps_pdf_converter  # Current method
         if method == MethodToFixEPS.gs:
             """効果なし？ gs方式"""
             path_cmd_gs = cls.check_ghostscript()
@@ -1049,8 +1048,7 @@ class Monitor(FileSystemEventHandler):
             ):
                 # Failed due to †commands are absent
                 logger.error(
-                    ".epsファイルを修正しようとしましたが、%sのコマンドにPATHが非存在/通ってません。"
-                    % (path_pdftops, path_epstopdf)
+                    ".epsファイルを修正しようとしましたが、%s/%sのコマンドにPATHが非存在/通ってません。" % (path_pdftops, path_epstopdf)
                 )
                 return None
 
@@ -1180,7 +1178,7 @@ class Monitor(FileSystemEventHandler):
                 tmp_dst = Path(dst_dir_apath)
 
             if tmp_dst.is_dir():
-                dst_pl:Path = tmp_dst.joinpath(src_pl.stem + to_fmt)
+                dst_pl: Path = tmp_dst.joinpath(src_pl.stem + to_fmt)
             else:
                 dst_pl = tmp_dst
             del dst_dir_apath
@@ -1371,6 +1369,7 @@ class Monitor(FileSystemEventHandler):
             self._state = StateMonitor.wait
         print("------------- End Event --------------------")
 
+    @override
     def on_created(self, event: FileSystemEvent) -> None:
         """
 
@@ -1385,6 +1384,7 @@ class Monitor(FileSystemEventHandler):
         # # cls.convert(src_file_apath=event.src_path, dst_dir_apath=cls._dst_pl, fmt_if_dst_without_ext=cls._to_fmt)  # , _to_fmt="png")
         # self._road_balancer(event=event)
 
+    @override
     def on_modified(self, event: FileSystemEvent) -> None:
         time.sleep(wait_sec)  # 画像生成まで少し待つ
         self.event_common(event, state_change="Modified")
@@ -1394,6 +1394,7 @@ class Monitor(FileSystemEventHandler):
         # logger.info("Modified:%s" % filename)
         # self._road_balancer(event=event)
 
+    @override
     def on_deleted(self, event: FileSystemEvent) -> None:
         self.event_common(event, state_change="Deleted", start=False)
         # filepath = event.src_path
@@ -1402,6 +1403,7 @@ class Monitor(FileSystemEventHandler):
         # logger.info("Deleted:%s" % filename)
         # cls._road_balancer(event=event)
 
+    @override
     def on_moved(self, event: FileMovedEvent | DirMovedEvent) -> None:
         """
         ファイル移動時のイベント
@@ -1558,6 +1560,7 @@ class Monitor(FileSystemEventHandler):
             is_crop=is_crop,
             gray=gray,
         )
+        self._monitor_fmts[src_pl, dst_pl] = to_fmt_in
 
     def start_monitors(self, sleep_sec: int | float = 1, observer_backend: str | None = None) -> None:
         """
@@ -1583,7 +1586,8 @@ class Monitor(FileSystemEventHandler):
 
                 # Check base_dst_pl path
                 if not dst_pl.exists():
-                    print("[Info] 右記PATH存在しません、作成しますか?:%s" % dst_pl)
+                    logger.info("右記PATH存在しません、作成しますか?:%s" % dst_pl)
+
                     res = ""
                     while res not in ("y", "n", "Y", "N"):
                         res = input("make dir?(y/n)")
@@ -1593,8 +1597,20 @@ class Monitor(FileSystemEventHandler):
                         raise Exception("[Error] dst_pathが存在しないので終了しました")
                 print("[Info] Set exporting Path:%s" % dst_pl)
 
-                # set into scheduling
+                #! set into scheduling
                 observer.schedule(event_handler, src_pl.as_posix(), recursive=True)
+
+                #! タイムスタンプ確認: srcがdstより5秒以上新しければコピー
+                to_fmt_in = self._monitor_fmts.get((src_pl, dst_pl), "")
+                moniko = self._monitors[src_pl, dst_pl]
+                for src_file in src_pl.rglob("*"):
+                    if not src_file.is_file():
+                        continue
+                    dst_file = dst_pl / (src_file.stem + to_fmt_in)
+                    src_mtime = src_file.stat().st_mtime
+                    if not dst_file.exists() or src_mtime - dst_file.stat().st_mtime >= 5:
+                        logger.info(f"[Startup] タイムスタンプ差>=5秒: {src_file.name} -> コピー実行")
+                        moniko(src_file.as_posix())
             # event_handler = ChangeHandler()
             observer.start()
             # print("[Info] Start Monitoring")
@@ -1620,7 +1636,7 @@ def _available_observer_backends() -> list[str]:
     if FSEventsObserver is not None:
         backends.append("fsevents")
     if KqueueObserver is not None:
-        backends.append("kqueue")
+        backends.append("kqueue")Ï
     if InotifyObserver is not None:
         backends.append("inotify")
     if WindowsApiObserver is not None:

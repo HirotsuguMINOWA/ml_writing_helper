@@ -16,6 +16,7 @@ def img_crop(image: ImageClsType, debug: bool = False) -> ImageClsType:
     :param debug:
     :return:
     """
+    #TODO: imgConvertクラスに統合するのが良さそう
     # image = Image.open()
 
     # image = image.copy()
