@@ -16,7 +16,6 @@ import time
 import traceback
 import unicodedata  # for MacOS NDF
 from collections.abc import Callable
-from enum import Enum, StrEnum, auto
 from pathlib import Path
 from subprocess import STDOUT, check_output
 from typing import Final, override
@@ -400,6 +399,34 @@ class Converter:
         else:
             return True, tmp_dst_pl
 
+    @staticmethod
+    def preprocess(src_pl: Path, dst_pl: Path) -> tuple[Path, Path]:
+        """
+        各変換前に通すべき前処理。
+        :param src_pl:
+        :param dst_pl:
+        :return:
+        """
+        try:
+            # チェックPATH
+            src_pl = src_pl.resolve()
+            # check src path
+            if not src_pl.is_file():
+                msg = f"src_plはfile pathか:{src_pl.as_posix()}"
+                raise FileNotFoundError(msg)
+            # abs. path
+            dst_pl = dst_pl.resolve()
+            # 拡張子を持つfileか否かチェック
+            if dst_pl.suffix == "":
+                msg = f"dst_plはfile pathか:{dst_pl.as_posix()}"
+                raise FileNotFoundError(msg)
+            if not dst_pl.parent.exists():
+                msg = f"dst_plの親PATHが存在しない:{dst_pl.as_posix()}"
+                raise FileNotFoundError(msg)
+            return src_pl, dst_pl
+        except FileNotFoundError as e:
+            logger.error(e)
+            exit(1)
 
 class Tool:
     def pdfcrop(self, src_pl: Path, dst_pl: Path) -> None:
@@ -541,34 +568,7 @@ class Monitor(FileSystemEventHandler):
     #         return True, res
     #     else:
     #         return False, ""
-    @staticmethod
-    def preprocess(src_pl: Path, dst_pl: Path) -> tuple[Path, Path]:
-        """
-        各変換前に通すべき前処理。
-        :param src_pl:
-        :param dst_pl:
-        :return:
-        """
-        try:
-            # チェックPATH
-            src_pl = src_pl.resolve()
-            # check src path
-            if not src_pl.is_file():
-                msg = f"src_plはfile pathか:{src_pl.as_posix()}"
-                raise FileNotFoundError(msg)
-            # abs. path
-            dst_pl = dst_pl.resolve()
-            # 拡張子を持つfileか否かチェック
-            if dst_pl.suffix == "":
-                msg = f"dst_plはfile pathか:{dst_pl.as_posix()}"
-                raise FileNotFoundError(msg)
-            if not dst_pl.parent.exists():
-                msg = f"dst_plの親PATHが存在しない:{dst_pl.as_posix()}"
-                raise FileNotFoundError(msg)
-            return src_pl, dst_pl
-        except FileNotFoundError as e:
-            logger.error(e)
-            exit(1)
+
 
     @staticmethod
     def util_manage_tmp_path(
@@ -1203,7 +1203,7 @@ class Monitor(FileSystemEventHandler):
                 return
 
             # preprocee - 前処理で解決
-            src_pl, dst_pl = self.preprocess(src_pl=src_pl, dst_pl=dst_pl)
+            src_pl, dst_pl = Converter.preprocess(src_pl=src_pl, dst_pl=dst_pl)
             if dst_pl is None:
                 raise ValueError("Noneであるのはおかしい")
             # 下記不要？
