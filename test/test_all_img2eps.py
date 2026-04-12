@@ -12,7 +12,6 @@ import sys
 import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import List
 
 sys.path.append("../ml_writing_helper")
 from ml_writing_helper.main import Monitor, StateMonitor
@@ -37,17 +36,20 @@ class AutoTester:
         :param excludes:
         :return:
         """
-        cls.main(sample=Path(sample), src=Path(src), dst=Path(dst), to_fmt=to_fmt, target_exts=target_exts,
-                 excludes=excludes)
+        cls.main(
+            sample=Path(sample),
+            src=Path(src),
+            dst=Path(dst),
+            to_fmt=to_fmt,
+            target_exts=target_exts,
+            excludes=excludes)
 
     @classmethod
     def start_monitoring(cls, src, dst, to_fmt):
-        print("Start start_monitoring: Start Monitoring dirs")
+        logger.debug("Start start_monitoring: Start Monitoring dirs")
         cls._monitor = Monitor()
         cls._monitor.set_monitor(
-            src_dir=src
-            , dst_dir=dst
-            , to_fmt=to_fmt
+            src_dir=src, dst_dir=dst, to_fmt=to_fmt
         )
         cls._standby_monitoring = True
         print("スタンバイ monitoring")
@@ -134,8 +136,13 @@ class AutoTester:
         logger.info("cp1 task_copy_src_files")
 
     @classmethod
-    def main(cls, sample: Path, src: Path, dst: Path, to_fmt: str, target_exts: List[str] = [],
-             excludes: List[str] = [], maxsize: int = 10):
+    def main(cls, sample: Path,
+             src: Path,
+             dst: Path,
+             to_fmt: str,
+             target_exts: list[str] = [],
+             excludes: list[str] = [],
+             maxsize: int = 10):
         logger.info("Test Main: start")
         cls.init_dirs(src, dst)
         # files = sample.glob("*")
@@ -175,4 +182,5 @@ class AutoTester:
 
 if __name__ == "__main__":
     # AutoTester.start(target_exts=[".png"])
-    AutoTester.start(to_fmt=".eps", target_exts=[])
+    ins = AutoTester()
+    ins.start(to_fmt=".eps", target_exts=[])
