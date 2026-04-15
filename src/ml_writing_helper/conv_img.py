@@ -509,7 +509,7 @@ class Converter:
         if not res:
             return False, None
         """ Cropping image """
-        tmp_dst_pl = cls._crop_all_fmt(src_img_pl=tmp_dst_pl, dst_pl=dst_pl)
+        tmp_dst_pl = cls.crop_all_fmt(src_img_pl=tmp_dst_pl, dst_pl=dst_pl)
         if tmp_dst_pl is None:
             logger.error("Failed crop: %s" % src_pl)
             return False, None
@@ -527,7 +527,7 @@ class Converter:
             return True, tmp_dst_pl
 
     @classmethod
-    def _crop_all_fmt(cls, src_img_pl: Path, dst_pl: Path) -> Path:
+    def crop_all_fmt(cls, src_img_pl: Path, dst_pl: Path) -> Path:
         """
         PDFとimage(png,jpeg,eps?)をcroppingする
         - 必要。なぜならImage系はPillowのImageクラスで扱えるが、PDFはファイル単位で操作しなくてはならない

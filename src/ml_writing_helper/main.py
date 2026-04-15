@@ -354,7 +354,7 @@ class Monitor(FileSystemEventHandler):
                 cls.mgr_conv_img(dst_tmp_pl, dst_pl, gray=gray)
             else:
                 # croppingのみ
-                Converter._crop_all_fmt(src_img_pl=dst_tmp_pl, dst_pl=dst_pl)
+                Converter.crop_all_fmt(src_img_pl=dst_tmp_pl, dst_pl=dst_pl)
 
         # Del mediate file
         if is_mediate:
@@ -436,7 +436,7 @@ class Monitor(FileSystemEventHandler):
             Converter.conv_manipulation_img(
                 src_pl=src_pl, dst_pl=dst_pl, do_trim=False, gray=gray
             )
-            Converter._crop_all_fmt(dst_pl, dst_pl)
+            Converter.crop_all_fmt(dst_pl, dst_pl)
         else:
             """
             ★ こちらはImageMagicで直接Crop(Trim)できるfmtだけを処理する
@@ -695,7 +695,7 @@ class Monitor(FileSystemEventHandler):
                 """
                 if dst_pl is None:
                     raise ValueError("Noneであるのはおかしい")
-                dst_pl = Converter._crop_all_fmt(src_pl, dst_pl)
+                dst_pl = Converter.crop_all_fmt(src_pl, dst_pl)
                 dst_pl = Converter.conv_manipulation_img(
                     src_pl, dst_pl, do_trim=True, gray=gray
                 )  # TODO: 現状ImgMagickの-trimでPDFもcropされている！！
@@ -762,7 +762,7 @@ class Monitor(FileSystemEventHandler):
             logger.error(f"{e}@{traceback.format_exc()}")
 
     @staticmethod
-    def check_ghostscript(cmd="gs"):
+    def check_ghostscript(cmd: str = "gs"):
         res = shutil.which(cmd)
         if res:
             return res
@@ -790,7 +790,7 @@ class Monitor(FileSystemEventHandler):
             for (
                     key_path,
                     closure,
-            ) in self._monitors.items():  # type:tuple[Path,Path],function
+            ) in self._monitors.items():
                 # print(f"key_path:{self.is_nfd(key_path[0].as_posix())},{event.src_path}")
                 """ Check the env. applied NDF or not"""
                 if platform.system() == "Darwin":
@@ -1050,7 +1050,7 @@ class Monitor(FileSystemEventHandler):
             )
             observer = _build_observer(backend)
             logger.info(f"Using watchdog observer backend: {backend}")
-            for src_pl, dst_pl in self._monitors.keys():  # type: Path,Path
+            for src_pl, dst_pl in self._monitors.keys():
 
                 # Check src path
                 if not src_pl.exists():
