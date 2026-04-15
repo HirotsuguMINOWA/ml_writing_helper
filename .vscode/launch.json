@@ -1,7 +1,28 @@
 {
     "configurations": [
         {
-            "name": "[ML Writing Helper] Python デバッガー: 現在のファイル",
+            "name": "Test1 @MLWH",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/test/test_all_img2eps.py",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}:${env:PYTHONPATH}"
+            }
+        },
+        {
+            "name": "[MLWH] 監視開始",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}:${env:PYTHONPATH}"
+            },
+        },
+        {
+            "name": "[MLWH] Python デバッガー: 現在のファイル",
             "type": "debugpy",
             "request": "launch",
             "program": "${file}",

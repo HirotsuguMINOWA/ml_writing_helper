@@ -23,7 +23,6 @@ from pdfCropMargins import crop
 from PIL import Image
 from loguru import logger
 from pdf2image import convert_from_path
-from pdfCropMargins.vendor.pysimplegui_4_foss.PySimpleGUI import G
 from watchdog.events import (
     DirMovedEvent,
     FileMovedEvent,
@@ -184,8 +183,8 @@ class Monitor(FileSystemEventHandler):
     ]
 
     @classmethod
-    def _ppaths_soffice(cls) -> list[Path]:
-        return [Path(x) for x in cls._paths_soffice]
+    def _ppaths_soffice(cls) -> tuple[Path, ...]:
+        return tuple([Path(x) for x in cls._paths_soffice])
 
     _ext_pluntuml: tuple[str, ...] = (".pu", ".puml")
 
@@ -225,15 +224,15 @@ class Monitor(FileSystemEventHandler):
         #     cls._p_dst_dir = Path(output_dir)
         # else:
         #     cls._p_dst_dir = Path(monitoring_dir).joinpath(output_dir)
-        self._src_pl: Path | None = None
-        self._dst_pl: Path | None = None
-        self._to_fmt: str | None = None
+        # self._src_pl: Path | None = None
+        # self._dst_pl: Path | None = None
+        # self._to_fmt: str | None = None
         self._monitors: dict[tuple[Path, Path], MonitorCallback] = {}
         self._monitor_fmts: dict[tuple[Path, Path], str] = {}
         self._tasks: list[CopyTask | ObserverInstance | ImgConvTaskStruct] = list()
         self._state: StateMonitor = StateMonitor.wait
         self._observer_backend: str = _normalize_observer_backend(observer_backend)
-        self._ppaths_soffice: list[Path] = [Path(x) for x in self._paths_soffice]
+        # self._ppaths_soffice2: list[Path] = self._ppaths_soffice()
         # if log_level_console is not None:
         #     global logger
         #     logger = get_logger(name=__name__, level_console=log_level_console)
@@ -1029,7 +1028,7 @@ class Monitor(FileSystemEventHandler):
         ins = ImgConvTaskStruct(
             src_dir_path=src_dir,
             dest_dir_path=dst_dir,
-            dest_ext=to_fmt,
+            to_fmt=to_fmt,
             gray=gray,
             is_crop=is_crop,
             mk_dst_dir=mk_dst_dir
@@ -1056,7 +1055,7 @@ class Monitor(FileSystemEventHandler):
                 # Check src path
                 if not src_pl.exists():
                     raise Exception("[Error] The path was not exists: %s" % src_pl)
-                print("[Info] Set monitoring Path:%s" % src_pl)
+                logger.info("Set monitoring Path:%s" % src_pl)
 
                 # Check base_dst_pl path
                 if not dst_pl.exists():
@@ -1069,7 +1068,7 @@ class Monitor(FileSystemEventHandler):
                         dst_pl.mkdir(parents=True, exist_ok=True)
                     else:
                         raise Exception("[Error] dst_pathが存在しないので終了しました")
-                print("[Info] Set exporting Path:%s" % dst_pl)
+                logger.info("Set exporting Path:%s" % dst_pl)
 
                 #! set into scheduling
                 observer.schedule(event_handler, src_pl.as_posix(), recursive=True)
@@ -1110,7 +1109,7 @@ def _available_observer_backends() -> list[str]:
     if FSEventsObserver is not None:
         backends.append("fsevents")
     if KqueueObserver is not None:
-        backends.append("kqueue")Ï
+        backends.append("kqueue")
     if InotifyObserver is not None:
         backends.append("inotify")
     if WindowsApiObserver is not None:

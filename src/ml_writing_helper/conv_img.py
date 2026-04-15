@@ -124,7 +124,7 @@ class ImgConvTaskStruct(ObserverInstance):
         self,
         src_dir_path: str | Path,
         dest_dir_path: str | Path,
-        dest_ext: str,
+        to_fmt: str,  # TODO: [優先度:大] dst_extへ要変更。問題は、to_fmtが広範囲に使われているため合わせて変更が必要
         diff_sec: int = 10,
         gray: bool = False,
         is_crop: bool = True,
@@ -135,7 +135,7 @@ class ImgConvTaskStruct(ObserverInstance):
             dest_dir_path=dest_dir_path,
             diff_sec=diff_sec
         )
-        self._dst_ext: Final[ImgConvOutputType] = ImgConvOutputType(dest_ext)
+        self._dst_ext: Final[ImgConvOutputType] = ImgConvOutputType(to_fmt)
         self._gray: Final[bool] = gray
         self._is_crop: Final[bool] = is_crop
         self._mk_dst_dir: Final[bool] = mk_dst_dir

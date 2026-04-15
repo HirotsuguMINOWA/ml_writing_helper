@@ -130,3 +130,4 @@ Install requirements
     2. a PowerPoint file can be converted to PNG in PowerPoint and then converted to eps in this script.
 3. MacOS: LibreOffice application verification not finished?
     1. after installing from Homebrew, if you use LibreOffice without completing the application validation, the image quality will be low.
+

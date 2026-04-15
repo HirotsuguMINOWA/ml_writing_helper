@@ -3,6 +3,5 @@
 loguru
 pdf2image
 Pillow
-StrEnum
 watchdog
 pdfCropMargins
