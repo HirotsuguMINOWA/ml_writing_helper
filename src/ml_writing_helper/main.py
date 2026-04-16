@@ -33,7 +33,7 @@ from watchdog.observers.api import BaseObserver
 from watchdog.observers.polling import PollingObserver
 from debtcollector import removals
 
-from ml_writing_helper.dat_cls import CopyTask, ObserverInstance
+from ml_writing_helper.abc_runner import CopyTask, ABCTaskRunner
 from ml_writing_helper.enum_cls import MethodToFixEPS, StateMonitor
 from ml_writing_helper.util import Util
 
@@ -57,7 +57,7 @@ try:
 except Exception:
     WindowsApiObserver = None
 
-from .conv_img import Converter, ImgConvTaskStruct, img_crop
+from .img_conv_runner import Converter, ImgConvTaskStruct, img_crop
 
 # import numpy as np
 # import matplotlib
@@ -229,7 +229,7 @@ class Monitor(FileSystemEventHandler):
         # self._to_fmt: str | None = None
         self._monitors: dict[tuple[Path, Path], MonitorCallback] = {}
         self._monitor_fmts: dict[tuple[Path, Path], str] = {}
-        self._tasks: list[CopyTask | ObserverInstance | ImgConvTaskStruct] = list()
+        self._tasks: list[CopyTask | ABCTaskRunner | ImgConvTaskStruct] = list()
         self._state: StateMonitor = StateMonitor.wait
         self._observer_backend: str = _normalize_observer_backend(observer_backend)
         # self._ppaths_soffice2: list[Path] = self._ppaths_soffice()
@@ -575,20 +575,20 @@ class Monitor(FileSystemEventHandler):
         except Exception as e:
             logger.error(e)
 
-    @staticmethod
-    def _path_conv(a_path: str | Path) -> Path:
-        """
-        入力pathを適切な型変換する
-        :param a_path:
-        :return:
-        """
-        if isinstance(a_path, str):
-            src_pl = Path(a_path)  # pathlibのインスタンス
-        elif isinstance(a_path, Path):
-            src_pl = a_path
-        else:
-            raise Exception(f"srcのpath指定が対応外のタイプ(f{type(a_path)})出す")
-        return src_pl
+    # @staticmethod
+    # def _path_conv(a_path: str | Path) -> Path:
+    #     """
+    #     入力pathを適切な型変換する
+    #     :param a_path:
+    #     :return:
+    #     """
+    #     if isinstance(a_path, str):
+    #         src_pl = Path(a_path)  # pathlibのインスタンス
+    #     elif isinstance(a_path, Path):
+    #         src_pl = a_path
+    #     else:
+    #         raise Exception(f"srcのpath指定が対応外のタイプ(f{type(a_path)})出す")
+    #     return src_pl
 
     def convert(
         self,
@@ -610,7 +610,7 @@ class Monitor(FileSystemEventHandler):
 
         try:
             # init1
-            src_pl = self._path_conv(src_file_apath)
+            src_pl =Path(src_file_apath)
             # dst_pl = self._path_conv(dst_dir_apath)
 
             """ 無視すべき拡張子 """
@@ -628,10 +628,11 @@ class Monitor(FileSystemEventHandler):
             del src_file_apath
             # src_file_apath = None  # 誤って参照しないように
 
-            if isinstance(dst_dir_apath, Path):
-                tmp_dst = dst_dir_apath
-            else:
-                tmp_dst = Path(dst_dir_apath)
+            # if isinstance(dst_dir_apath, Path):
+            #     tmp_dst = dst_dir_apath
+            # else:
+            #     tmp_dst = Path(dst_dir_apath)
+            tmp_dst = Path(dst_dir_apath)
 
             if tmp_dst.is_dir():
                 dst_pl: Path = tmp_dst.joinpath(src_pl.stem + to_fmt)
@@ -1125,25 +1126,25 @@ def _build_cli_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command")
 
     convert_parser = subparsers.add_parser("convert", help="convert a single file")
-    convert_parser.add_argument("src_path", help="source file path")
-    convert_parser.add_argument("dst_dir_apath", help="destination directory or file path")
-    convert_parser.add_argument("to_fmt", help="destination format such as png or .png")
-    convert_parser.add_argument("--gray", action="store_true", help="convert image to grayscale when supported")
-    convert_parser.add_argument("--no-crop", action="store_true", help="disable cropping during conversion")
+    _ = convert_parser.add_argument("src_path", type="str", help="source file path")
+    _ = convert_parser.add_argument("dst_dir_apath", help="destination directory or file path")
+    _ = convert_parser.add_argument("to_fmt", help="destination format such as png or .png")
+    _ = convert_parser.add_argument("--gray", action="store_true", help="convert image to grayscale when supported")
+    _ = convert_parser.add_argument("--no-crop", action="store_true", help="disable cropping during conversion")
 
     monitor_parser = subparsers.add_parser("monitor", help="watch a directory and convert changed files")
-    monitor_parser.add_argument("src_dir", help="source directory to monitor")
-    monitor_parser.add_argument("dst_dir", help="destination directory")
-    monitor_parser.add_argument("to_fmt", help="destination format such as png or .png")
-    monitor_parser.add_argument("--gray", action="store_true", help="convert image to grayscale when supported")
-    monitor_parser.add_argument("--no-crop", action="store_true", help="disable cropping during conversion")
-    monitor_parser.add_argument(
+    _ = monitor_parser.add_argument("src_dir", help="source directory to monitor")
+    _ = monitor_parser.add_argument("dst_dir", help="destination directory")
+    _ = monitor_parser.add_argument("to_fmt", help="destination format such as png or .png")
+    _ = monitor_parser.add_argument("--gray", action="store_true", help="convert image to grayscale when supported")
+    _ = monitor_parser.add_argument("--no-crop", action="store_true", help="disable cropping during conversion")
+    _ = monitor_parser.add_argument(
         "--observer",
         default=DEFAULT_OBSERVER_BACKEND,
         choices=_available_observer_backends(),
         help="watchdog observer backend. polling is cloud-storage friendly; native is lighter on local file systems.",
     )
-    monitor_parser.add_argument(
+    _ = monitor_parser.add_argument(
         "--sleep-sec",
         type=float,
         default=1.0,
