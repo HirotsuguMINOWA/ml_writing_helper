@@ -5,12 +5,13 @@ from pathlib import Path
 import shutil
 from typing import Final, override
 from loguru import logger
+from watchdog.events import DirModifiedEvent, FileModifiedEvent, FileSystemEventHandler
 from src.ml_writing_helper.enum_cls import TaskType
 from typed_classproperties import cached_classproperty
 
 
 @dataclass
-class ObserverInstance(ABC):
+class ABCTaskRunner(ABC, FileSystemEventHandler):
     """監視TaskのTOPクラス"""
 
     def __init__(
@@ -20,13 +21,22 @@ class ObserverInstance(ABC):
         dest_dir_path: str | Path,
         # target_exts: Sequence[str],
         diff_sec: int = 10,
+        # observer:EventHandler=FileSystemEventHandler
     ):
+        super().__init__()
         # TODO: check拡張子
         # self._task_type: Final[TaskType] = task_type
-        self._src_dir_path: Final[Path] = Path(src_dir_path)
+        # self._src_dir_path: Final[Path] = Path(src_dir_path)
+        self.directory_path: Final[Path] = Path(src_dir_path)
         self._dest_dir_path: Final[Path] = Path(dest_dir_path)
         # self._target_exts: Final[Sequence[str]] = target_exts
         self._diff_sec: Final[int] = diff_sec
+
+    @override
+    def on_modified(self, event: DirModifiedEvent | FileModifiedEvent) -> None:
+        if event.is_directory or isinstance(event.src_path, bytes):
+            return
+        self.run(update_file_path=Path(event.src_path))
 
     @cached_classproperty
     @abstractmethod
@@ -35,12 +45,12 @@ class ObserverInstance(ABC):
 
     @cached_classproperty
     @abstractmethod
-    def target_exts(cls) -> Sequence[str]:
+    def target_src_exts(cls) -> Sequence[str]:
         raise NotImplementedError
 
     @property
     def src_dir_path(self) -> Path:
-        return self._src_dir_path
+        return self.directory_path
 
     # @src_dir_path.setter
     # def src_path(self, v: str | Path):
@@ -52,7 +62,7 @@ class ObserverInstance(ABC):
     def run_dir(self) -> None:
         # if self.target_exts is None:
         #     return
-        for ext in self.target_exts:
+        for ext in self.target_src_exts:
             file_lists = self.src_dir_path.glob(f"*/*.{ext}")
             for target_f_path in file_lists:
                 self.run(update_file_path=target_f_path)
@@ -61,7 +71,7 @@ class ObserverInstance(ABC):
         """src_pathの変更が本Taskに該当するか否かを判定"""
         return (
             self._src_dir_path.as_posix() in update_file_path.parent.as_posix()
-            and update_file_path.suffix in self.target_exts
+            and update_file_path.suffix in self.target_src_exts
         )
 
     @abstractmethod
@@ -112,28 +122,3 @@ class ObserverInstance(ABC):
     @staticmethod
     def move(src_path: str | Path, dest_path: str | Path):
         shutil.move(src=src_path, dst=dest_path)
-
-
-# @dataclass
-class CopyTask(ObserverInstance):
-    @cached_classproperty
-    def target_exts(cls) -> None | Sequence[str]:
-        return None
-
-    @cached_classproperty
-    def task_type(cls) -> TaskType:
-        return TaskType.copy
-
-    """監視下で.bibの様に変更があればcopyする処理をするクラス"""
-
-    @override
-    def dest_file_path(self, update_file_path: Path) -> Path:
-        if self._dest_dir_path.suffix:
-            return self._dest_dir_path
-        return self._dest_dir_path / update_file_path.name
-
-    @override
-    def run(self, update_file_path: Path) -> None:
-        if not self._match(update_file_path=update_file_path):
-            return
-        self.copy_in_timestamp_ins(update_file_path=update_file_path)
