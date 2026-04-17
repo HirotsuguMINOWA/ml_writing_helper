@@ -33,9 +33,10 @@ from watchdog.observers.api import BaseObserver
 from watchdog.observers.polling import PollingObserver
 from debtcollector import removals
 
-from ml_writing_helper.abc_runner import CopyTask, ABCTaskRunner
-from ml_writing_helper.enum_cls import MethodToFixEPS, StateMonitor
-from ml_writing_helper.util import Util
+from src.ml_writing_helper.enum_cls import MethodToFixEPS, StateMonitor
+from src.ml_writing_helper.util import Util
+from src.ml_writing_helper.task_runner.copy_runner import CopyTask
+from src.ml_writing_helper.task_runner.img_conv_runner import ImgConvTaskStruct
 
 try:
     from watchdog.observers.fsevents import FSEventsObserver
@@ -57,7 +58,6 @@ try:
 except Exception:
     WindowsApiObserver = None
 
-from .img_conv_runner import Converter, ImgConvTaskStruct, img_crop
 
 # import numpy as np
 # import matplotlib
@@ -123,35 +123,6 @@ def _build_observer(observer_backend: str = DEFAULT_OBSERVER_BACKEND) -> BaseObs
 # ログ出力テスト
 # --------------------------------
 # logger.debug("Hello World!")
-
-
-class Tool:
-    def pdfcrop(self, src_pl: Path, dst_pl: Path) -> None:
-        """
-
-        :param src_pl:
-        :param dst_pl:
-        :return:
-        """
-        pass
-
-    def img_magick(self, src_pl: Path, dst_pl: Path) -> None:
-        """
-
-        :param src_pl:
-        :param dst_pl:
-        :return:
-        """
-        pass
-
-    def _conv_raw_img(self, src_pl: Path, dst_pl: Path) -> None:
-        """
-        ラスタ型?(png, jpeg)の画像変換
-        :param src_pl:
-        :param dst_pl:
-        :return:
-        """
-        pass
 
 
 class Monitor(FileSystemEventHandler):
@@ -460,6 +431,7 @@ class Monitor(FileSystemEventHandler):
         :return:
         """
         # TODO: 面倒なんとか最も簡単な方法できないか
+        pass
 
     @classmethod
     def fix_eps(cls, src_pl: Path) -> Path | None:
@@ -610,7 +582,7 @@ class Monitor(FileSystemEventHandler):
 
         try:
             # init1
-            src_pl =Path(src_file_apath)
+            src_pl = Path(src_file_apath)
             # dst_pl = self._path_conv(dst_dir_apath)
 
             """ 無視すべき拡張子 """
@@ -729,7 +701,7 @@ class Monitor(FileSystemEventHandler):
                 # tmp_src = src_pl  # .with_suffix("")
                 # tmp_dst = dst_pl.joinpath(src_pl.name)  # .with_suffix(".bib")
                 # new_path = shutil.copyfile(tmp_src, tmp_dst)
-                shutil.copy(src_pl, dst_pl)
+                _ = shutil.copy(src_pl, dst_pl)
                 logger.info("Copied %s to %s" % (src_pl, dst_pl))
 
             elif src_pl.suffix.lower() in self._ext_pluntuml:
@@ -1001,7 +973,7 @@ class Monitor(FileSystemEventHandler):
         dst_dir: str | Path,
         diff_sec: int = 10
     ) -> None:
-        ins = CopyTask(
+        ins: CopyTask = CopyTask(
             src_dir_path=src_dir,
             dest_dir_path=dst_dir,
             diff_sec=diff_sec
@@ -1044,6 +1016,8 @@ class Monitor(FileSystemEventHandler):
         """
         try:
             event_handler = self
+
+            #** ObserverをCLIパラで指定可能
             backend = (
                 self._observer_backend
                 if observer_backend is None
