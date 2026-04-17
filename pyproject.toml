@@ -21,9 +21,9 @@ dev = [
     "click",
     "build",
     "pip-tools",
-    "pytest = >=5.2",
+    "pytest >=5.2",
     "pip-versions  >=0.1.0",
-    "mypy = >0.960",
+    "mypy >=0.960",
 ]
 
 [project.scripts]
