@@ -5,7 +5,6 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 from enum import StrEnum
-from re import I
 import shlex
 import shutil
 from subprocess import STDOUT, check_output
@@ -18,7 +17,7 @@ from loguru import logger
 from pdf2image import convert_from_path
 from typed_classproperties import cached_classproperty
 
-from ml_writing_helper.enum_cls import TaskType
+from src.ml_writing_helper.enum_cls import TaskType
 from src.ml_writing_helper.task_runner.abc_runner import ABCTaskRunner
 from src.ml_writing_helper.util import Util
 
