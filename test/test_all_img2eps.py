@@ -19,14 +19,14 @@ import threading
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-sys.path.append("../ml_writing_helper")
-from ml_writing_helper.main import Monitor, StateMonitor
+# sys.path.append("../ml_writing_helper")
+from src.ml_writing_helper.main import Monitor, StateMonitor
 from loguru import logger
 
 # --- 設定定数 ---
-WAIT_FOR_CONVERSION_SEC = 60   # 変換完了待機タイムアウト(秒)
-POLL_INTERVAL_SEC = 1.0         # ポーリング間隔(秒)
-STARTUP_SLEEP_SEC = 10          # Monitor起動待ちsleep時間(秒)
+WAIT_FOR_CONVERSION_SEC = 60  # 変換完了待機タイムアウト(秒)
+POLL_INTERVAL_SEC = 1.0  # ポーリング間隔(秒)
+STARTUP_SLEEP_SEC = 10  # Monitor起動待ちsleep時間(秒)
 
 target_dir_p: Path = Path(__file__).parent.joinpath("tmp_conv")
 # if not target_dir_p.exists():
@@ -57,9 +57,10 @@ class AutoTester:
     """
 
     def __init__(self):
-        self._monitor: Monitor | None = None
+        # self._monitor: Monitor | None = None
+        self._monitor: Monitor = Monitor()
         self._monitor_ready = threading.Event()  # Monitor起動完了を通知するイベント
-        self._stop_event = threading.Event()     # Monitor停止をリクエストするイベント
+        self._stop_event = threading.Event()  # Monitor停止をリクエストするイベント
 
     # ------------------------------------------------------------------
     # ユーティリティ
@@ -114,10 +115,11 @@ class AutoTester:
             bib_src: Path, bib_dst: Path,
             to_fmt: str):
         logger.info("[Thread1] Monitor 起動開始")
-        self._monitor = Monitor()
-        self._monitor.set_monitor(src_dir=fig_src, dst_dir=fig_gen, to_fmt=to_fmt)
+
+        # self._monitor.set_monitor(src_dir=fig_src, dst_dir=fig_gen, to_fmt=to_fmt)
+        self._monitor.set_img_conv(src_dir=fig_src, dst_dir=fig_gen, to_fmt=to_fmt)
         # ★ bib はコピーのみ（変換なし）→ to_fmt=".bib" でそのまま渡す
-        self._monitor.set_monitor(src_dir=bib_src, dst_dir=bib_dst, to_fmt=".bib")
+        self._monitor.set_copy_task(src_dir=bib_src, dst_dir=bib_dst, src_suffixes=["bib"])
 
         # start_monitors()の前に必ずsetする（ブロッキング前に通知）
         self._monitor_ready.set()
@@ -147,7 +149,7 @@ class AutoTester:
 
         # --- (1) Monitor起動を10秒待つ ---
         logger.info(f"[Thread2] Monitor起動待ち ({STARTUP_SLEEP_SEC}sec sleep)...")
-        self._monitor_ready.wait()   # Thread1がreadyをセットするまで待機
+        self._monitor_ready.wait()  # Thread1がreadyをセットするまで待機
         time.sleep(STARTUP_SLEEP_SEC)
         logger.info("[Thread2] 待機完了 - テスト開始")
 
@@ -228,7 +230,7 @@ class AutoTester:
             bib_sample: Path = BIB_SAMPLE,
             bib_src: Path = BIB_SRC,
             bib_dst: Path = BIB_DST,
-            to_fmt: str = ".eps"):
+            to_fmt: str = "eps"):
 
         logger.info("=== AutoTester 開始 ===")
 
@@ -269,4 +271,4 @@ class AutoTester:
 
 if __name__ == "__main__":
     tester = AutoTester()
-    tester.run(to_fmt=".eps")
+    tester.run(to_fmt="eps")

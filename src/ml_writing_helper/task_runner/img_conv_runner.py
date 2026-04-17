@@ -4,7 +4,7 @@
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-from enum import StrEnum
+from enum import StrEnum, auto
 import shlex
 import shutil
 from subprocess import STDOUT, check_output
@@ -23,10 +23,13 @@ from src.ml_writing_helper.util import Util
 
 
 class ImgConvInputType(StrEnum):
-    png = ".png"
-    jpg = ".jpg"
-    jpeg = ".jpeg"
-    eps = ".eps"
+    png = "png"
+    jpg = "jpg"
+    jpeg = "jpeg"
+    pdf = "pdf"
+    pptx = "pptx"
+    ppt = "ppt"
+    gif = "gif"  # TODO: GIFは可？
 
 
 class ImgConvOutputType(StrEnum):
@@ -104,48 +107,250 @@ def img_crop(image: ImageClsType, debug: bool = False) -> ImageClsType:
 # 出力がepsの場合、監視folderにpngなど画像ファイルが書き込まれたらepsへ変換するコードをかけ
 class ImgConvTaskStruct(ABCTaskRunner):
 
-    @cached_classproperty
-    def target_src_exts(cls) -> Sequence[str]:
-        return [".pptx", ".ppt", ".png", ".jpeg", ".jpg",".gif"]
+    # @cached_classproperty
+    # def target_src_suffixes(cls) -> Sequence[str]:
+    #     return [".pptx", ".ppt", ".png", ".jpeg", ".jpg", ".gif"]
 
     @cached_classproperty
     def task_type(cls) -> TaskType:
         return TaskType.img_conv
 
-    @cached_classproperty
-    def target_exts(cls) -> None | Sequence[str]:
-        raise NotImplementedError
+    def convert(
+            self,
+            src_file_apath: str | Path,
+            # dst_dir_apath: str | Path,
+            dst_suffix: str = "png",
+            is_crop: bool = True,
+            gray: bool = False,
+    ) -> None:
+        """
+        単一ファイル変換
+        ppt->pdf->cropping
+        :param src_file_apath:
+        # :param dst_dir_apath: Indicating dir path. NOT file path
+        :param dst_suffix: format type converted
+        :param is_crop: Whether crop or not
+        :param gray:
+        """
+
+        try:
+            # init1
+            src_pl = Path(src_file_apath)
+            # dst_pl = self._path_conv(dst_dir_apath)
+
+            """ 無視すべき拡張子 """
+            if (
+                    src_pl.name.startswith("~")
+                    or src_pl.name.startswith(".")
+                    or src_pl.suffix.lower() in (".part", ".tmp")
+                    or src_pl.stem.endswith("~")
+            ):
+                # for bibdesk
+                logger.info("Ignored: %s" % src_pl.name)
+                return
+            if not src_pl.is_absolute():
+                raise Exception("path_srcは絶対Pathで指定して下さい。src_path:%s" % src_pl)
+            del src_file_apath
+            # src_file_apath = None  # 誤って参照しないように
+
+            # if isinstance(dst_dir_apath, Path):
+            #     tmp_dst = dst_dir_apath
+            # else:
+            #     tmp_dst = Path(dst_dir_apath)
+            # tmp_dst = Path(dst_dir_apath)
+
+            # if tmp_dst.is_dir():
+            #     dst_pl: Path = tmp_dst.joinpath(src_pl.stem + dst_suffix)
+            # else:
+            #     dst_pl = tmp_dst
+            dst_pl = self.dst_file_path(update_file_path=src_pl)
+            # del dst_dir_apath
+            # dst_dir_apath = None  # Prevent Trouble
+            # del to_fmt # 消すな. .bibコピー失敗するから. #FIXME: 要修正
+            # to_fmt = None  # Prevent Trouble
+            if dst_pl is None:
+                raise ValueError("Noneであるのはおかしい")
+            """ チェック """
+            # to_fmt = cls._validated_fmt(to_fmt=to_fmt, src_pl=src_pl)
+            if src_pl.suffix is None or src_pl.suffix.lower() == "":
+                logger.error(
+                    "Stop conversion because the indicated extension of source was wrong(file:%s)."
+                    % src_pl.name
+                )
+                return
+            if dst_pl.suffix is None or dst_pl.suffix == "":
+                logger.error(
+                    "Stop conversion because the indicated extension of destination was wrong(file:%s)."
+                    % dst_pl.name
+                )
+                return
+
+            # preprocee - 前処理で解決
+            src_pl, dst_pl = Util.preprocess(src_pl=src_pl, dst_pl=dst_pl)
+            if dst_pl is None:
+                raise ValueError("Noneであるのはおかしい")
+            # 下記不要？
+            if not src_pl.exists() and not dst_pl.suffix == ".bib":
+                raise Exception("src path(1st-arg:%s)が見つかりません、訂正して下さい" % src_pl.as_posix())
+            # init2
+            # # FIXME: Pathしか受け付けないように要修正
+            # dst_pl = Path(dst_dir_apath)
+            # if not dst_dir_apath.is_dir():
+            #     raise Exception("dst_dir_apath(2nd-arg:%s)は、ファイルではなく、フォルダのPATHを指定して下さい" % dst_dir_apath)
+            # os.chdir(dst_pl.parent)  # important!
+
+            # 拡張子毎に振り分け
+            logger.debug(f"src file ext is {src_pl.suffix}")
+            if src_pl.suffix.lower() in (".png", ".jpg", ".jpeg", ".ai", ".eps"):
+                """Image Cropping and Conversion
+                - [条件] ImageMagicが対応しているFOrmatのみ. Only the format which corresponded to ImageMagick
+                - files entered in src_folder, converted into dst_pl which cropping. and conv to eps
+                """
+                logger.info("Image cropping and Conversion")
+                # pl_src2 = cls._crop_all_fmt(src_pl, dst_pl.joinpath(src_pl.stem + src_pl.suffix),
+                #                          to_img_fmt=src_pl.suffix)
+                # if fmt == ".eps":
+                #     cls._conv2eps(src_pl=pl_src2, pl_dst_dir=dst_pl.joinpath(src_pl.stem + src_pl.suffix))
+                # return
+                # _ = self.mgr_conv_img(src_pl=src_pl, dst_pl=dst_pl, gray=gray)
+                # _ = self.conv_manipulation_img(src_pl=src_pl, dst_pl=dst_pl, do_trim=is_crop, gray=gray)
+                # _ = cls._conv_and_crop(src_pl=src_pl, dst_pl=dst_pl)
+                SlideAndImgConverter.conv_manipulation_img(src_pl=src_pl, dst_pl=dst_pl, gray=gray)
+            elif src_pl.suffix.lower() in ".pdf":
+                """
+                .pdfへの変換
+                """
+                if dst_pl is None:
+                    raise ValueError("Noneであるのはおかしい")
+                dst_pl = SlideAndImgConverter.crop_all_fmt(src_pl, dst_pl)
+                dst_pl = SlideAndImgConverter.conv_manipulation_img(
+                    src_pl, dst_pl, do_trim=True, gray=gray
+                )  # TODO: 現状ImgMagickの-trimでPDFもcropされている！！
+                if dst_pl is None:
+                    raise ValueError("Noneであるのはおかしい")
+
+                # FIXME: 下記fixは不要なのでは。
+                # dst_pl = self.fix_eps(dst_pl)
+            elif src_pl.suffix.lower() in (".ppt", ".pptx", ".odp") and not src_pl.name.startswith("~"):
+                """ Slide Conversion """
+                self.mgr_conv_slide(src_pl, dst_pl, gray=gray)
+            elif dst_pl.suffix == ".md" and src_pl.name.endswith("_pdc"):
+                """PANDOCでpdf変換
+
+                """
+                pass
+                # TODO: PdfにPWを印加できるように。必ずmethod化しろ、この処理は。
+                # TODO:　変換したpdfをしてPathへ転送
+            elif dst_pl.suffix == ".md" and src_pl.name.endswith("_mp"):
+                """Marp-cliを利用したスライドPDFへ
+                """
+                pass
+
+            elif src_pl.suffix.lower() == ".bib":  # and fmt_if_dst_without_ext == ".bib":
+                """
+                .bibファイルのコピー
+                注意).bib.partが生成されるが、瞬間的に.bibになる。それを捉えて該当フォルダへコピーしている
+                """
+                # FIXME: 上記if、条件が重複しているので注
+                # tmp_src = src_pl  # .with_suffix("")
+                # tmp_dst = dst_pl.joinpath(src_pl.name)  # .with_suffix(".bib")
+                # new_path = shutil.copyfile(tmp_src, tmp_dst)
+                _ = shutil.copy(src_pl, dst_pl)
+                logger.info("Copied %s to %s" % (src_pl, dst_pl))
+
+            elif src_pl.suffix.lower() in self._ext_pluntuml:
+                """PlantUML
+                """
+                logger.debug("Start converting: plantUML")
+                SlideAndImgConverter.plantuml2img(src_pl=src_pl, dst_pl=dst_pl)
+            elif src_pl.name.endswith("_mermaid") and src_pl.suffix.lower() == ".md" or src_pl.suffix.lower() == ".mmd":
+                logger.info(f"Mermaid conversion: {src_pl}")
+                SlideAndImgConverter.conv_mermaid_with_crop(
+                    src_pl=src_pl, dst_pl=dst_pl, gray=gray
+                )  # , to_fmt=to_fmt)
+            else:
+                logger.info("未処理ファイル:%s" % src_pl)
+
+            # FIXME: 下記fixは不要なのでは。
+            # if dst_pl.suffix == ".eps":
+            #     dst_pl = self.fix_eps(dst_pl)
+
+        #
+        # def conv2pnt(cls, path_src, dir_dst):
+        #     plib_src = pathlib.Path(path_src)  # pathlibのインスタンス
+        #     if plib_src.suffix in (".ppt", ".pptx") and not plib_src.name.startswith("~"):
+        #         path_dst = pathlib.Path(dir_dst) / plib_src.with_suffix(".pdf").name
+        #         cmd = "/Applications/LibreOffice.app/Contents/MacOS/soffice --headless --convert-to pdf --outdir {out_dir} {path_src}".format(
+        #             out_dir=out_dir, path_src=path_src)
+        #         print("[Debug] CMD: ppt2pdf" + cmd)
+        #         tokens = shlex.split(cmd)
+        #         subprocess.run(tokens)
+        except Exception as e:
+            logger.exception(e)
 
     @override
-    def run(self, update_file_path: Path) -> None:
-        raise NotImplementedError
+    def _run_internal(self, update_file_path: Path) -> None:
+        self.convert(
+            src_file_apath=update_file_path,  # pathlib.Path,
+            # dst_dir_apath=self.dest_file_path(update_file_path=update_file_path).parent,  # TODO: 二度手間
+            dst_suffix=self._dst_suffix,
+            gray=self._gray,
+            is_crop=self._is_crop,
+            # mk_dst_dir=True,
+        )
 
     @override
-    def dest_file_path(self, update_file_path: Path) -> Path:
-        raise NotImplementedError
+    def dst_file_path(self, update_file_path: Path) -> Path:
+        return self._dest_dir_path.joinpath(f"{update_file_path.stem}.{self._dst_suffix}")
 
     def __init__(
-        self,
-        src_dir_path: str | Path,
-        dest_dir_path: str | Path,
-        to_fmt: str,  # TODO: [優先度:大] dst_extへ要変更。問題は、to_fmtが広範囲に使われているため合わせて変更が必要
-        diff_sec: int = 10,
-        gray: bool = False,
-        is_crop: bool = True,
-        mk_dst_dir: bool = True
+            self,
+            src_dir_path: str | Path,
+            dst_dir_path: str | Path,
+            dst_suffix: str,  # TODO: [優先度:大] dst_extへ要変更。問題は、to_fmtが広範囲に使われているため合わせて変更が必要
+            diff_sec: int = 10,
+            gray: bool = False,
+            is_crop: bool = True,
+            mk_dst_dir: bool = True
     ):
         super().__init__(
             src_dir_path=src_dir_path,
-            dest_dir_path=dest_dir_path,
-            diff_sec=diff_sec
+            dst_dir_path=dst_dir_path,
+            diff_sec=diff_sec,
+            dst_suffixes=tuple([dst_suffix]),
+            src_suffixes=[str(x) for x in tuple(ImgConvInputType)],  # [".pptx", ".ppt", ".png", ".jpeg", ".jpg", ".gif"],
         )
-        self._dst_ext: Final[ImgConvOutputType] = ImgConvOutputType(to_fmt)
+        self._dst_suffix: Final[ImgConvOutputType] = ImgConvOutputType(dst_suffix)
         self._gray: Final[bool] = gray
         self._is_crop: Final[bool] = is_crop
         self._mk_dst_dir: Final[bool] = mk_dst_dir
 
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, ImgConvTaskStruct):
+            return NotImplemented
+        return (
+                self.task_type == other.task_type
+                and self._dest_dir_path == other._dest_dir_path
+                and self._dst_suffix == other._dst_suffix
+                and self._gray == other._gray
+                and self._is_crop == other._is_crop
+                and self._mk_dst_dir == other._mk_dst_dir
+        )
 
-class Converter:
+    def __hash__(self) -> int:
+        return hash(
+            (
+                self.task_type,
+                self._dest_dir_path,
+                self._dst_suffix,
+                self._gray,
+                self._is_crop,
+                self._mk_dst_dir,
+            )
+        )
+
+
+class SlideAndImgConverter:
     """1対1formatでの直接画像変換用クラス
     - フォーマット変換のclassmethodが主のクラス
     """
@@ -377,8 +582,8 @@ class Converter:
 
     @staticmethod
     def remove_transparency(
-        im: Image.Image,
-        bg_color: tuple[int, int, int] = (255, 255, 255),
+            im: Image.Image,
+            bg_color: tuple[int, int, int] = (255, 255, 255),
     ) -> Image.Image:
         """
         Taken from https://stackoverflow.com/a/35859141/7444782
@@ -400,12 +605,12 @@ class Converter:
 
     @classmethod
     def conv_manipulation_img(
-        cls,
-        src_pl: Path,
-        dst_pl: Path,
-        do_trim: bool = True,
-        gray: bool = False,
-        eps_ver: int = 2,
+            cls,
+            src_pl: Path,
+            dst_pl: Path,
+            do_trim: bool = True,
+            gray: bool = False,
+            eps_ver: int = 2,
     ) -> Path | None:
         """
         Manipulation (Convert/Crop/Gray) Image
@@ -448,7 +653,7 @@ class Converter:
         下記は「Imageクラス」で画像データを処理を実施する
         """
         if src_pl.suffix.lower() == ".pdf":
-            Converter.pdf2img(src_pl=src_pl, dst_pl=dst_pl)
+            SlideAndImgConverter.pdf2img(src_pl=src_pl, dst_pl=dst_pl)
         else:
             """ Conversion other than pdf """
             dst_im = Image.open(src_pl.as_posix())
@@ -487,10 +692,10 @@ class Converter:
 
     @classmethod
     def conv_mermaid_with_crop(
-        cls,
-        src_pl: Path,
-        dst_pl: Path,
-        gray: bool = False,
+            cls,
+            src_pl: Path,
+            dst_pl: Path,
+            gray: bool = False,
     ) -> tuple[bool, Path | None]:
         """
         mermaid markdownを変換 及び 特定のformatへ変換する
@@ -610,10 +815,10 @@ class Converter:
 
     @classmethod
     def _crop_pdf_by_PDFCropMargin(
-        cls,
-        src_pl: Path,
-        dst_pl: Path,
-        margin: int | float = 0,
+            cls,
+            src_pl: Path,
+            dst_pl: Path,
+            margin: int | float = 0,
     ) -> Path:
         """
         PDFをcropする。autocropも対応
@@ -631,10 +836,10 @@ class Converter:
 
     @classmethod
     def _crop_pdf_by_pdfcrop(
-        cls,
-        src_pl: Path,
-        dst_pl: Path,
-        margin: int | float = 0,
+            cls,
+            src_pl: Path,
+            dst_pl: Path,
+            margin: int | float = 0,
     ) -> Path:
         """
         PDFをcropする。autocropも対応
@@ -655,6 +860,152 @@ class Converter:
         if res_msg:
             logger.info(res_msg)
         return dst_pl
+
+    @classmethod
+    def mgr_conv_slide(
+            cls,
+            src_pl: Path,
+            dst_pl: Path,
+            gray: bool,
+            is_crop: bool = True,
+            via_ext: str = ".png",
+            div_proc: tuple[str, ...] = (".pdf", ".eps"),
+    ) -> None:
+        """
+        スライドの変換を制御するマネージャ
+        TODO: mgr_conv_slideメソッドに統一すべき。
+        :param src_pl:
+        :param dst_pl:
+        :param is_crop:
+        :param via_ext:
+        :param div_proc:
+        :return:
+        """
+        is_mediate = False
+        if dst_pl.suffix in div_proc:
+            """
+            - 注意) PowerPoint/LibreOffice(.odp)は.pdfへ変換してPDFCropで失敗する。そのため、一度、.png経由する。
+            """
+            # warn = """
+            #   [Warning] スライドにはPowerPoint形式(.pptx)に変換して使ってください。
+            #   """
+            # # print(warn)
+            logger.warning(f".ppt(x)/.odpから{div_proc}への変換は{via_ext}経由で変換します。")
+            # 他のフォーマット経由で変換する
+            is_mediate = True
+            dst_tmp_pl = dst_pl.parent.joinpath(dst_pl.stem + "_tmp" + via_ext)
+            logger.info(f"tmp: {dst_tmp_pl.as_posix()}")
+        else:
+            dst_tmp_pl = dst_pl
+
+        # スライド変換 ※ ただし、変換のみ
+        cls._conv_slide(src_pl=src_pl, dst_pl=dst_tmp_pl)
+
+        if is_crop:
+            if is_mediate:
+                # croppingを含むPDFへ変換。
+                cls.mgr_conv_img(dst_tmp_pl, dst_pl, gray=gray)
+            else:
+                # croppingのみ
+                SlideAndImgConverter.crop_all_fmt(src_img_pl=dst_tmp_pl, dst_pl=dst_pl)
+
+        # Del mediate file
+        if is_mediate:
+            dst_tmp_pl.unlink()
+
+    @classmethod
+    def _conv_slide(cls, src_pl: Path, dst_pl: Path) -> None:
+        """
+        :param src_pl:
+        :param dst_pl: ファイル/folderまでのPATH.場合分けが必要
+        :return:
+        """
+        for p_soffice in [Path(x) for x in cls._paths_soffice]:
+            if p_soffice.exists():
+                cmd = "'{path_soffice}' --headless --norestore --convert-to {dst_ext} --outdir '{out_dir}' '{path_src}'".format(
+                    # cmd = "'{path_soffice}' --headless --convert-to {dst_ext} {path_src}".format(
+                    path_soffice=p_soffice,
+                    dst_ext=dst_pl.suffix[1:],  # eliminate first "."
+                    # , out_dir=dir_dst
+                    out_dir=dst_pl.parent.as_posix(),
+                    path_src=src_pl,
+                )
+                break
+        else:
+            logger.warning(f"LibreOfficeが見つかりません。探索したPATH:{cls._paths_soffice}")
+
+        if src_pl.suffix.lower() in (".pptx", ".ppt"):
+            logger.warning(
+                "(Math) symbols may be VANISH!!!!. Please confirm generated product not to disappear symbols")
+        # output = cls._run_cmd(cmd)
+        output = cls._run_cmd(cmd, "CMD(slide2img): ")
+        # logger.debug("CMD(slide2img):" + cmd)
+        # tokens = shlex.split(cmd)
+        # subprocess.run(tokens)
+        # output = check_output(tokens, stderr=STDOUT).decode("utf8")
+        logger.debug("Output: %s" % output)
+        if output == "Error: source file could not be loaded\n":
+            """なぜかLO Vanillaで出現？"""
+            # raise Exception("")
+            logger.error("なぜかLO Vanillaで出現？")
+
+        # Change gen file name
+        pl_out = dst_pl.parent.joinpath(src_pl.stem + dst_pl.suffix)
+        shutil.move(pl_out, dst_pl)
+
+    @classmethod
+    def mgr_conv_img(cls, src_pl: Path, dst_pl: Path, gray: bool = False) -> None:
+        """
+        Image Conversion with other(e.g. cropping)
+        FIXME: _conv_imgやらと重複しており、機能もそちらに移動している。もう、こちらは不要
+        - 対象: 全ての画像, pdf, eps。それ以外の.md, .mmdなどから呼び出して使う様にすべきだろう。
+        - ImageMagickのcropと画像変換を合わせ使う
+        - ほぼ、ImageMagickだけでよく、PDF-Outのみ別分岐処理となった
+        :param src_pl:
+        :param dst_pl:
+        :param gray:
+        :return: 変換後のpath名
+        :rtype: pathlib.Path
+        """
+        """ Calc path of base_dst_pl """
+        # path_dst = pathlib.Path(dir_dst) / fname_str_or_pl.name
+        # path_dst = pathlib.Path(dir_dst) / plib_src.with_suffix("." + cls._to_fmt).name
+        if not src_pl.exists():
+            logger.error(f"{src_pl} not found")
+            return
+        # if dst_pl.is_dir():
+        #     dst_pl = dst_pl.joinpath(src_pl.name)  # if the path is dir, set src_filename_stem converted
+        if (
+                src_pl.suffix.lower() in cls.imagic_fmt_conv_in
+                and dst_pl.suffix in cls.imagic_fmt_conv_out
+                and dst_pl.suffix not in (".pdf", ".eps")
+        ):
+            """
+            - (in,out)共にpdfのcropはできない. epsのin?,outは可
+            - 処理対象
+                - 一般画像(jpeg, epsなど)
+                - pdf: inのみ。
+            """
+            SlideAndImgConverter.conv_manipulation_img(
+                src_pl=src_pl, dst_pl=dst_pl, do_trim=False, gray=gray
+            )
+            SlideAndImgConverter.crop_all_fmt(dst_pl, dst_pl)
+        else:
+            """
+            ★ こちらはImageMagicで直接Crop(Trim)できるfmtだけを処理する
+            出力がPDFの場合のみ2段階変換(conv,crop)を実施
+            pdf->image: OK!!!
+                $ convert try2-crop.pdf eps2:try2-crop.eps
+                >> try2-crop.eps という、トリミングされたepsができる。
+                http://would-be-astronomer.hatenablog.com/entry/2015/03/26/214633
+            pdfcrop機能しない事が多い？img_magickと併用でcropする事
+            """
+            _ = SlideAndImgConverter.conv_manipulation_img(
+                src_pl, dst_pl, do_trim=True, gray=gray
+            )  # TODO: 現状ImgMagickの-trimでPDFもcropされている！！
+            # cls._crop_all_fmt(dst_pl, dst_pl)
+        # else:
+        #     logger.error("_conv_with_crop_bothがCalled.しかし何も変換せず。src:%s,dst:%s" % (src_pl, dst_pl))
 
 
 def test_1() -> None:
