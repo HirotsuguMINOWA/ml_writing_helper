@@ -1,4 +1,4 @@
-src = "../sample/fig_sample/test_eps.eps"
+src = "../sandbox/fig_sample/test_eps.eps"
 dst_dir = "fig_gen"
 #
 

@@ -13,7 +13,6 @@ import shlex
 import shutil
 import sys
 import time
-import traceback
 import unicodedata  # for MacOS NDF
 from collections.abc import Callable
 from pathlib import Path
@@ -768,7 +767,7 @@ class Monitor(FileSystemEventHandler):
             )
             self._observer = _build_observer(backend)
             if self._observer is None: # pyright: ignore[reportUnnecessaryComparison]
-                raise Exception(f"[bug] ObserverインスタンスがNone")
+                raise Exception("[bug] ObserverインスタンスがNone")
             for task in self._tasks:
                 task.run_all_target_files_in_target_dir()
                 self._observer.schedule(task, task.src_dir_path.as_posix(), recursive=True)

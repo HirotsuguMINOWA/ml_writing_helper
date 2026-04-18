@@ -63,20 +63,14 @@ class SlideAndImgConverter:
         return output
 
     @classmethod
-    def pdf2img(cls, src_pl: Path, dst_pl: Path, dpi: int = 150) -> None:
-        # PDF -> Image に変換（150dpi）
-        pages: list[Image.Image] = convert_from_path(src_pl.as_posix(), dpi)
+    def pdf2img(cls, src_pl: Path, dst_pl: Path) -> None:
+        pages = convert_from_path(src_pl.as_posix())
+        if not pages:
+            raise ValueError(f"No pages found in PDF: {src_pl}")
 
-        # 画像ファイルを１ページずつ保存
-        # image_dir = Path("./image_file")
-        if len(pages) == 1:
-            pages[0].save(dst_pl.as_posix(), dst_pl.suffix)
-        else:
-            for i, page in enumerate(pages):
-                file_name = dst_pl.stem + "_{:02d}".format(i + 1) + dst_pl.suffix
-                image_path = dst_pl / file_name
-                # JPEGで保存
-                page.save(str(image_path), dst_pl.suffix)
+        # PILのformatは "EPS" のようにドットなしが必要
+        fmt = dst_pl.suffix.lstrip(".").upper()
+        pages[0].save(dst_pl.as_posix(), format=fmt)
 
     @classmethod
     def plantuml2img(cls, src_pl: Path, dst_pl: Path, need_pre_proc: bool = False) -> None:
@@ -780,7 +774,7 @@ def img_crop(image: ImageClsType, debug: bool = False) -> ImageClsType:
 
 
 def test_img_crop():
-    src_img = Path('sample/fig_sample/test_large.png')
+    src_img = Path('sandbox/fig_sample/test_large.png')
     src_im = Image.open(src_img)
     convd_im = img_crop(src_im)
     convd_im.show()

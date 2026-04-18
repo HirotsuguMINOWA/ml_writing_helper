@@ -14,6 +14,6 @@ def trim(im):
         return im.crop(bbox)
 
 
-im = Image.open("../sample/fig_sample/test_eps.eps")
+im = Image.open("../sandbox/fig_sample/test_eps.eps")
 im = trim(im)
 im.show()

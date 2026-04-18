@@ -5,7 +5,7 @@
 from pathlib import Path
 
 src_eps = Path(__file__).parent.parent
-src_eps = src_eps.joinpath("sample/fig_sample/test_eps.eps")
+src_eps = src_eps.joinpath("sandbox/fig_sample/test_eps.eps")
 dst_eps = ""
 
 print("src_path:%s" % src_eps)

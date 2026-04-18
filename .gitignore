@@ -4,9 +4,10 @@
 **/_fig_gen
 **/fig_src
 **/_fig_src
-sample/fig_srcぽぺび/*
+sandbox/fig_src/*
 **/.history
 poetry.lock
+**/tmp*
 
 # Created by .ignore support plugin (hsz.mobi)
 ### Python template

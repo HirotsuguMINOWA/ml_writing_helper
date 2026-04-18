@@ -48,7 +48,7 @@ def adapt_edges(edges, *, height, width):
 
 if __name__ == "__main__":
 
-    filename_in = "../../sample/fig_sample/test_png.png"
+    filename_in = "../../sandbox/fig_sample/test_png.png"
     filename_out = "res_NHnV7.png"
 
     image = cv2.imread(str(filename_in))
