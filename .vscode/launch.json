@@ -1,6 +1,17 @@
 {
     "configurations": [
         {
+            "name": "Test(BIB) @MLWH",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/test/test_bib_copy.py",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}:${env:PYTHONPATH}"
+            }
+        },
+        {
             "name": "Test1 @MLWH",
             "type": "debugpy",
             "request": "launch",
