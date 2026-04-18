@@ -138,6 +138,7 @@ class ABCTaskRunner(ABC, FileSystemEventHandler):
         if self._src_suffixes is not None and update_file_path.suffix[1:] not in self._src_suffixes:
             logger.debug(f"拡張子{update_file_path.suffix}はコピー対処外")
             return None
+        logger.info(f"監視前実行: {self.__class__.__name__}({update_file_path.as_posix()} → {self.dst_file_path(update_file_path=update_file_path).as_posix()})")
         return self._run_internal(update_file_path=update_file_path)
 
     @abstractmethod
@@ -207,7 +208,7 @@ class ABCTaskRunner(ABC, FileSystemEventHandler):
         # print(self.msg_event_start)
         logger.info(f"{state_change} : {filename}")
         # cls.convert(src_file_apath=event.src_path, dst_dir_apath=cls._dst_pl, fmt_if_dst_without_ext=cls._to_fmt)  # , _to_fmt="png")
-        if isinstance(event.src_path,bytes):
+        if isinstance(event.src_path, bytes):
             logger.debug(f"{event.src_path=}はbytes型です。何もせずにTask skipします。")
             return None
         if start:
@@ -328,5 +329,6 @@ class ABCTaskRunner(ABC, FileSystemEventHandler):
     def __eq__(self, other: object) -> bool:
         raise NotImplementedError
 
+    @abstractmethod
     def __hash__(self) -> int:
         raise NotImplementedError

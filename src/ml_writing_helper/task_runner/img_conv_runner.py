@@ -21,6 +21,30 @@ class ImgConvTaskStruct(ABCTaskRunner):
     # @cached_classproperty
     # def target_src_suffixes(cls) -> Sequence[str]:
     #     return [".pptx", ".ppt", ".png", ".jpeg", ".jpg", ".gif"]
+    def __repr__(self):
+        return f'{self.__class__.__name__}(src_dir_path:{self._src_dir_path}, dst_dir_path={self._dest_dir_path}, src_suffixes={self._src_suffixes}, dst_suffixes={self._src_suffixes})'
+
+    def __init__(
+            self,
+            src_dir_path: str | Path,
+            dst_dir_path: str | Path,
+            dst_suffix: str,  # TODO: [優先度:大] dst_extへ要変更。問題は、to_fmtが広範囲に使われているため合わせて変更が必要
+            diff_sec: int = 10,
+            gray: bool = False,
+            is_crop: bool = True,
+            mk_dst_dir: bool = True
+    ):
+        super().__init__(
+            src_dir_path=src_dir_path,
+            dst_dir_path=dst_dir_path,
+            diff_sec=diff_sec,
+            dst_suffixes=tuple([dst_suffix]),
+            src_suffixes=[str(x) for x in tuple(ImgConvInputType)],  # [".pptx", ".ppt", ".png", ".jpeg", ".jpg", ".gif"],
+        )
+        self._dst_suffix: Final[ImgConvOutputType] = ImgConvOutputType(dst_suffix)
+        self._gray: Final[bool] = gray
+        self._is_crop: Final[bool] = is_crop
+        self._mk_dst_dir: Final[bool] = mk_dst_dir
 
     @cached_classproperty
     def task_type(cls) -> TaskType:
@@ -213,28 +237,6 @@ class ImgConvTaskStruct(ABCTaskRunner):
     @override
     def dst_file_path(self, update_file_path: Path) -> Path:
         return self._dest_dir_path.joinpath(f"{update_file_path.stem}.{self._dst_suffix}")
-
-    def __init__(
-            self,
-            src_dir_path: str | Path,
-            dst_dir_path: str | Path,
-            dst_suffix: str,  # TODO: [優先度:大] dst_extへ要変更。問題は、to_fmtが広範囲に使われているため合わせて変更が必要
-            diff_sec: int = 10,
-            gray: bool = False,
-            is_crop: bool = True,
-            mk_dst_dir: bool = True
-    ):
-        super().__init__(
-            src_dir_path=src_dir_path,
-            dst_dir_path=dst_dir_path,
-            diff_sec=diff_sec,
-            dst_suffixes=tuple([dst_suffix]),
-            src_suffixes=[str(x) for x in tuple(ImgConvInputType)],  # [".pptx", ".ppt", ".png", ".jpeg", ".jpg", ".gif"],
-        )
-        self._dst_suffix: Final[ImgConvOutputType] = ImgConvOutputType(dst_suffix)
-        self._gray: Final[bool] = gray
-        self._is_crop: Final[bool] = is_crop
-        self._mk_dst_dir: Final[bool] = mk_dst_dir
 
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, ImgConvTaskStruct):

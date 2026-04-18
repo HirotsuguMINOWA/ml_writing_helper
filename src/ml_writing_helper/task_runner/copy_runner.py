@@ -11,6 +11,9 @@ from src.ml_writing_helper.task_runner.abc_runner import ABCTaskRunner
 
 
 class CopyTask(ABCTaskRunner):
+    def __repr__(self):
+        return f'{self.__class__.__name__}(src_dir_path:{self._src_dir_path}, dst_dir_path={self._dest_dir_path}, src_suffixes={self._src_suffixes})'
+
     def __init__(
             self,
             # task_type: TaskType,
@@ -64,9 +67,9 @@ class CopyTask(ABCTaskRunner):
         if not isinstance(other, CopyTask):
             return NotImplemented
         return (
-            self.task_type == other.task_type
-            and self._dest_dir_path == other._dest_dir_path
-            and self._dst_suffixes == other._dst_suffixes
+                self.task_type == other.task_type
+                and self._dest_dir_path == other._dest_dir_path
+                and self._dst_suffixes == other._dst_suffixes
         )
 
     def __hash__(self) -> int:
