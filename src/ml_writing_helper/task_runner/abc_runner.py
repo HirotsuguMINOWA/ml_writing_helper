@@ -80,7 +80,7 @@ class ABCTaskRunner(ABC, FileSystemEventHandler):
 
             # ** Check base_self.dest_dir_path path
             if not self._dest_dir_path.exists():
-                logger.info("右記PATH存在しません、作成しますか?:%s" % self.dest_dir_path)
+                logger.info("右記PATH存在しません、作成しますか?:%s" % self._dest_dir_path)
 
                 res = ""
                 while res not in ("y", "n", "Y", "N"):
@@ -93,7 +93,7 @@ class ABCTaskRunner(ABC, FileSystemEventHandler):
 
             # ! set into scheduling
             # !
-            observer.schedule(self, self.self.src_dir_path.as_posix(), recursive=True)
+            observer.schedule(self, self.src_dir_path.as_posix(), recursive=True)
 
             # ! タイムスタンプ確認: srcがdstより5秒以上新しければコピー
             # to_fmt_in = self._monitor_fmts.get((self.src_dir_path, self.dest_dir_path), "")
@@ -120,12 +120,12 @@ class ABCTaskRunner(ABC, FileSystemEventHandler):
     @property
     def src_suffixes(self) -> Sequence[str]:
         # raise NotImplementedError
-        self._src_suffixes
+        return self._src_suffixes
 
     @property
     def dst_suffixes(self) -> Sequence[str]:
         # raise NotImplementedError
-        self._dst_suffixes
+        return self._dst_suffixes
 
     @property
     def src_dir_path(self) -> Path:
@@ -157,42 +157,42 @@ class ABCTaskRunner(ABC, FileSystemEventHandler):
         """src_pathの変更が本Taskに該当するか否かを判定"""
         return (
                 self._src_dir_path.as_posix() in update_file_path.parent.as_posix()
-                and update_file_path.suffix in self.target_src_suffixes
+                and update_file_path.suffix in self._src_suffixes
         )
 
     @abstractmethod
     def dst_file_path(self, update_file_path: Path) -> Path:
         raise NotImplementedError
 
-    def _road_balancer(self, event: FileSystemEvent) -> None:
-        """
-
-        :param event:
-        :return:
-        """
-        if event.is_directory:
-            return  # 監視対象ではない。
-        # print(f"event.src_path:{self.is_nfd(event.src_path)},{event.src_path}")
-        for (
-                key_path,
-                closure,
-        ) in self._monitors.items():
-            # print(f"key_path:{self.is_nfd(key_path[0].as_posix())},{event.src_path}")
-            """ Check the env. applied NDF or not"""
-            if platform.system() == "Darwin":
-                """convert NDF to NFC """
-                converted = unicodedata.normalize("NFC", key_path[0].as_posix())
-                tmp_src_path = unicodedata.normalize("NFC", event.src_path)
-            else:
-                converted = key_path[0].as_posix()
-                tmp_src_path = event.src_path
-            # if converted in event.src_path:  # 0: src_path, 1:dst_path
-            if converted in tmp_src_path:  # 0: src_path, 1:dst_path
-                if event.event_type == "moved":
-                    src_path = event.dest_path
-                else:
-                    src_path = event.src_path
-                closure(src_path)  # run
+    # def _road_balancer(self, event: FileSystemEvent) -> None:
+    #     """
+    #
+    #     :param event:
+    #     :return:
+    #     """
+    #     if event.is_directory:
+    #         return  # 監視対象ではない。
+    #     # print(f"event.src_path:{self.is_nfd(event.src_path)},{event.src_path}")
+    #     for (
+    #             key_path,
+    #             closure,
+    #     ) in self._monitors.items():
+    #         # print(f"key_path:{self.is_nfd(key_path[0].as_posix())},{event.src_path}")
+    #         """ Check the env. applied NDF or not"""
+    #         if platform.system() == "Darwin":
+    #             """convert NDF to NFC """
+    #             converted = unicodedata.normalize("NFC", key_path[0].as_posix())
+    #             tmp_src_path = unicodedata.normalize("NFC", event.src_path)
+    #         else:
+    #             converted = key_path[0].as_posix()
+    #             tmp_src_path = event.src_path
+    #         # if converted in event.src_path:  # 0: src_path, 1:dst_path
+    #         if converted in tmp_src_path:  # 0: src_path, 1:dst_path
+    #             if event.event_type == "moved":
+    #                 src_path = event.dest_path
+    #             else:
+    #                 src_path = event.src_path
+    #             closure(src_path)  # run
 
     def event_common(
             self,
@@ -207,6 +207,9 @@ class ABCTaskRunner(ABC, FileSystemEventHandler):
         # print(self.msg_event_start)
         logger.info(f"{state_change} : {filename}")
         # cls.convert(src_file_apath=event.src_path, dst_dir_apath=cls._dst_pl, fmt_if_dst_without_ext=cls._to_fmt)  # , _to_fmt="png")
+        if isinstance(event.src_path,bytes):
+            logger.debug(f"{event.src_path=}はbytes型です。何もせずにTask skipします。")
+            return None
         if start:
             # self._road_balancer(event=event)
             self.run(update_file_path=Path(event.src_path))

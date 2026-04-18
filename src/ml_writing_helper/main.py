@@ -35,9 +35,8 @@ from debtcollector import removals
 
 from src.ml_writing_helper.task_runner.abc_runner import ABCTaskRunner
 from src.ml_writing_helper.enum_cls import MethodToFixEPS, StateMonitor
-from src.ml_writing_helper.util import Util
 from src.ml_writing_helper.task_runner.copy_runner import CopyTask
-from src.ml_writing_helper.task_runner.img_conv_runner import ImgConvTaskStruct, SlideAndImgConverter
+from src.ml_writing_helper.task_runner.img_conv_runner import ImgConvTaskStruct
 
 try:
     from watchdog.observers.fsevents import FSEventsObserver
@@ -768,7 +767,7 @@ class Monitor(FileSystemEventHandler):
                 else _normalize_observer_backend(observer_backend)
             )
             self._observer = _build_observer(backend)
-            if self._observer is None:
+            if self._observer is None: # pyright: ignore[reportUnnecessaryComparison]
                 raise Exception(f"[bug] ObserverインスタンスがNone")
             for task in self._tasks:
                 task.run_all_target_files_in_target_dir()
@@ -785,11 +784,8 @@ class Monitor(FileSystemEventHandler):
                     break
             self._observer.join()
         except Exception as e:
-            raise Exception("Current path: %s" % Path.cwd()) from e
-        except Exception as e:
             logger.exception(e)
-            raise Exception(e)
-            exit(1)
+            raise Exception("Current path: %s" % Path.cwd()) from e
 
         # try:
         #     event_handler = self
@@ -918,6 +914,7 @@ def _run_convert_cli(args: argparse.Namespace) -> int:
     monitor_ins = Monitor()
     monitor_ins.convert(
         src_file_apath=src_pl.as_posix(),
+        
         dst_dir_apath=args.dst_dir_apath,
         to_fmt=args.to_fmt,
         is_crop=not args.no_crop,

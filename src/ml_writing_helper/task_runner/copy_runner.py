@@ -103,7 +103,6 @@ class CopyTaskStruct(CopyTask):
             diff_sec=diff_sec,
             wait_sec=wait_sec,
             src_suffixes=src_suffixes,
-            dst_suffixes=[""]
             # observer:EventHandler=FileSystemEventHandler
         )
 
