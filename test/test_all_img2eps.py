@@ -161,14 +161,14 @@ class AutoTester:
         logger.info("[Thread2] === Step1: png/jpeg の変換テスト ===")
         copied_imgs = self.copy_files(fig_sample, fig_src, IMG_EXTS)
         if copied_imgs:
-            expected_eps = [fig_gen / (f.stem + to_fmt) for f in copied_imgs]
+            expected_eps = [fig_gen / (f.stem + "." + to_fmt) for f in copied_imgs]
             logger.info(f"[Thread2] 変換完了を待機中: {expected_eps}")
             ok = self.wait_for_files(expected_eps)
             try:
                 assert ok, f"[FAIL] Step1: 変換タイムアウト。生成されなかったファイル: {[f for f in expected_eps if not f.exists()]}"
                 logger.info("[Thread2] Step1: PASS ✅ png/jpeg → .eps 変換確認")
-            except AssertionError as e:
-                logger.error(e)
+            except Exception as e:
+                logger.exception(e)
                 all_passed = False
         else:
             logger.warning("[Thread2] Step1: fig_sampleにpng/jpegが見つかりません。スキップ")
@@ -179,15 +179,16 @@ class AutoTester:
         logger.info("[Thread2] === Step2: .pptx の変換テスト ===")
         copied_pptx = self.copy_files(fig_sample, fig_src, PPTX_EXTS)
         if copied_pptx:
-            expected_pptx_eps = [fig_gen / (f.stem + to_fmt) for f in copied_pptx]
+            expected_pptx_eps = [fig_gen / (f.stem + "." + to_fmt) for f in copied_pptx]
             logger.info(f"[Thread2] 変換完了を待機中: {expected_pptx_eps}")
             ok = self.wait_for_files(expected_pptx_eps)
             try:
                 assert ok, f"[FAIL] Step2: 変換タイムアウト。生成されなかったファイル: {[f for f in expected_pptx_eps if not f.exists()]}"
                 logger.info("[Thread2] Step2: PASS ✅ .pptx → .eps 変換確認")
-            except AssertionError as e:
-                logger.error(e)
+            except Exception as e:
+                logger.exception(e)
                 all_passed = False
+
         else:
             logger.warning("[Thread2] Step2: fig_sampleに.pptxが見つかりません。スキップ")
 

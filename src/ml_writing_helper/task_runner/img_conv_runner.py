@@ -15,6 +15,7 @@ from pathlib import Path
 
 from loguru import logger
 from pdf2image import convert_from_path
+from pdfCropMargins import crop
 from typed_classproperties import cached_classproperty
 
 from src.ml_writing_helper.enum_cls import TaskType
@@ -233,7 +234,7 @@ class ImgConvTaskStruct(ABCTaskRunner):
                 # dst_pl = self.fix_eps(dst_pl)
             elif src_pl.suffix.lower() in (".ppt", ".pptx", ".odp") and not src_pl.name.startswith("~"):
                 """ Slide Conversion """
-                self.mgr_conv_slide(src_pl, dst_pl, gray=gray)
+                SlideAndImgConverter.mgr_conv_slide(src_pl, dst_pl, gray=gray)
             elif dst_pl.suffix == ".md" and src_pl.name.endswith("_pdc"):
                 """PANDOCでpdf変換
 
@@ -258,7 +259,7 @@ class ImgConvTaskStruct(ABCTaskRunner):
                 _ = shutil.copy(src_pl, dst_pl)
                 logger.info("Copied %s to %s" % (src_pl, dst_pl))
 
-            elif src_pl.suffix.lower() in self._ext_pluntuml:
+            elif src_pl.suffix.lower() in SlideAndImgConverter._ext_pluntuml:
                 """PlantUML
                 """
                 logger.debug("Start converting: plantUML")
@@ -354,9 +355,29 @@ class SlideAndImgConverter:
     """1対1formatでの直接画像変換用クラス
     - フォーマット変換のclassmethodが主のクラス
     """
+    imagic_fmt_conv_out: tuple[str, ...] = (".png", ".jpg", ".jpeg", ".png", ".eps", ".svg")
+
+    _ext_pluntuml: tuple[str, ...] = (".pu", ".puml")
 
     plantuml_fmt_out: tuple[str, ...] = (".png", ".svg", ".pdf", ".eps", ".html", ".txt", ".tex")
     mermaid_fmt_in: tuple[str, ...] = (".svg", ".png", ".pdf")
+    _paths_soffice: list[str] = [
+        "soffice",
+        "/Applications/LibreOffice.app/Contents/MacOS/soffice",
+        r"C:\Program Files\LibreOffice\program\soffice.exe"
+    ]
+    imagic_fmt_conv_in: tuple[str, ...] = (
+        ".png",
+        ".jpg",
+        ".jpeg",
+        ".png",
+        ".eps",
+        ".svg",
+        ".pdf",
+    )
+    @classmethod
+    def _ppaths_soffice(cls) -> tuple[Path, ...]:
+        return tuple([Path(x) for x in cls._paths_soffice])
 
     @staticmethod
     def _run_cmd(cmd: str, short_msg: str = "", is_print: bool = True) -> str:
@@ -717,6 +738,9 @@ class SlideAndImgConverter:
         """ Conversion: mermaid """
         if not res:
             return False, None
+        if tmp_dst_pl is None:
+            logger.error(f"Fail! {tmp_dst_pl} is NONE")
+            return False, None
         """ Cropping image """
         tmp_dst_pl = cls.crop_all_fmt(src_img_pl=tmp_dst_pl, dst_pl=dst_pl)
         if tmp_dst_pl is None:
@@ -920,6 +944,7 @@ class SlideAndImgConverter:
         :param dst_pl: ファイル/folderまでのPATH.場合分けが必要
         :return:
         """
+        cmd: None | str = None
         for p_soffice in [Path(x) for x in cls._paths_soffice]:
             if p_soffice.exists():
                 cmd = "'{path_soffice}' --headless --norestore --convert-to {dst_ext} --outdir '{out_dir}' '{path_src}'".format(
@@ -933,7 +958,8 @@ class SlideAndImgConverter:
                 break
         else:
             logger.warning(f"LibreOfficeが見つかりません。探索したPATH:{cls._paths_soffice}")
-
+            return None
+        #*****
         if src_pl.suffix.lower() in (".pptx", ".ppt"):
             logger.warning(
                 "(Math) symbols may be VANISH!!!!. Please confirm generated product not to disappear symbols")

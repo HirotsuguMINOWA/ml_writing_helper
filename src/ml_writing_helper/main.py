@@ -137,28 +137,6 @@ class Monitor(FileSystemEventHandler):
 
     msg_event_start: str = "-------------------  Start Event  -------------------"
     app_in: tuple[str, ...] = (".jpeg", ".jpg", ".png")
-    imagic_fmt_conv_in: tuple[str, ...] = (
-        ".png",
-        ".jpg",
-        ".jpeg",
-        ".png",
-        ".eps",
-        ".svg",
-        ".pdf",
-    )
-    imagic_fmt_conv_out: tuple[str, ...] = (".png", ".jpg", ".jpeg", ".png", ".eps", ".svg")
-
-    _paths_soffice: list[str] = [
-        "soffice",
-        "/Applications/LibreOffice.app/Contents/MacOS/soffice",
-        r"C:\Program Files\LibreOffice\program\soffice.exe"
-    ]
-
-    @classmethod
-    def _ppaths_soffice(cls) -> tuple[Path, ...]:
-        return tuple([Path(x) for x in cls._paths_soffice])
-
-    _ext_pluntuml: tuple[str, ...] = (".pu", ".puml")
 
     def __init__(
             self,
@@ -373,35 +351,35 @@ class Monitor(FileSystemEventHandler):
                 logger.error("Failed:%s" % src_pl)
                 return None
 
-    def convert_all(
-            self,
-            src_dir: str | Path,
-            dst_dir: str | Path,
-            to_fmt: str = ".eps",
-            gray: bool = False,
-    ) -> None:
-        """
-        指定したdirの対応拡張子を全て変換する
-        :param src_dir:
-        :param dst_dir:
-        :param to_fmt:
-        :param gray:
-        :return:
-        """
-        try:
-            src_pl = Path(src_dir)
-            del src_dir
-            dst_pl = Path(dst_dir)
-            del dst_dir
-            if not src_pl.exists():
-                raise Exception("Dir not Found")
-            if not src_pl.is_dir():
-                raise Exception("Src is not dir")
-            files = src_pl.glob("*")
-            for a_file in files:
-                print(f"src:{src_pl}, dst:{dst_pl}")
-                self.convert(src_file_apath=a_file, dst_dir_apath=dst_pl, to_fmt=to_fmt, gray=gray)
-        except Exception as e:
+    # def convert_all(
+    #         self,
+    #         src_dir: str | Path,
+    #         dst_dir: str | Path,
+    #         to_fmt: str = ".eps",
+    #         gray: bool = False,
+    # ) -> None:
+    #     """
+    #     指定したdirの対応拡張子を全て変換する
+    #     :param src_dir:
+    #     :param dst_dir:
+    #     :param to_fmt:
+    #     :param gray:
+    #     :return:
+    #     """
+    #     try:
+    #         src_pl = Path(src_dir)
+    #         del src_dir
+    #         dst_pl = Path(dst_dir)
+    #         del dst_dir
+    #         if not src_pl.exists():
+    #             raise Exception("Dir not Found")
+    #         if not src_pl.is_dir():
+    #             raise Exception("Src is not dir")
+    #         files = src_pl.glob("*")
+    #         for a_file in files:
+    #             print(f"src:{src_pl}, dst:{dst_pl}")
+    #             self.convert(src_file_apath=a_file, dst_dir_apath=dst_pl, to_fmt=to_fmt, gray=gray)
+    #     except Exception as e:
             logger.error(e)
 
     # @staticmethod
@@ -678,24 +656,24 @@ class Monitor(FileSystemEventHandler):
     #     except Exception as e:
     #         raise Exception("Current path: %s" % pathlib.Path.cwd())
 
-    def _get_monitor_func(
-            self,
-            src_pl: Path,
-            dst_pl: Path,
-            to_fmt_in: str,
-            is_crop: bool = True,
-            gray: bool = False,
-    ) -> MonitorCallback:
-        def moniko(path_updated_file: str) -> None:
-            self.convert(
-                src_file_apath=path_updated_file,
-                dst_dir_apath=dst_pl,
-                to_fmt=to_fmt_in,
-                is_crop=is_crop,
-                gray=gray,
-            )
-
-        return moniko
+    # def _get_monitor_func(
+    #         self,
+    #         src_pl: Path,
+    #         dst_pl: Path,
+    #         to_fmt_in: str,
+    #         is_crop: bool = True,
+    #         gray: bool = False,
+    # ) -> MonitorCallback:
+    #     def moniko(path_updated_file: str) -> None:
+    #         self.convert(
+    #             src_file_apath=path_updated_file,
+    #             dst_dir_apath=dst_pl,
+    #             to_fmt=to_fmt_in,
+    #             is_crop=is_crop,
+    #             gray=gray,
+    #         )
+    #
+    #     return moniko
 
     @removals.remove(message="廃止。新しいset_copy,set_conv_imgを使用せよ。古いmethodは起動時にsrcとdstのtimestamp差をチェックしない")
     def set_monitor(
