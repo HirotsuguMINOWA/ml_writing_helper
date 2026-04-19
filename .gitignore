@@ -1,4 +1,8 @@
-## Added by me
+# Nuitka
+build_nuitka_output/*
+nuitka-crash-report*
+
+## Added by Author
 #.idea/*
 **/fig_gen
 **/_fig_gen

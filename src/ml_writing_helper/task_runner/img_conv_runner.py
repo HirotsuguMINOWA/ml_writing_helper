@@ -9,10 +9,10 @@ from pathlib import Path
 from loguru import logger
 from typed_classproperties import cached_classproperty
 
-from src.ml_writing_helper.enum_cls import TaskType
-from src.ml_writing_helper.task_runner.abc_runner import ABCTaskRunner
-from src.ml_writing_helper.util import Util
-from src.ml_writing_helper.converter.slide_img_converter import SlideAndImgConverter, ImgConvInputType, ImgConvOutputType
+from ml_writing_helper.enum_cls import TaskType
+from ml_writing_helper.task_runner.abc_runner import ABCTaskRunner
+from ml_writing_helper.util import Util
+from ml_writing_helper.converter.slide_img_converter import SlideAndImgConverter, ImgConvInputType, ImgConvOutputType
 
 
 # 出力がepsの場合、監視folderにpngなど画像ファイルが書き込まれたらepsへ変換するコードをかけ

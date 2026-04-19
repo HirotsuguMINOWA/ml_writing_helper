@@ -10,7 +10,7 @@ from loguru import logger
 from pdf2image import convert_from_path
 
 from pdfCropMargins import crop
-from src.ml_writing_helper.util import Util
+from ml_writing_helper.util import Util
 
 
 class SlideAndImgConverter:

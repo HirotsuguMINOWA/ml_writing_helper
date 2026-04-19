@@ -6,10 +6,8 @@
 ###############################################################
 
 import argparse
-import os
 import platform
 import shlex
-# import ftplib
 import shutil
 import sys
 import time
@@ -32,10 +30,10 @@ from watchdog.observers.api import BaseObserver
 from watchdog.observers.polling import PollingObserver
 from debtcollector import removals
 
-from src.ml_writing_helper.task_runner.abc_runner import ABCTaskRunner
-from src.ml_writing_helper.enum_cls import MethodToFixEPS, StateMonitor
-from src.ml_writing_helper.task_runner.copy_runner import CopyTask
-from src.ml_writing_helper.task_runner.img_conv_runner import ImgConvTaskStruct
+from ml_writing_helper.task_runner.abc_runner import ABCTaskRunner
+from ml_writing_helper.enum_cls import MethodToFixEPS, StateMonitor
+from ml_writing_helper.task_runner.copy_runner import CopyTask
+from ml_writing_helper.task_runner.img_conv_runner import ImgConvTaskStruct
 
 try:
     from watchdog.observers.fsevents import FSEventsObserver
@@ -866,7 +864,7 @@ def _build_cli_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command")
 
     convert_parser = subparsers.add_parser("convert", help="convert a single file")
-    _ = convert_parser.add_argument("src_path", type="str", help="source file path")
+    _ = convert_parser.add_argument("src_path", type=str, help="source file path")
     _ = convert_parser.add_argument("dst_dir_apath", help="destination directory or file path")
     _ = convert_parser.add_argument("to_fmt", help="destination format such as png or .png")
     _ = convert_parser.add_argument("--gray", action="store_true", help="convert image to grayscale when supported")

@@ -4,6 +4,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from typed_classproperties import cached_classproperty
 from typing import Final, override 
 from loguru import logger
 from watchdog.observers.api import BaseObserver
@@ -15,8 +16,7 @@ from watchdog.events import DirModifiedEvent, FileModifiedEvent, FileSystemEvent
 # from watchdog.observers.polling import PollingObserver
 # from watchdog.observers.read_directory_changes import WindowsApiObserver
 
-from src.ml_writing_helper.enum_cls import TaskType, StateMonitor
-from typed_classproperties import cached_classproperty
+from ml_writing_helper.enum_cls import TaskType, StateMonitor
 
 
 @dataclass

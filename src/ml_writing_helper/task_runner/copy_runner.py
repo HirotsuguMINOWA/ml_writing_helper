@@ -6,8 +6,8 @@ from typing import override
 from loguru import logger
 from typed_classproperties import cached_classproperty
 
-from src.ml_writing_helper.enum_cls import TaskType
-from src.ml_writing_helper.task_runner.abc_runner import ABCTaskRunner
+from ml_writing_helper.enum_cls import TaskType
+from ml_writing_helper.task_runner.abc_runner import ABCTaskRunner
 
 
 class CopyTask(ABCTaskRunner):
