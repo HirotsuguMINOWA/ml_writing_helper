@@ -1,14 +1,12 @@
 import os
-import platform
 import time
-import unicodedata
 from abc import ABC, abstractmethod
 from collections.abc import Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
-import shutil
-from typing import Final, override, Callable, Self
+from typing import Final, override 
 from loguru import logger
+from watchdog.observers.api import BaseObserver
 from watchdog.events import DirModifiedEvent, FileModifiedEvent, FileSystemEventHandler, FileSystemEvent, DirMovedEvent, FileMovedEvent
 # from watchdog.observers import BaseObserver
 # from watchdog.observers.fsevents import FSEventsObserver
@@ -51,7 +49,7 @@ class ABCTaskRunner(ABC, FileSystemEventHandler):
 
     def set_observer(
             self,
-            observer,
+            observer: BaseObserver,
             sleep_sec: int | float = 1,
             observer_backend: str | None = None
     ) -> None:
@@ -157,8 +155,8 @@ class ABCTaskRunner(ABC, FileSystemEventHandler):
     def _match(self, update_file_path: Path) -> bool:
         """src_pathの変更が本Taskに該当するか否かを判定"""
         return (
-                self._src_dir_path.as_posix() in update_file_path.parent.as_posix()
-                and update_file_path.suffix in self._src_suffixes
+            self._src_dir_path.as_posix() in update_file_path.parent.as_posix()
+            and update_file_path.suffix in self._src_suffixes
         )
 
     @abstractmethod
