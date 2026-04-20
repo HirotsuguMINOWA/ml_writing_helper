@@ -1,0 +1,92 @@
+name: Build with Nuitka
+
+on:
+  push:
+    branches: [main, master]
+    tags: ['v*']
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            python-version: "3.13"
+            artifact-name: ml_writing_helper-linux-amd64
+            file-extension: ""
+          - os: windows-latest
+            python-version: "3.13"
+            artifact-name: ml_writing_helper-windows-amd64.exe
+            file-extension: ".exe"
+          - os: macos-latest
+            python-version: "3.13"
+            artifact-name: ml_writing_helper-macos-universal
+            file-extension: ""
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install nuitka>=1.0 setuptools wheel
+
+      - name: Install project dependencies
+        run: |
+          pip install -r requirements.txt
+
+      - name: Build with Nuitka
+        run: |
+          python -m nuitka \
+            --output-dir=dist_nuitka \
+            --output-filename=ml_writing_helper${{ matrix.file-extension }} \
+            --output-mode=single-file \
+            --mode=foundation \
+            --include-data-dir=src=src \
+            --nofollow-import-to=numpy \
+            --nofollow-import-to=scipy \
+            --nofollow-import-to=tkinter \
+            --nofollow-import-to=Tkinter \
+            --nofollow-import-to=matplotlib \
+            --nofollow-import-to=pandas \
+            --nofollow-import-to=kiwisolver \
+            --nofollow-import-to=sqlite \
+            --nofollow-import-to=PySimpleGUI \
+            --nofollow-import-to=pdfCropMargins.gui \
+            src/ml_writing_helper/main.py
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact-name }}
+          path: dist_nuitka/ml_writing_helper${{ matrix.file-extension }}.dist/ml_writing_helper${{ matrix.file-extension }}
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/**/*
+          generate_release_notes: true
