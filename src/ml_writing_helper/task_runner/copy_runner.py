@@ -62,6 +62,9 @@ class CopyTask(ABCTaskRunner):
                 src=update_file_path.as_posix(),
                 dst=self.dst_file_path(update_file_path=update_file_path)
             )
+            logger.debug(f"[Copy完了] src:{update_file_path.as_posix()} → {self.dst_file_path(update_file_path=update_file_path)}")
+        else:
+            logger.warning(f"[!Copy非完了] src:{update_file_path.as_posix()} → {self.dst_file_path(update_file_path=update_file_path)}")
 
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, CopyTask):

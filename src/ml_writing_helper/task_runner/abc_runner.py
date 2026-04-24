@@ -5,7 +5,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typed_classproperties import cached_classproperty
-from typing import Final, override 
+from typing import Final, override
 from loguru import logger
 from watchdog.observers.api import BaseObserver
 from watchdog.events import DirModifiedEvent, FileModifiedEvent, FileSystemEventHandler, FileSystemEvent, DirMovedEvent, FileMovedEvent
@@ -22,7 +22,7 @@ from ml_writing_helper.enum_cls import TaskType, StateMonitor
 @dataclass
 class ABCTaskRunner(ABC, FileSystemEventHandler):
     """監視TaskのTOPクラス"""
-    __slots__ = ["_src_suffixes", "_dst_suffixes", "_wait_sec", "_directory_path", "_dest_dir_path", "_diff_sec"]
+    __slots__ = ["_src_suffixes", "_dst_suffixes", "_wait_sec", "_dest_dir_path", "_diff_sec"]
 
     def __init__(
             self,
@@ -39,9 +39,9 @@ class ABCTaskRunner(ABC, FileSystemEventHandler):
         # TODO: check拡張子
         # self._task_type: Final[TaskType] = task_type
         # self._src_dir_path: Final[Path] = Path(src_dir_path)
-        self._src_suffixes = src_suffixes
-        self._dst_suffixes = dst_suffixes
-        self._wait_sec = wait_sec
+        self._src_suffixes: Sequence[str] = src_suffixes
+        self._dst_suffixes: Sequence[str] = dst_suffixes
+        self._wait_sec: Final[int] = wait_sec
         self._src_dir_path: Final[Path] = Path(src_dir_path)
         self._dest_dir_path: Final[Path] = Path(dst_dir_path)
         # self._target_exts: Final[Sequence[str]] = target_exts
@@ -155,8 +155,8 @@ class ABCTaskRunner(ABC, FileSystemEventHandler):
     def _match(self, update_file_path: Path) -> bool:
         """src_pathの変更が本Taskに該当するか否かを判定"""
         return (
-            self._src_dir_path.as_posix() in update_file_path.parent.as_posix()
-            and update_file_path.suffix in self._src_suffixes
+                self._src_dir_path.as_posix() in update_file_path.parent.as_posix()
+                and update_file_path.suffix in self._src_suffixes
         )
 
     @abstractmethod
