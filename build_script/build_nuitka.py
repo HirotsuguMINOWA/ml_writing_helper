@@ -9,11 +9,14 @@ Usage:
     python build_nuitka.py --debug
 """
 
-import os
 import subprocess
 import sys
 import platform
 from pathlib import Path
+from loguru import logger
+
+for _ in range(10):
+    logger.warning("pyproject.tomlでNuitkaによるbuildへ移行予定。This script was deprecated.")
 
 # --- Configuration ---
 PROJECT_ROOT = Path(__file__).resolve().parent

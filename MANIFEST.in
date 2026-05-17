@@ -1,1 +1,2 @@
 include requirements.txt
+include build_script/build_backend.py
