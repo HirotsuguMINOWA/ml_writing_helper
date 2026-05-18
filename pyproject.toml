@@ -22,6 +22,7 @@ requires-python = ">=3.12"
 dev = [
     "click",
     "build",
+    "cibuildwheel",
     "Nuitka[app]",
     "pip-tools",
     "pytest >=5.2",
@@ -56,3 +57,18 @@ nofollow-import-to = [
     "PySimpleGUI",
     "pdfCropMargins.gui",
 ]
+
+[tool.cibuildwheel]
+build = "cp312-* cp313-*"
+skip = "*-musllinux_* *-win32"
+archs = ["auto64"]
+build-frontend = "build"
+
+[tool.cibuildwheel.linux]
+archs = ["x86_64"]
+
+[tool.cibuildwheel.macos]
+archs = ["x86_64", "arm64"]
+
+[tool.cibuildwheel.windows]
+archs = ["AMD64"]
