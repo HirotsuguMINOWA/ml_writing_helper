@@ -34,6 +34,7 @@ from ml_writing_helper.task_runner.abc_runner import ABCTaskRunner
 from ml_writing_helper.enum_cls import MethodToFixEPS, StateMonitor
 from ml_writing_helper.task_runner.copy_runner import CopyTask
 from ml_writing_helper.task_runner.img_conv_runner import ImgConvTaskStruct
+from ml_writing_helper.converter.slide_img_converter import ImgConvOutputType
 
 try:
     from watchdog.observers.fsevents import FSEventsObserver
@@ -734,6 +735,10 @@ class Monitor(FileSystemEventHandler):
             is_crop: bool = True,
             mk_dst_dir: bool = True,
     ) -> None:
+        dst_pl = self._get_internal_deal_path(path=dst_dir)
+        if mk_dst_dir and not dst_pl.exists():
+            dst_pl.mkdir(parents=True, exist_ok=True)
+            logger.info(f"Made dir:{dst_pl.as_posix()}")
         ins = ImgConvTaskStruct(
             src_dir_path=src_dir,
             dst_dir_path=dst_dir,
@@ -856,6 +861,54 @@ def _available_observer_backends() -> list[str]:
     return backends
 
 
+CLI_COMMANDS: Final[tuple[str, ...]] = ("convert", "monitor", "watch")
+OUTPUT_FORMATS: Final[list[str]] = [str(x) for x in ImgConvOutputType]
+
+
+def _strip_dot(ext: str) -> str:
+    return ext.strip().lstrip(".").lower()
+
+
+def _resolve_path(path: str | Path, base: Path) -> Path:
+    path_pl = Path(path).expanduser()
+    if not path_pl.is_absolute():
+        path_pl = base.joinpath(path_pl)
+    return path_pl.resolve()
+
+
+def _add_common_conv_args(parser: argparse.ArgumentParser) -> None:
+    _ = parser.add_argument("--gray", action="store_true", help="convert image to grayscale when supported")
+    _ = parser.add_argument("--no-crop", action="store_true", help="disable cropping during conversion")
+
+
+def _add_common_monitor_args(parser: argparse.ArgumentParser) -> None:
+    _ = parser.add_argument(
+        "--observer",
+        default=DEFAULT_OBSERVER_BACKEND,
+        choices=_available_observer_backends(),
+        help="watchdog observer backend. polling is cloud-storage friendly; native is lighter on local file systems.",
+    )
+    _ = parser.add_argument(
+        "--sleep-sec",
+        type=float,
+        default=1.0,
+        help="main loop sleep time in seconds",
+    )
+    _ = parser.add_argument(
+        "--diff-sec",
+        type=int,
+        default=10,
+        help="skip a file if src and dst timestamps differ by this many seconds or less",
+    )
+    _ = parser.add_argument(
+        "--log-level",
+        default="INFO",
+        choices=["TRACE", "DEBUG", "INFO", "SUCCESS", "WARNING", "ERROR", "CRITICAL"],
+        type=str.upper,
+        help="console log level",
+    )
+
+
 def _build_cli_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Markuplanguage(.md, .tex) Helper",
@@ -865,36 +918,65 @@ def _build_cli_parser() -> argparse.ArgumentParser:
 
     convert_parser = subparsers.add_parser("convert", help="convert a single file")
     _ = convert_parser.add_argument("src_path", type=str, help="source file path")
-    _ = convert_parser.add_argument("dst_dir_apath", help="destination directory or file path")
+    _ = convert_parser.add_argument("dst_dir_apath", help="destination directory")
     _ = convert_parser.add_argument("to_fmt", help="destination format such as png or .png")
-    _ = convert_parser.add_argument("--gray", action="store_true", help="convert image to grayscale when supported")
-    _ = convert_parser.add_argument("--no-crop", action="store_true", help="disable cropping during conversion")
+    _add_common_conv_args(convert_parser)
 
     monitor_parser = subparsers.add_parser("monitor", help="watch a directory and convert changed files")
     _ = monitor_parser.add_argument("src_dir", help="source directory to monitor")
     _ = monitor_parser.add_argument("dst_dir", help="destination directory")
     _ = monitor_parser.add_argument("to_fmt", help="destination format such as png or .png")
-    _ = monitor_parser.add_argument("--gray", action="store_true", help="convert image to grayscale when supported")
-    _ = monitor_parser.add_argument("--no-crop", action="store_true", help="disable cropping during conversion")
-    _ = monitor_parser.add_argument(
-        "--observer",
-        default=DEFAULT_OBSERVER_BACKEND,
-        choices=_available_observer_backends(),
-        help="watchdog observer backend. polling is cloud-storage friendly; native is lighter on local file systems.",
+    _add_common_conv_args(monitor_parser)
+    _add_common_monitor_args(monitor_parser)
+
+    watch_parser = subparsers.add_parser(
+        "watch",
+        help="watch a manuscript dir: convert figures and copy files such as .bib",
+        description=(
+            "Watch <root>/<img-src> and convert figures into <root>/<img-dst>. "
+            "Optionally copy files (e.g. exported .bib) with --copy. "
+            "Relative paths are resolved from --root."
+        ),
     )
-    _ = monitor_parser.add_argument(
-        "--sleep-sec",
-        type=float,
-        default=1.0,
-        help="polling interval and main loop sleep time in seconds",
+    _ = watch_parser.add_argument(
+        "--root",
+        default=".",
+        help="manuscript root dir. relative paths are resolved from here (default: current dir)",
     )
+    _ = watch_parser.add_argument("--img-src", default="fig_src", help="figure source dir (default: fig_src)")
+    _ = watch_parser.add_argument("--img-dst", default="fig_gen", help="figure output dir (default: fig_gen)")
+    _ = watch_parser.add_argument(
+        "--ext",
+        default="pdf",
+        type=_strip_dot,
+        choices=OUTPUT_FORMATS,
+        help="figure output format (default: pdf)",
+    )
+    _ = watch_parser.add_argument("--no-img", action="store_true", help="disable figure conversion task")
+    _add_common_conv_args(watch_parser)
+    _ = watch_parser.add_argument(
+        "--copy",
+        nargs=2,
+        action="append",
+        default=[],
+        metavar=("SRC_DIR", "DST_DIR"),
+        help="copy changed files from SRC_DIR to DST_DIR. can be repeated",
+    )
+    _ = watch_parser.add_argument(
+        "--copy-ext",
+        action="append",
+        type=_strip_dot,
+        default=None,
+        help="extension copied by --copy tasks. can be repeated (default: bib)",
+    )
+    _add_common_monitor_args(watch_parser)
     return parser
 
 
 def _parse_cli_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = _build_cli_parser()
     args_in = list(sys.argv[1:] if argv is None else argv)
-    if args_in and args_in[0] not in ("convert", "monitor", "-h", "--help"):
+    if args_in and args_in[0] not in (*CLI_COMMANDS, "-h", "--help"):
         args_in = ["convert", *args_in]
     args = parser.parse_args(args_in)
     if args.command is None:
@@ -903,53 +985,115 @@ def _parse_cli_args(argv: list[str] | None = None) -> argparse.Namespace:
     return args
 
 
+def _set_log_level(level: str) -> None:
+    logger.remove()
+    _ = logger.add(sys.stderr, level=level)
+
+
 def _run_convert_cli(args: argparse.Namespace) -> int:
-    src_pl = Path(args.src_path)
-    if not src_pl.is_absolute():
-        src_pl = Path.cwd().joinpath(src_pl)
+    src_pl = _resolve_path(args.src_path, Path.cwd())
     logger.debug("fname_str_or_pl:%s" % src_pl)
-    monitor_ins = Monitor()
-    monitor_ins.convert(
-        src_file_apath=src_pl.as_posix(),
-        
-        dst_dir_apath=args.dst_dir_apath,
-        to_fmt=args.to_fmt,
-        is_crop=not args.no_crop,
+    dst_dir = _resolve_path(args.dst_dir_apath, Path.cwd())
+    dst_dir.mkdir(parents=True, exist_ok=True)
+    task = ImgConvTaskStruct(
+        src_dir_path=src_pl.parent,
+        dst_dir_path=dst_dir,
+        dst_suffix=_strip_dot(args.to_fmt),
         gray=args.gray,
+        is_crop=not args.no_crop,
     )
-    logger.debug("END-END-END")
+    task.convert(src_file_apath=src_pl, gray=args.gray, is_crop=not args.no_crop)
     return 0
 
 
 def _run_monitor_cli(args: argparse.Namespace) -> int:
+    _set_log_level(args.log_level)
     monitor_ins = Monitor(observer_backend=args.observer)
-    monitor_ins.set_monitor(
-        src_dir=args.src_dir,
-        dst_dir=args.dst_dir,
-        to_fmt=args.to_fmt,
+    monitor_ins.set_img_conv(
+        src_dir=_resolve_path(args.src_dir, Path.cwd()),
+        dst_dir=_resolve_path(args.dst_dir, Path.cwd()),
+        to_fmt=_strip_dot(args.to_fmt),
         is_crop=not args.no_crop,
         gray=args.gray,
         mk_dst_dir=True,
     )
-    monitor_ins.start_monitors(
-        sleep_sec=args.sleep_sec,
-        observer_backend=args.observer,
-    )
+    monitor_ins.start_monitors(sleep_sec=args.sleep_sec)
+    return 0
+
+
+def _run_watch_cli(args: argparse.Namespace) -> int:
+    _set_log_level(args.log_level)
+    root = _resolve_path(args.root, Path.cwd())
+    logger.debug(f"manuscript_root: {root}")
+    if not root.is_dir():
+        logger.error(f"--root is not a directory: {root}")
+        return 2
+
+    monitor_ins = Monitor(observer_backend=args.observer)
+
+    if not args.no_img:
+        img_src = _resolve_path(args.img_src, root)
+        if not img_src.is_dir():
+            logger.error(f"--img-src is not a directory: {img_src}")
+            return 2
+        img_dst = _resolve_path(args.img_dst, root)
+        logger.info(f"Figure conversion: {img_src} -> {img_dst} (.{args.ext})")
+        monitor_ins.set_img_conv(
+            src_dir=img_src,
+            dst_dir=img_dst,
+            to_fmt=args.ext,
+            is_crop=not args.no_crop,
+            gray=args.gray,
+            mk_dst_dir=True,
+        )
+
+    copy_exts: list[str] = args.copy_ext or ["bib"]
+    for src_dir, dst_dir in args.copy:
+        copy_src = _resolve_path(src_dir, root)
+        if not copy_src.is_dir():
+            logger.error(f"--copy SRC_DIR is not a directory: {copy_src}")
+            return 2
+        copy_dst = _resolve_path(dst_dir, root)
+        if not copy_dst.suffix:
+            copy_dst.mkdir(parents=True, exist_ok=True)
+        logger.info(f"Copy: {copy_src} -> {copy_dst} ({', '.join(copy_exts)})")
+        monitor_ins.set_copy_task(
+            src_dir=copy_src,
+            dst_dir=copy_dst,
+            src_suffixes=copy_exts,
+            diff_sec=args.diff_sec,
+        )
+
+    if args.no_img and not args.copy:
+        logger.error("Nothing to watch: --no-img is set and no --copy is given")
+        return 2
+
+    monitor_ins.start_monitors(sleep_sec=args.sleep_sec)
     return 0
 
 
 def main(argv: list[str] | None = None) -> int:
     args = _parse_cli_args(argv=argv)
+    if args.command == "watch":
+        return _run_watch_cli(args)
     if args.command == "monitor":
         return _run_monitor_cli(args)
     return _run_convert_cli(args)
 
 
-def monitor(argv: list[str] | None = None) -> int:
+def _main_with_command(command: str, argv: list[str] | None) -> int:
     args_in = list(sys.argv[1:] if argv is None else argv)
-    if not args_in or args_in[0] != "monitor":
-        args_in = ["monitor", *args_in]
+    if not args_in or args_in[0] != command:
+        args_in = [command, *args_in]
     return main(args_in)
+
+
+def watch(argv: list[str] | None = None) -> int:
+    return _main_with_command("watch", argv)
+
+
+def monitor(argv: list[str] | None = None) -> int:
+    return _main_with_command("monitor", argv)
 
 
 def convert(argv: list[str] | None = None) -> int:

@@ -58,7 +58,7 @@ class CopyTask(ABCTaskRunner):
 
         if self._need_task_run_ins(update_file_path=update_file_path):
             # self.run(update_file_path=update_file_path)
-            shutil.copy(
+            shutil.copy2(
                 src=update_file_path.as_posix(),
                 dst=self.dst_file_path(update_file_path=update_file_path)
             )

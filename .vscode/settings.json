@@ -3,5 +3,6 @@
     "python.testing.pytestEnabled": true,
     "cSpell.enableFiletypes": [
         "markdown"
-    ]
+    ],
+    "python.analysis.typeCheckingMode": "off"
 }

@@ -34,13 +34,38 @@ Please install the following software before using this package.
 
 1. LibreOffice
 
-## CLI(Not Implemented yet)
+## CLI
 
-- ~~Format: `convert4ml src_path dst_dir to_fmt is_crop`~~
+### watcher (`watch4ml`)
 
-### watcher
+Run in the manuscript root (or give `--root`):
 
-- ~~Format: `mlhelper.watch`~~
+```bash
+# fig_src/ -> fig_gen/ as grayscale .pdf, and copy exported .bib into bib/
+watch4ml --ext pdf --gray --copy ~/Documents/BibTexExported bib
+```
+
+| Option | Default | Description |
+| --- | --- | --- |
+| `--root DIR` | current dir | Manuscript root. Relative paths are resolved from here |
+| `--img-src DIR` | `fig_src` | Figure source dir |
+| `--img-dst DIR` | `fig_gen` | Figure output dir (created if missing) |
+| `--ext FMT` | `pdf` | Output format: eps, pdf, png, jpg, jpeg, gif, bmp, tiff |
+| `--gray` | off | Convert to grayscale |
+| `--no-crop` | off | Disable cropping |
+| `--no-img` | off | Disable figure conversion (copy only) |
+| `--copy SRC DST` | none | Copy changed files from SRC to DST. Repeatable |
+| `--copy-ext EXT` | `bib` | Extension copied by `--copy`. Repeatable |
+| `--observer` | `polling` | watchdog backend (`polling` is cloud-storage friendly, `native` is lighter) |
+| `--sleep-sec` | `1.0` | Main loop sleep time |
+| `--diff-sec` | `10` | Skip when src/dst timestamps differ by this many seconds or less |
+| `--log-level` | `INFO` | Console log level |
+
+`convert4ml watch ...` is the same as `watch4ml ...`.
+
+### single file conversion
+
+- `convert4ml src_path dst_dir to_fmt [--gray] [--no-crop]`
 
 ## Install
 
@@ -50,8 +75,11 @@ Install requirements
    2. MacOS: `brew install --cask libreoffice`
    3. Linux: `sudo apt-get install libreoffice`
    4. Manual install...
-2. this package:
-   1. `pip install -U git+https://github.com/HirotsuguMINOWA/ml_writing_helper.git`
+2. poppler (used by pdf2image): `brew install poppler` / `sudo apt-get install poppler-utils`
+3. this package (pipx recommended):
+   1. From a local checkout: `pipx install .` (update: `pipx install --force .`)
+   2. From a built wheel: `pipx install dist/ml_writing_helper-<ver>-<tag>.whl`
+   3. From GitHub: `pipx install git+https://github.com/HirotsuguMINOWA/ml_writing_helper.git`
 
 
 ## Usage

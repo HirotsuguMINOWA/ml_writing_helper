@@ -280,7 +280,7 @@ class ABCTaskRunner(ABC, FileSystemEventHandler):
 
     def _need_task_run_ins(self, update_file_path: Path):
         return self.need_task_run_staticmethod(
-            src_path=self._src_dir_path,
+            src_path=update_file_path,
             dest_path=self.dst_file_path(update_file_path=update_file_path),
             diff_sec=self._diff_sec,
             # target_src_suffixes=self._src_suffixes

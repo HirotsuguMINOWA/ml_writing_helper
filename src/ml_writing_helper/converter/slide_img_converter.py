@@ -70,6 +70,8 @@ class SlideAndImgConverter:
 
         # PILのformatは "EPS" のようにドットなしが必要
         fmt = dst_pl.suffix.lstrip(".").upper()
+        if fmt == "JPG":
+            fmt = "JPEG"
         pages[0].save(dst_pl.as_posix(), format=fmt)
 
     @classmethod
@@ -703,6 +705,13 @@ class ImgConvInputType(StrEnum):
 
 class ImgConvOutputType(StrEnum):
     eps = "eps"
+    pdf = "pdf"
+    png = "png"
+    jpg = "jpg"
+    jpeg = "jpeg"
+    gif = "gif"
+    bmp = "bmp"
+    tiff = "tiff"
 
 
 def img_crop(image: ImageClsType, debug: bool = False) -> ImageClsType:
