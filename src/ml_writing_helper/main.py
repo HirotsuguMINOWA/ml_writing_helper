@@ -34,7 +34,23 @@ from ml_writing_helper.task_runner.abc_runner import ABCTaskRunner
 from ml_writing_helper.enum_cls import MethodToFixEPS, StateMonitor
 from ml_writing_helper.task_runner.copy_runner import CopyTask
 from ml_writing_helper.task_runner.img_conv_runner import ImgConvTaskStruct
-from ml_writing_helper.converter.slide_img_converter import ImgConvOutputType
+from ml_writing_helper.config import (
+    CONFIG_FILENAME,
+    DEFAULT_COPY_EXTS,
+    DEFAULT_DIFF_SEC,
+    DEFAULT_LOG_LEVEL,
+    DEFAULT_OBSERVER,
+    DEFAULT_SLEEP_SEC,
+    LOG_LEVELS,
+    OUTPUT_FORMATS,
+    ConfigError,
+    CopyTaskConfig,
+    ImgConvTaskConfig,
+    WatchConfig,
+    load_config,
+    resolve_path,
+    strip_dot,
+)
 
 try:
     from watchdog.observers.fsevents import FSEventsObserver
@@ -57,7 +73,7 @@ except Exception:
     WindowsApiObserver = None
 
 # wait_sec: int = 1
-DEFAULT_OBSERVER_BACKEND: Final[str] = "polling"
+DEFAULT_OBSERVER_BACKEND: Final[str] = DEFAULT_OBSERVER
 MonitorCallback = Callable[[str], None]
 
 
@@ -862,18 +878,11 @@ def _available_observer_backends() -> list[str]:
 
 
 CLI_COMMANDS: Final[tuple[str, ...]] = ("convert", "monitor", "watch")
-OUTPUT_FORMATS: Final[list[str]] = [str(x) for x in ImgConvOutputType]
-
-
-def _strip_dot(ext: str) -> str:
-    return ext.strip().lstrip(".").lower()
-
-
-def _resolve_path(path: str | Path, base: Path) -> Path:
-    path_pl = Path(path).expanduser()
-    if not path_pl.is_absolute():
-        path_pl = base.joinpath(path_pl)
-    return path_pl.resolve()
+# `watch` options that conflict with --json (dest names)
+WATCH_CLI_OPTIONS: Final[tuple[str, ...]] = (
+    "root", "img_src", "img_dst", "ext", "no_img", "gray", "no_crop", "copy", "copy_ext",
+    "observer", "sleep_sec", "diff_sec", "log_level",
+)
 
 
 def _add_common_conv_args(parser: argparse.ArgumentParser) -> None:
@@ -882,30 +891,28 @@ def _add_common_conv_args(parser: argparse.ArgumentParser) -> None:
 
 
 def _add_common_monitor_args(parser: argparse.ArgumentParser) -> None:
+    # defaults are None so that `watch` can tell whether an option was given. see _apply_monitor_defaults
     _ = parser.add_argument(
         "--observer",
-        default=DEFAULT_OBSERVER_BACKEND,
         choices=_available_observer_backends(),
-        help="watchdog observer backend. polling is cloud-storage friendly; native is lighter on local file systems.",
+        help=f"watchdog observer backend (default: {DEFAULT_OBSERVER_BACKEND}). "
+             "polling is cloud-storage friendly; native is lighter on local file systems.",
     )
     _ = parser.add_argument(
         "--sleep-sec",
         type=float,
-        default=1.0,
-        help="main loop sleep time in seconds",
+        help=f"main loop sleep time in seconds (default: {DEFAULT_SLEEP_SEC})",
     )
     _ = parser.add_argument(
         "--diff-sec",
         type=int,
-        default=10,
-        help="skip a file if src and dst timestamps differ by this many seconds or less",
+        help=f"skip a file if src and dst timestamps differ by this many seconds or less (default: {DEFAULT_DIFF_SEC})",
     )
     _ = parser.add_argument(
         "--log-level",
-        default="INFO",
-        choices=["TRACE", "DEBUG", "INFO", "SUCCESS", "WARNING", "ERROR", "CRITICAL"],
+        choices=LOG_LEVELS,
         type=str.upper,
-        help="console log level",
+        help=f"console log level (default: {DEFAULT_LOG_LEVEL})",
     )
 
 
@@ -933,22 +940,26 @@ def _build_cli_parser() -> argparse.ArgumentParser:
         "watch",
         help="watch a manuscript dir: convert figures and copy files such as .bib",
         description=(
-            "Watch <root>/<img-src> and convert figures into <root>/<img-dst>. "
-            "Optionally copy files (e.g. exported .bib) with --copy. "
-            "Relative paths are resolved from --root."
+            "Run watch tasks from a json file (--json) or from CLI options. "
+            f"With no options at all, ./{CONFIG_FILENAME} is used; "
+            "if it does not exist, a web UI to create it is opened. "
+            "--json cannot be combined with other options."
         ),
     )
     _ = watch_parser.add_argument(
+        "--json",
+        metavar="PATH",
+        help=f"json file describing tasks (default: ./{CONFIG_FILENAME} when no other option is given)",
+    )
+    _ = watch_parser.add_argument(
         "--root",
-        default=".",
         help="manuscript root dir. relative paths are resolved from here (default: current dir)",
     )
-    _ = watch_parser.add_argument("--img-src", default="fig_src", help="figure source dir (default: fig_src)")
-    _ = watch_parser.add_argument("--img-dst", default="fig_gen", help="figure output dir (default: fig_gen)")
+    _ = watch_parser.add_argument("--img-src", help="figure source dir (default: fig_src)")
+    _ = watch_parser.add_argument("--img-dst", help="figure output dir (default: fig_gen)")
     _ = watch_parser.add_argument(
         "--ext",
-        default="pdf",
-        type=_strip_dot,
+        type=strip_dot,
         choices=OUTPUT_FORMATS,
         help="figure output format (default: pdf)",
     )
@@ -958,15 +969,13 @@ def _build_cli_parser() -> argparse.ArgumentParser:
         "--copy",
         nargs=2,
         action="append",
-        default=[],
         metavar=("SRC_DIR", "DST_DIR"),
         help="copy changed files from SRC_DIR to DST_DIR. can be repeated",
     )
     _ = watch_parser.add_argument(
         "--copy-ext",
         action="append",
-        type=_strip_dot,
-        default=None,
+        type=strip_dot,
         help="extension copied by --copy tasks. can be repeated (default: bib)",
     )
     _add_common_monitor_args(watch_parser)
@@ -990,15 +999,26 @@ def _set_log_level(level: str) -> None:
     _ = logger.add(sys.stderr, level=level)
 
 
+def _apply_monitor_defaults(args: argparse.Namespace) -> None:
+    if args.observer is None:
+        args.observer = DEFAULT_OBSERVER_BACKEND
+    if args.sleep_sec is None:
+        args.sleep_sec = DEFAULT_SLEEP_SEC
+    if args.diff_sec is None:
+        args.diff_sec = DEFAULT_DIFF_SEC
+    if args.log_level is None:
+        args.log_level = DEFAULT_LOG_LEVEL
+
+
 def _run_convert_cli(args: argparse.Namespace) -> int:
-    src_pl = _resolve_path(args.src_path, Path.cwd())
+    src_pl = resolve_path(args.src_path, Path.cwd())
     logger.debug("fname_str_or_pl:%s" % src_pl)
-    dst_dir = _resolve_path(args.dst_dir_apath, Path.cwd())
+    dst_dir = resolve_path(args.dst_dir_apath, Path.cwd())
     dst_dir.mkdir(parents=True, exist_ok=True)
     task = ImgConvTaskStruct(
         src_dir_path=src_pl.parent,
         dst_dir_path=dst_dir,
-        dst_suffix=_strip_dot(args.to_fmt),
+        dst_suffix=strip_dot(args.to_fmt),
         gray=args.gray,
         is_crop=not args.no_crop,
     )
@@ -1007,12 +1027,13 @@ def _run_convert_cli(args: argparse.Namespace) -> int:
 
 
 def _run_monitor_cli(args: argparse.Namespace) -> int:
+    _apply_monitor_defaults(args)
     _set_log_level(args.log_level)
     monitor_ins = Monitor(observer_backend=args.observer)
     monitor_ins.set_img_conv(
-        src_dir=_resolve_path(args.src_dir, Path.cwd()),
-        dst_dir=_resolve_path(args.dst_dir, Path.cwd()),
-        to_fmt=_strip_dot(args.to_fmt),
+        src_dir=resolve_path(args.src_dir, Path.cwd()),
+        dst_dir=resolve_path(args.dst_dir, Path.cwd()),
+        to_fmt=strip_dot(args.to_fmt),
         is_crop=not args.no_crop,
         gray=args.gray,
         mk_dst_dir=True,
@@ -1021,55 +1042,128 @@ def _run_monitor_cli(args: argparse.Namespace) -> int:
     return 0
 
 
-def _run_watch_cli(args: argparse.Namespace) -> int:
-    _set_log_level(args.log_level)
-    root = _resolve_path(args.root, Path.cwd())
-    logger.debug(f"manuscript_root: {root}")
-    if not root.is_dir():
-        logger.error(f"--root is not a directory: {root}")
-        return 2
+def _specified_watch_options(args: argparse.Namespace) -> list[str]:
+    """`watch` options given on the command line, as --option names."""
+    return [
+        "--" + name.replace("_", "-")
+        for name in WATCH_CLI_OPTIONS
+        if getattr(args, name) not in (None, False)
+    ]
 
-    monitor_ins = Monitor(observer_backend=args.observer)
+
+def _watch_config_from_cli(args: argparse.Namespace) -> WatchConfig:
+    """Build WatchConfig from `watch` CLI options. Raises ConfigError."""
+    _apply_monitor_defaults(args)
+    root = resolve_path(args.root or ".", Path.cwd())
+    if not root.is_dir():
+        raise ConfigError([f"--root is not a directory: {root}"])
+    errors: list[str] = []
+    tasks: list[ImgConvTaskConfig | CopyTaskConfig] = []
 
     if not args.no_img:
-        img_src = _resolve_path(args.img_src, root)
+        img_src = resolve_path(args.img_src or "fig_src", root)
         if not img_src.is_dir():
-            logger.error(f"--img-src is not a directory: {img_src}")
-            return 2
-        img_dst = _resolve_path(args.img_dst, root)
-        logger.info(f"Figure conversion: {img_src} -> {img_dst} (.{args.ext})")
-        monitor_ins.set_img_conv(
-            src_dir=img_src,
-            dst_dir=img_dst,
-            to_fmt=args.ext,
-            is_crop=not args.no_crop,
-            gray=args.gray,
-            mk_dst_dir=True,
+            errors.append(f"--img-src is not a directory: {img_src}")
+        tasks.append(
+            ImgConvTaskConfig(
+                src=img_src,
+                dst=resolve_path(args.img_dst or "fig_gen", root),
+                ext=args.ext or "pdf",
+                gray=args.gray,
+                crop=not args.no_crop,
+            )
         )
 
-    copy_exts: list[str] = args.copy_ext or ["bib"]
-    for src_dir, dst_dir in args.copy:
-        copy_src = _resolve_path(src_dir, root)
+    copy_exts = tuple(args.copy_ext or DEFAULT_COPY_EXTS)
+    for src_dir, dst_dir in args.copy or []:
+        copy_src = resolve_path(src_dir, root)
         if not copy_src.is_dir():
-            logger.error(f"--copy SRC_DIR is not a directory: {copy_src}")
-            return 2
-        copy_dst = _resolve_path(dst_dir, root)
-        if not copy_dst.suffix:
-            copy_dst.mkdir(parents=True, exist_ok=True)
-        logger.info(f"Copy: {copy_src} -> {copy_dst} ({', '.join(copy_exts)})")
-        monitor_ins.set_copy_task(
-            src_dir=copy_src,
-            dst_dir=copy_dst,
-            src_suffixes=copy_exts,
-            diff_sec=args.diff_sec,
+            errors.append(f"--copy SRC_DIR is not a directory: {copy_src}")
+        tasks.append(
+            CopyTaskConfig(src=copy_src, dst=resolve_path(dst_dir, root), exts=copy_exts, diff_sec=args.diff_sec)
         )
 
-    if args.no_img and not args.copy:
-        logger.error("Nothing to watch: --no-img is set and no --copy is given")
-        return 2
+    if not tasks:
+        errors.append("Nothing to watch: --no-img is set and no --copy is given")
+    if errors:
+        raise ConfigError(errors)
+    return WatchConfig(tasks=tasks, observer=args.observer, sleep_sec=args.sleep_sec, log_level=args.log_level)
 
-    monitor_ins.start_monitors(sleep_sec=args.sleep_sec)
+
+def _resolve_watch_config(args: argparse.Namespace) -> WatchConfig | None:
+    """Decide the mode (json / CLI / web UI) and return the config. None means nothing to run."""
+    observers = _available_observer_backends()
+    cli_options = _specified_watch_options(args)
+
+    if args.json is not None:
+        if cli_options:
+            raise ConfigError([
+                f"--json と他のパラメータ（{', '.join(cli_options)}）は同時に指定できません。",
+                "--json だけを指定するか、--json を外して CLI パラメータでタスクを指定してください。",
+            ])
+        json_path = resolve_path(args.json, Path.cwd())
+        if not json_path.is_file():
+            raise ConfigError([f"--json のファイルが見つかりません: {json_path}"])
+        logger.info(f"Load tasks from {json_path}")
+        return load_config(json_path, available_observers=observers)
+
+    default_json = Path.cwd().joinpath(CONFIG_FILENAME)
+    if cli_options:
+        if default_json.is_file():
+            logger.info(f"CLI パラメータが指定されたため {CONFIG_FILENAME} は使用しません")
+        return _watch_config_from_cli(args)
+
+    if default_json.is_file():
+        logger.info(f"Load tasks from {default_json}")
+        return load_config(default_json, available_observers=observers)
+
+    from ml_writing_helper.webui import run_webui
+
+    result = run_webui(save_path=default_json, available_observers=observers)
+    if not (result.saved and result.start_watch):
+        return None
+    return load_config(default_json, available_observers=observers)
+
+
+def _run_watch_config(config: WatchConfig) -> int:
+    _set_log_level(config.log_level)
+    monitor_ins = Monitor(observer_backend=config.observer)
+    for task in config.tasks:
+        if isinstance(task, ImgConvTaskConfig):
+            logger.info(f"Figure conversion: {task.src} -> {task.dst} (.{task.ext})")
+            monitor_ins.set_img_conv(
+                src_dir=task.src,
+                dst_dir=task.dst,
+                to_fmt=task.ext,
+                is_crop=task.crop,
+                gray=task.gray,
+                mk_dst_dir=True,
+            )
+        else:
+            if not task.dst.suffix:
+                task.dst.mkdir(parents=True, exist_ok=True)
+            logger.info(f"Copy: {task.src} -> {task.dst} ({', '.join(task.exts)})")
+            monitor_ins.set_copy_task(
+                src_dir=task.src,
+                dst_dir=task.dst,
+                src_suffixes=list(task.exts),
+                diff_sec=task.diff_sec,
+            )
+    monitor_ins.start_monitors(sleep_sec=config.sleep_sec)
     return 0
+
+
+def _run_watch_cli(args: argparse.Namespace) -> int:
+    _set_log_level(args.log_level or DEFAULT_LOG_LEVEL)
+    try:
+        config = _resolve_watch_config(args)
+    except ConfigError as e:
+        for msg in e.errors:
+            logger.error(msg)
+        return 2
+    if config is None:
+        return 0
+    return _run_watch_config(config)
 
 
 def main(argv: list[str] | None = None) -> int:

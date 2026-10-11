@@ -38,6 +38,43 @@ Please install the following software before using this package.
 
 ### watcher (`watch4ml`)
 
+`watch4ml` runs in one of three modes:
+
+| Command | Mode |
+| --- | --- |
+| `watch4ml --json PATH` | Tasks from the json file. Cannot be combined with any other option (error) |
+| `watch4ml --ext pdf ...` | Tasks from CLI options (below). `ml_writing_helper.json` is ignored |
+| `watch4ml` (no option) | Uses `./ml_writing_helper.json`. If it does not exist, a web UI to create it opens in the browser |
+
+#### json mode
+
+Multiple tasks can be defined in one file. Relative paths are resolved from `root`, which is resolved from the json file's directory.
+
+```json
+{
+  "root": ".",
+  "observer": "polling",
+  "sleep_sec": 1.0,
+  "log_level": "INFO",
+  "tasks": [
+    {"type": "img_conv", "src": "fig_src", "dst": "fig_gen", "ext": "pdf", "gray": true, "crop": true},
+    {"type": "img_conv", "src": "slides", "dst": "fig_gen", "ext": "eps"},
+    {"type": "copy", "src": "~/Documents/BibTexExported", "dst": "bib", "exts": ["bib"], "diff_sec": 10}
+  ]
+}
+```
+
+| Task key | Type | Default | Description |
+| --- | --- | --- | --- |
+| `type` | `img_conv` / `copy` | required | Task kind |
+| `src`, `dst` | path | required | Watched dir / output dir (`dst` is created if missing) |
+| `ext` | string | `pdf` | `img_conv` only. eps, pdf, png, jpg, jpeg, gif, bmp, tiff |
+| `gray`, `crop` | bool | `false`, `true` | `img_conv` only |
+| `exts` | list | `["bib"]` | `copy` only. Extensions to copy |
+| `diff_sec` | int | `10` | `copy` only. Skip when src/dst timestamps differ by this many seconds or less |
+
+#### CLI mode
+
 Run in the manuscript root (or give `--root`):
 
 ```bash
