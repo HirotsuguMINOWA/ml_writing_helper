@@ -14,6 +14,12 @@ Example::
     }
 
 Relative paths are resolved from ``root``, which is itself resolved from the directory of the json file.
+
+A single task can also be written at the top level with ``mode`` (shorthand, e.g. for ``--json '{...}'``)::
+
+    {"mode": "copy", "src": "~/Documents/BibTexExported", "dst": "bib", "ext": "bib"}
+
+``mode`` is accepted as an alias of ``type``, and ``ext`` as an alias of ``exts`` in copy tasks.
 """
 import json
 from collections.abc import Sequence
@@ -118,6 +124,9 @@ def parse_config(
         log_level = DEFAULT_LOG_LEVEL
 
     tasks_raw = data.get("tasks")
+    if tasks_raw is None and ("mode" in data or "type" in data):
+        # shorthand: the top-level object itself is a single task
+        tasks_raw = [data]
     tasks: list[ImgConvTaskConfig | CopyTaskConfig] = []
     if not isinstance(tasks_raw, list) or not tasks_raw:
         errors.append('"tasks" must be a non-empty list')
@@ -128,9 +137,9 @@ def parse_config(
         if not isinstance(t, dict):
             errors.append(f"{where} must be an object")
             continue
-        task_type = t.get("type")
+        task_type = t.get("type", t.get("mode"))
         if task_type not in TASK_TYPES:
-            errors.append(f'{where}.type must be one of {list(TASK_TYPES)}: {task_type!r}')
+            errors.append(f'{where}.type (mode) must be one of {list(TASK_TYPES)}: {task_type!r}')
             continue
 
         paths: dict[str, Path] = {}
@@ -157,7 +166,7 @@ def parse_config(
                 continue
             tasks.append(ImgConvTaskConfig(src=paths["src"], dst=paths["dst"], ext=strip_dot(ext), gray=gray, crop=crop))
         else:
-            exts = t.get("exts", list(DEFAULT_COPY_EXTS))
+            exts = t.get("exts", t.get("ext", list(DEFAULT_COPY_EXTS)))
             if isinstance(exts, str):
                 exts = [exts]
             if (
@@ -194,3 +203,20 @@ def load_config(path: Path, available_observers: Sequence[str] | None = None) ->
         return parse_config(data, base_dir=path.parent, available_observers=available_observers)
     except ConfigError as e:
         raise ConfigError([f"{path}: {msg}" for msg in e.errors]) from e
+
+
+def looks_like_json(value: str) -> bool:
+    """True if a --json value is an inline JSON object rather than a file path."""
+    return value.lstrip().startswith("{")
+
+
+def load_config_string(text: str, base_dir: Path, available_observers: Sequence[str] | None = None) -> WatchConfig:
+    """Load config from an inline JSON string. Relative paths are resolved from base_dir."""
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError as e:
+        raise ConfigError([f"--json: invalid JSON string ({e})"]) from e
+    try:
+        return parse_config(data, base_dir=base_dir, available_observers=available_observers)
+    except ConfigError as e:
+        raise ConfigError([f"--json: {msg}" for msg in e.errors]) from e

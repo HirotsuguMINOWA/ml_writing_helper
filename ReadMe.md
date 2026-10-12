@@ -36,19 +36,36 @@ Please install the following software before using this package.
 
 ## CLI
 
+
+### Caution for CLI
+
+- CLI run can do one task only per one process.
+- If your want to do multi tasks in CLI, you run this app to do each task.
+  - If you want to do multi tasks, you had better to use `--json` mode.
+
+
 ### watcher (`watch4ml`)
 
-`watch4ml` runs in one of three modes:
+`watch4ml` decides where the watch tasks come from by the first argument:
 
-| Command | Mode |
-| --- | --- |
-| `watch4ml --json PATH` | Tasks from the json file. Cannot be combined with any other option (error) |
-| `watch4ml --ext pdf ...` | Tasks from CLI options (below). `ml_writing_helper.json` is ignored |
-| `watch4ml` (no option) | Uses `./ml_writing_helper.json`. If it does not exist, a web UI to create it opens in the browser |
+| Command                         | Behavior                                                                                             |
+| ------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `watch4ml img_conv [params...]` | Mode `img_conv`: one figure conversion task from CLI parameters. `ml_writing_helper.json` is ignored |
+| `watch4ml copy [params...]`     | Mode `copy`: copy tasks from CLI parameters. `ml_writing_helper.json` is ignored                     |
+| `watch4ml --json PATH`          | Tasks from the json file. Cannot be combined with a mode (error)                                     |
+| `watch4ml --json '{...}'`       | Tasks from a JSON string (see below). Cannot be combined with a mode (error)                         |
+| `watch4ml` (no argument)        | Uses `./ml_writing_helper.json`. If it does not exist, a web UI to create it opens in the browser    |
 
-#### json mode
+To run multiple tasks at once (e.g. img_conv and copy), use the json file.
 
-Multiple tasks can be defined in one file. Relative paths are resolved from `root`, which is resolved from the json file's directory.
+#### json instruction
+
+`--json` takes either a json file path or a JSON string:
+
+- If the value starts with `{`, it is parsed as a JSON string and run as the task instruction.
+- Otherwise it is treated as a json file path.
+
+Multiple tasks can be defined in one file. Relative paths are resolved from `root`, which is resolved from the json file's directory (for a JSON string, from the current directory).
 
 ```json
 {
@@ -64,41 +81,88 @@ Multiple tasks can be defined in one file. Relative paths are resolved from `roo
 }
 ```
 
-| Task key | Type | Default | Description |
-| --- | --- | --- | --- |
-| `type` | `img_conv` / `copy` | required | Task kind |
-| `src`, `dst` | path | required | Watched dir / output dir (`dst` is created if missing) |
-| `ext` | string | `pdf` | `img_conv` only. eps, pdf, png, jpg, jpeg, gif, bmp, tiff |
-| `gray`, `crop` | bool | `false`, `true` | `img_conv` only |
-| `exts` | list | `["bib"]` | `copy` only. Extensions to copy |
-| `diff_sec` | int | `10` | `copy` only. Skip when src/dst timestamps differ by this many seconds or less |
+| Task key       | Type                | Default         | Description                                                                   |
+| -------------- | ------------------- | --------------- | ----------------------------------------------------------------------------- |
+| `type`         | `img_conv` / `copy` | required        | Task kind                                                                     |
+| `src`, `dst`   | path                | required        | Watched dir / output dir (`dst` is created if missing)                        |
+| `ext`          | string              | `pdf`           | `img_conv` only. eps, pdf, png, jpg, jpeg, gif, bmp, tiff                     |
+| `gray`, `crop` | bool                | `false`, `true` | `img_conv` only                                                               |
+| `exts`         | list                | `["bib"]`       | `copy` only. Extensions to copy                                               |
+| `diff_sec`     | int                 | `10`            | `copy` only. Skip when src/dst timestamps differ by this many seconds or less |
 
-#### CLI mode
+- `mode` can be used instead of `type` (same meaning as the CLI mode).
+- In `copy` tasks, `ext` can be used instead of `exts` (string or list).
 
-Run in the manuscript root (or give `--root`):
+##### JSON string (`--json '{...}'`)
+
+The same format as the json file. A single task can also be written at the top level with `mode` (shorthand):
 
 ```bash
-# fig_src/ -> fig_gen/ as grayscale .pdf, and copy exported .bib into bib/
-watch4ml --ext pdf --gray --copy ~/Documents/BibTexExported bib
+# single task (shorthand)
+watch4ml --json '{"mode": "copy", "src": "~/Documents/BibTexExported", "dst": "bib", "ext": "bib"}'
+
+# multiple tasks (same format as the json file)
+watch4ml --json '{"tasks": [{"mode": "img_conv", "src": "fig_src", "dst": "fig_gen", "ext": "pdf"}, {"mode": "copy", "src": "~/Documents/BibTexExported", "dst": "bib"}]}'
 ```
 
-| Option | Default | Description |
-| --- | --- | --- |
-| `--root DIR` | current dir | Manuscript root. Relative paths are resolved from here |
-| `--img-src DIR` | `fig_src` | Figure source dir |
-| `--img-dst DIR` | `fig_gen` | Figure output dir (created if missing) |
-| `--ext FMT` | `pdf` | Output format: eps, pdf, png, jpg, jpeg, gif, bmp, tiff |
-| `--gray` | off | Convert to grayscale |
-| `--no-crop` | off | Disable cropping |
-| `--no-img` | off | Disable figure conversion (copy only) |
-| `--copy SRC DST` | none | Copy changed files from SRC to DST. Repeatable |
-| `--copy-ext EXT` | `bib` | Extension copied by `--copy`. Repeatable |
-| `--observer` | `polling` | watchdog backend (`polling` is cloud-storage friendly, `native` is lighter) |
-| `--sleep-sec` | `1.0` | Main loop sleep time |
-| `--diff-sec` | `10` | Skip when src/dst timestamps differ by this many seconds or less |
-| `--log-level` | `INFO` | Console log level |
+Wrap the JSON string in single quotes `'...'` so that the shell passes the double quotes as they are.
 
-`convert4ml watch ...` is the same as `watch4ml ...`.
+#### CLI instruction
+
+```bash
+watch4ml [Mode] [sub parameters...] [--root [root PATH]]
+
+# fig_src/ -> fig_gen/ as grayscale .pdf
+watch4ml img_conv --ext pdf --gray
+
+# copy exported .bib into bib/
+watch4ml copy --src ~/Documents/BibTexExported --dst bib
+```
+
+##### Common parameters
+
+Available in every mode. Give them after the mode (e.g. `watch4ml copy --src a --dst b --log-level DEBUG`).
+
+| Option             | Default             | Description                                                                 |
+| ------------------ | ------------------- | --------------------------------------------------------------------------- |
+| `--observer`       | `polling`           | watchdog backend (`polling` is cloud-storage friendly, `native` is lighter) |
+| `--sleep-sec`      | `1.0`               | Main loop sleep time                                                        |
+| `--diff-sec`       | `10`                | Skip when src/dst timestamps differ by this many seconds or less            |
+| `--log-level`      | `INFO`              | Console log level                                                           |
+| `--root root_PATH` | current folder(".") | The base PATH for this app to understand relative PATH                      |
+
+##### Mode: img_conv
+
+This mode converts src path's images (e.g.: .pptx, .png) into dest path with format (e.g.: .eps, .pdf)
+
+| Option      | Default   | Description                                             |
+| ----------- | --------- | ------------------------------------------------------- |
+| `--src DIR` | `fig_src` | Figure source dir                                       |
+| `--dst DIR` | `fig_gen` | Figure output dir (created if missing)                  |
+| `--ext FMT` | `pdf`     | Output format: eps, pdf, png, jpg, jpeg, gif, bmp, tiff |
+| `--gray`    | off       | Convert to grayscale                                    |
+| `--no-crop` | off       | Disable cropping                                        |
+
+##### Mode: copy
+
+This mode copies the files of src path into the dest path
+
+| Option      | Default    | Description                                                                                                   |
+| ----------- | ---------- | ------------------------------------------------------------------------------------------------------------- |
+| `--src SRC` | (required) | Copy changed files from SRC. Repeatable                                                                       |
+| `--dst DST` | (required) | Copy changed files to DST. Repeatable: paired with `--src` in order, or a single `--dst` receives all `--src` |
+| `--ext EXT` | `bib`      | Extension to copy. Repeatable                                                                                 |
+
+When `--src` and `--dst` are given multiple times, they are matched as follows:
+
+- If both counts are the same, they are paired in the given order (e.g. `--src a --dst x --src b --dst y` copies a→x and b→y).
+- If only one `--dst` is given, every `--src` is copied into it.
+- Any other combination of counts is an error.
+
+##### [Not implement yet] Mode: doc_conv
+
+This mode convert document type(e.g.: markdown) into other type(e.g.:pdf) if src files are changed.
+
 
 ### single file conversion
 

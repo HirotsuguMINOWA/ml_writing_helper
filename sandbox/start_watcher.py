@@ -1,10 +1,10 @@
 """Thin wrapper of the `watch4ml` CLI.
 
-Settings come from ./ml_writing_helper.json (or --json PATH), or from CLI parameters.
-With no parameters and no json, a web UI to create the json opens. Equivalent CLI command:
+Settings come from ./ml_writing_helper.json (or --json PATH), or from a mode with CLI parameters.
+With no arguments and no json, a web UI to create the json opens. CLI examples:
 
-    watch4ml --root <this dir> --ext pdf --gray \
-        --copy /Users/my_user/Documents/BibTexExported bib
+    watch4ml img_conv --root <this dir> --ext pdf --gray
+    watch4ml copy --root <this dir> --src /Users/my_user/Documents/BibTexExported --dst bib
 
 Run `watch4ml --help` for all options.
 """

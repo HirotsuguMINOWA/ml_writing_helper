@@ -48,6 +48,8 @@ from ml_writing_helper.config import (
     ImgConvTaskConfig,
     WatchConfig,
     load_config,
+    load_config_string,
+    looks_like_json,
     resolve_path,
     strip_dot,
 )
@@ -878,11 +880,7 @@ def _available_observer_backends() -> list[str]:
 
 
 CLI_COMMANDS: Final[tuple[str, ...]] = ("convert", "monitor", "watch")
-# `watch` options that conflict with --json (dest names)
-WATCH_CLI_OPTIONS: Final[tuple[str, ...]] = (
-    "root", "img_src", "img_dst", "ext", "no_img", "gray", "no_crop", "copy", "copy_ext",
-    "observer", "sleep_sec", "diff_sec", "log_level",
-)
+WATCH_MODES: Final[tuple[str, ...]] = ("img_conv", "copy")
 
 
 def _add_common_conv_args(parser: argparse.ArgumentParser) -> None:
@@ -916,6 +914,15 @@ def _add_common_monitor_args(parser: argparse.ArgumentParser) -> None:
     )
 
 
+def _add_watch_common_args(parser: argparse.ArgumentParser) -> None:
+    _add_common_monitor_args(parser)
+    _ = parser.add_argument(
+        "--root",
+        metavar="DIR",
+        help="base dir to resolve relative paths (default: current dir)",
+    )
+
+
 def _build_cli_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Markuplanguage(.md, .tex) Helper",
@@ -938,47 +945,54 @@ def _build_cli_parser() -> argparse.ArgumentParser:
 
     watch_parser = subparsers.add_parser(
         "watch",
-        help="watch a manuscript dir: convert figures and copy files such as .bib",
+        help="watch dirs: convert figures (img_conv) or copy files such as .bib (copy)",
         description=(
-            "Run watch tasks from a json file (--json) or from CLI options. "
-            f"With no options at all, ./{CONFIG_FILENAME} is used; "
-            "if it does not exist, a web UI to create it is opened. "
-            "--json cannot be combined with other options."
+            "watch4ml [mode] [sub parameters...]. "
+            "mode: img_conv | copy. "
+            f"Without mode, tasks are read from --json (file path or JSON string) or ./{CONFIG_FILENAME}; "
+            "if neither exists, a web UI to create the json is opened. "
+            "--json cannot be combined with a mode."
         ),
     )
     _ = watch_parser.add_argument(
         "--json",
-        metavar="PATH",
-        help=f"json file describing tasks (default: ./{CONFIG_FILENAME} when no other option is given)",
+        metavar="PATH_OR_JSON",
+        help="json file path, or tasks as a JSON string such as "
+             "'{\"mode\": \"copy\", \"src\": \"a\", \"dst\": \"b\"}' "
+             f"(default: ./{CONFIG_FILENAME} when no mode is given)",
     )
-    _ = watch_parser.add_argument(
-        "--root",
-        help="manuscript root dir. relative paths are resolved from here (default: current dir)",
+    mode_parsers = watch_parser.add_subparsers(dest="mode", metavar="mode")
+
+    img_parser = mode_parsers.add_parser(
+        "img_conv",
+        help="convert images/slides in src (e.g. .pptx, .png) into dst with a format (e.g. .eps, .pdf)",
     )
-    _ = watch_parser.add_argument("--img-src", help="figure source dir (default: fig_src)")
-    _ = watch_parser.add_argument("--img-dst", help="figure output dir (default: fig_gen)")
-    _ = watch_parser.add_argument(
+    _ = img_parser.add_argument("--src", metavar="DIR", help="figure source dir (default: fig_src)")
+    _ = img_parser.add_argument("--dst", metavar="DIR", help="figure output dir, created if missing (default: fig_gen)")
+    _ = img_parser.add_argument(
         "--ext",
         type=strip_dot,
         choices=OUTPUT_FORMATS,
-        help="figure output format (default: pdf)",
+        help="output format (default: pdf)",
     )
-    _ = watch_parser.add_argument("--no-img", action="store_true", help="disable figure conversion task")
-    _add_common_conv_args(watch_parser)
-    _ = watch_parser.add_argument(
-        "--copy",
-        nargs=2,
-        action="append",
-        metavar=("SRC_DIR", "DST_DIR"),
-        help="copy changed files from SRC_DIR to DST_DIR. can be repeated",
+    _add_common_conv_args(img_parser)
+    _add_watch_common_args(img_parser)
+
+    copy_parser = mode_parsers.add_parser("copy", help="copy changed files in src into dst")
+    _ = copy_parser.add_argument(
+        "--src", dest="srcs", metavar="DIR", action="append", required=True,
+        help="copy changed files from DIR. can be repeated",
     )
-    _ = watch_parser.add_argument(
-        "--copy-ext",
-        action="append",
-        type=strip_dot,
-        help="extension copied by --copy tasks. can be repeated (default: bib)",
+    _ = copy_parser.add_argument(
+        "--dst", dest="dsts", metavar="DIR", action="append", required=True,
+        help="copy changed files to DIR. can be repeated: paired with --src in order, "
+             "or a single --dst receives all --src",
     )
-    _add_common_monitor_args(watch_parser)
+    _ = copy_parser.add_argument(
+        "--ext", dest="exts", metavar="EXT", action="append", type=strip_dot,
+        help="extension to copy. can be repeated (default: bib)",
+    )
+    _add_watch_common_args(copy_parser)
     return parser
 
 
@@ -1042,17 +1056,8 @@ def _run_monitor_cli(args: argparse.Namespace) -> int:
     return 0
 
 
-def _specified_watch_options(args: argparse.Namespace) -> list[str]:
-    """`watch` options given on the command line, as --option names."""
-    return [
-        "--" + name.replace("_", "-")
-        for name in WATCH_CLI_OPTIONS
-        if getattr(args, name) not in (None, False)
-    ]
-
-
 def _watch_config_from_cli(args: argparse.Namespace) -> WatchConfig:
-    """Build WatchConfig from `watch` CLI options. Raises ConfigError."""
+    """Build WatchConfig from `watch <mode>` CLI options. Raises ConfigError."""
     _apply_monitor_defaults(args)
     root = resolve_path(args.root or ".", Path.cwd())
     if not root.is_dir():
@@ -1060,47 +1065,54 @@ def _watch_config_from_cli(args: argparse.Namespace) -> WatchConfig:
     errors: list[str] = []
     tasks: list[ImgConvTaskConfig | CopyTaskConfig] = []
 
-    if not args.no_img:
-        img_src = resolve_path(args.img_src or "fig_src", root)
-        if not img_src.is_dir():
-            errors.append(f"--img-src is not a directory: {img_src}")
+    if args.mode == "img_conv":
+        src = resolve_path(args.src or "fig_src", root)
+        if not src.is_dir():
+            errors.append(f"--src is not a directory: {src}")
         tasks.append(
             ImgConvTaskConfig(
-                src=img_src,
-                dst=resolve_path(args.img_dst or "fig_gen", root),
+                src=src,
+                dst=resolve_path(args.dst or "fig_gen", root),
                 ext=args.ext or "pdf",
                 gray=args.gray,
                 crop=not args.no_crop,
             )
         )
+    else:
+        srcs: list[str] = args.srcs
+        dsts: list[str] = args.dsts
+        if len(dsts) == 1:
+            dsts = dsts * len(srcs)
+        if len(srcs) != len(dsts):
+            raise ConfigError([
+                f"--src ({len(srcs)}) and --dst ({len(dsts)}) counts differ. "
+                "give the same number of --src and --dst, or a single --dst"
+            ])
+        exts = tuple(args.exts or DEFAULT_COPY_EXTS)
+        for src_dir, dst_dir in zip(srcs, dsts):
+            src = resolve_path(src_dir, root)
+            if not src.is_dir():
+                errors.append(f"--src is not a directory: {src}")
+            tasks.append(CopyTaskConfig(src=src, dst=resolve_path(dst_dir, root), exts=exts, diff_sec=args.diff_sec))
 
-    copy_exts = tuple(args.copy_ext or DEFAULT_COPY_EXTS)
-    for src_dir, dst_dir in args.copy or []:
-        copy_src = resolve_path(src_dir, root)
-        if not copy_src.is_dir():
-            errors.append(f"--copy SRC_DIR is not a directory: {copy_src}")
-        tasks.append(
-            CopyTaskConfig(src=copy_src, dst=resolve_path(dst_dir, root), exts=copy_exts, diff_sec=args.diff_sec)
-        )
-
-    if not tasks:
-        errors.append("Nothing to watch: --no-img is set and no --copy is given")
     if errors:
         raise ConfigError(errors)
     return WatchConfig(tasks=tasks, observer=args.observer, sleep_sec=args.sleep_sec, log_level=args.log_level)
 
 
 def _resolve_watch_config(args: argparse.Namespace) -> WatchConfig | None:
-    """Decide the mode (json / CLI / web UI) and return the config. None means nothing to run."""
+    """Decide where tasks come from (mode / json / web UI) and return the config. None means nothing to run."""
     observers = _available_observer_backends()
-    cli_options = _specified_watch_options(args)
 
     if args.json is not None:
-        if cli_options:
+        if args.mode is not None:
             raise ConfigError([
-                f"--json と他のパラメータ（{', '.join(cli_options)}）は同時に指定できません。",
-                "--json だけを指定するか、--json を外して CLI パラメータでタスクを指定してください。",
+                f"--json と mode（{args.mode}）は同時に指定できません。",
+                "watch4ml --json <PATH または JSON 文字列> だけを指定するか、watch4ml <mode> ... でタスクを指定してください。",
             ])
+        if looks_like_json(args.json):
+            logger.info("Load tasks from --json string")
+            return load_config_string(args.json, base_dir=Path.cwd(), available_observers=observers)
         json_path = resolve_path(args.json, Path.cwd())
         if not json_path.is_file():
             raise ConfigError([f"--json のファイルが見つかりません: {json_path}"])
@@ -1108,9 +1120,9 @@ def _resolve_watch_config(args: argparse.Namespace) -> WatchConfig | None:
         return load_config(json_path, available_observers=observers)
 
     default_json = Path.cwd().joinpath(CONFIG_FILENAME)
-    if cli_options:
+    if args.mode is not None:
         if default_json.is_file():
-            logger.info(f"CLI パラメータが指定されたため {CONFIG_FILENAME} は使用しません")
+            logger.info(f"mode（{args.mode}）が指定されたため {CONFIG_FILENAME} は使用しません")
         return _watch_config_from_cli(args)
 
     if default_json.is_file():
@@ -1154,7 +1166,7 @@ def _run_watch_config(config: WatchConfig) -> int:
 
 
 def _run_watch_cli(args: argparse.Namespace) -> int:
-    _set_log_level(args.log_level or DEFAULT_LOG_LEVEL)
+    _set_log_level(getattr(args, "log_level", None) or DEFAULT_LOG_LEVEL)
     try:
         config = _resolve_watch_config(args)
     except ConfigError as e:
