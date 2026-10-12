@@ -46,17 +46,27 @@ Please install the following software before using this package.
 
 ### watcher (`watch4ml`)
 
-`watch4ml` decides where the watch tasks come from by the first argument:
+Choose how to run with one of the following options. They cannot be combined.
 
-| Command                         | Behavior                                                                                             |
-| ------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| `watch4ml img_conv [params...]` | Mode `img_conv`: one figure conversion task from CLI parameters. `ml_writing_helper.json` is ignored |
-| `watch4ml copy [params...]`     | Mode `copy`: copy tasks from CLI parameters. `ml_writing_helper.json` is ignored                     |
-| `watch4ml --json PATH`          | Tasks from the json file. Cannot be combined with a mode (error)                                     |
-| `watch4ml --json '{...}'`       | Tasks from a JSON string (see below). Cannot be combined with a mode (error)                         |
-| `watch4ml` (no argument)        | Uses `./ml_writing_helper.json`. If it does not exist, a web UI to create it opens in the browser    |
+| Command                                     | Behavior                                                                                 |
+| ------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `watch4ml` (no argument) / `watch4ml --help` | Show the help message                                                                    |
+| `watch4ml --json [PATH]`                    | Tasks from the json file. Without PATH, `./ml_writing_helper.json` is used               |
+| `watch4ml --json '{...}'`                   | Tasks from a JSON string (see below)                                                     |
+| `watch4ml --mode img_conv [params...]`      | Mode `img_conv`: one figure conversion task from CLI parameters                          |
+| `watch4ml --mode copy [params...]`          | Mode `copy`: copy tasks from CLI parameters                                              |
+| `watch4ml --conf-maker-web [PATH]`          | Create/edit the json file in a web UI (browser). Without PATH, `./ml_writing_helper.json` |
+| `watch4ml --conf-maker-cli [PATH]`          | Create/edit the json file interactively in the terminal. Without PATH, `./ml_writing_helper.json` |
 
-To run multiple tasks at once (e.g. img_conv and copy), use the json file.
+- The parameters of `--mode` (`--src`, `--ext`, `--root`, `--log-level`, ...) can be used only with `--mode`. With `--json` or `--conf-maker-*`, write them in the json file instead.
+- To run multiple tasks at once (e.g. img_conv and copy), use the json file.
+
+#### Creating the json file (`--conf-maker-web` / `--conf-maker-cli`)
+
+- `--conf-maker-web`: opens a form in the browser. Add tasks, check the preview, then press "保存して監視開始" (save and start watching) or "保存のみ" (save only).
+- `--conf-maker-cli`: asks each setting in the terminal. Press Enter to accept the default shown in `[ ]`. Invalid answers (e.g. a folder that does not exist) are asked again. After saving, you can start watching right away.
+- If the file already exists, its content is loaded as the initial values and is overwritten when you save.
+- If PATH is a folder, `ml_writing_helper.json` is created in it.
 
 #### json instruction
 
@@ -64,6 +74,7 @@ To run multiple tasks at once (e.g. img_conv and copy), use the json file.
 
 - If the value starts with `{`, it is parsed as a JSON string and run as the task instruction.
 - Otherwise it is treated as a json file path.
+- Without a value (`watch4ml --json`), `./ml_writing_helper.json` is used.
 
 Multiple tasks can be defined in one file. Relative paths are resolved from `root`, which is resolved from the json file's directory (for a JSON string, from the current directory).
 
@@ -107,21 +118,21 @@ watch4ml --json '{"tasks": [{"mode": "img_conv", "src": "fig_src", "dst": "fig_g
 
 Wrap the JSON string in single quotes `'...'` so that the shell passes the double quotes as they are.
 
-#### CLI instruction
+#### CLI instruction (`--mode`)
 
 ```bash
-watch4ml [Mode] [sub parameters...] [--root [root PATH]]
+watch4ml --mode [img_conv|copy] [sub parameters...] [--root [root PATH]]
 
 # fig_src/ -> fig_gen/ as grayscale .pdf
-watch4ml img_conv --ext pdf --gray
+watch4ml --mode img_conv --ext pdf --gray
 
 # copy exported .bib into bib/
-watch4ml copy --src ~/Documents/BibTexExported --dst bib
+watch4ml --mode copy --src ~/Documents/BibTexExported --dst bib
 ```
 
 ##### Common parameters
 
-Available in every mode. Give them after the mode (e.g. `watch4ml copy --src a --dst b --log-level DEBUG`).
+Available in every mode (e.g. `watch4ml --mode copy --src a --dst b --log-level DEBUG`).
 
 | Option             | Default             | Description                                                                 |
 | ------------------ | ------------------- | --------------------------------------------------------------------------- |
@@ -137,8 +148,8 @@ This mode converts src path's images (e.g.: .pptx, .png) into dest path with for
 
 | Option      | Default   | Description                                             |
 | ----------- | --------- | ------------------------------------------------------- |
-| `--src DIR` | `fig_src` | Figure source dir                                       |
-| `--dst DIR` | `fig_gen` | Figure output dir (created if missing)                  |
+| `--src DIR` | `fig_src` | Figure source dir. Once only                            |
+| `--dst DIR` | `fig_gen` | Figure output dir (created if missing). Once only       |
 | `--ext FMT` | `pdf`     | Output format: eps, pdf, png, jpg, jpeg, gif, bmp, tiff |
 | `--gray`    | off       | Convert to grayscale                                    |
 | `--no-crop` | off       | Disable cropping                                        |

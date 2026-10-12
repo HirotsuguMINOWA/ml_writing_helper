@@ -94,6 +94,33 @@ class WatchConfig:
     log_level: str = DEFAULT_LOG_LEVEL
 
 
+@dataclass(frozen=True)
+class ConfMakerResult:
+    """Result of a config maker (web UI / interactive CLI)."""
+    saved: bool
+    start_watch: bool
+
+
+def read_existing_config(path: Path) -> dict[str, Any] | None:
+    """Read an existing config as initial values for a config maker. Shorthand is expanded into "tasks".
+
+    Returns None if the file does not exist or cannot be read as a JSON object.
+    """
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        return None
+    if not isinstance(data, dict):
+        return None
+    if "tasks" not in data and ("mode" in data or "type" in data):
+        globals_ = {k: v for k, v in data.items() if k in _TOP_KEYS}
+        task = {k: v for k, v in data.items() if k not in _TOP_KEYS}
+        data = {**globals_, "tasks": [task]}
+    if not isinstance(data.get("tasks"), list):
+        return None
+    return data
+
+
 def strip_dot(ext: str) -> str:
     return ext.strip().lstrip(".").lower()
 
@@ -348,7 +375,7 @@ def load_config(path: Path, available_observers: Sequence[str] | None = None) ->
     if not text.strip():
         raise ConfigError(["ファイルが空です"], title=title,
                           hint=f"例: {{\"tasks\": [{_EXAMPLE}]}}\n"
-                               "ファイルを削除して watch4ml を引数なしで実行すると、Web UI で作成できます")
+                               "watch4ml --conf-maker-web（ブラウザ）か --conf-maker-cli（ターミナル）で作成できます")
     try:
         data = json.loads(text)
     except json.JSONDecodeError as e:
@@ -393,7 +420,7 @@ def load_config_arg(value: str, cwd: Path, available_observers: Sequence[str] | 
         else:
             hint = (
                 "ファイル名の綴りと、今いるフォルダを確認してください\n"
-                f"ファイルを作るには、{CONFIG_FILENAME} の無いフォルダで watch4ml を引数なしで実行すると Web UI が開きます"
+                "ファイルは watch4ml --conf-maker-web（ブラウザ）か --conf-maker-cli（ターミナル）で作成できます"
             )
         raise ConfigError(
             [f"ファイルが見つかりません\n指定値: {_show(value)}\n探した場所: {path}"],

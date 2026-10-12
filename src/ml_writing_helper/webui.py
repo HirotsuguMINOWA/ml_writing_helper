@@ -8,7 +8,6 @@ import secrets
 import threading
 import webbrowser
 from collections.abc import Sequence
-from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
@@ -21,14 +20,13 @@ from ml_writing_helper.config import (
     LOG_LEVELS,
     OUTPUT_FORMATS,
     ConfigError,
+    ConfMakerResult,
     parse_config,
+    read_existing_config,
 )
 
 
-@dataclass(frozen=True)
-class WebUIResult:
-    saved: bool
-    start_watch: bool
+WebUIResult = ConfMakerResult
 
 
 _PAGE = r"""<!doctype html>
@@ -80,7 +78,7 @@ pre { background: var(--code); border-radius: 6px; padding: 12px; overflow-x: au
 <body>
 <main>
   <h1>ML Writing Helper 設定</h1>
-  <p class="sub">保存先: <code id="savePath"></code></p>
+  <p class="sub">保存先: <code id="savePath"></code><br><span id="existsNote"></span></p>
 
   <section>
     <h2>全体設定</h2>
@@ -233,7 +231,34 @@ async function cancel() {
 document.getElementById("savePath").textContent = BOOT.savePath;
 opt(document.getElementById("observer"), BOOT.observers, BOOT.defaultObserver);
 opt(document.getElementById("log_level"), BOOT.logLevels, BOOT.defaultLogLevel);
-addTask("img_conv");
+function loadInitial(c) {
+  if (typeof c.root === "string") document.getElementById("root").value = c.root;
+  if (typeof c.sleep_sec === "number") document.getElementById("sleep_sec").value = c.sleep_sec;
+  if (BOOT.observers.includes(c.observer)) document.getElementById("observer").value = c.observer;
+  if (typeof c.log_level === "string" && BOOT.logLevels.includes(c.log_level.toUpperCase()))
+    document.getElementById("log_level").value = c.log_level.toUpperCase();
+  for (const t of c.tasks) {
+    if (!t || typeof t !== "object") continue;
+    const type = t.type || t.mode;
+    if (type === "img_conv") {
+      tasks.push({type, src: t.src || "", dst: t.dst || "", ext: String(t.ext || "pdf").replace(/^\./, ""),
+                  gray: t.gray === true, crop: t.crop !== false});
+    } else if (type === "copy") {
+      const e = t.exts ?? t.ext ?? ["bib"];
+      tasks.push({type, src: t.src || "", dst: t.dst || "", exts: Array.isArray(e) ? e.map(String) : [String(e)],
+                  diff_sec: Number.isInteger(t.diff_sec) ? t.diff_sec : 10});
+    }
+  }
+  render();
+}
+
+if (BOOT.exists) {
+  document.getElementById("existsNote").textContent = BOOT.initial
+    ? "既存のファイルを読み込みました。保存すると上書きされます。"
+    : "既存のファイルは読み込めなかったため、新しく作成します。保存すると上書きされます。";
+}
+if (BOOT.initial) loadInitial(BOOT.initial);
+if (tasks.length === 0) addTask("img_conv");
 </script>
 </body>
 </html>
@@ -246,13 +271,15 @@ def run_webui(
         host: str = "127.0.0.1",
         port: int = 0,
         open_browser: bool = True,
-) -> WebUIResult:
+) -> ConfMakerResult:
     """Serve the config editor until the user saves or cancels. Blocks."""
     token = secrets.token_urlsafe(16)
     result: dict[str, bool] = {"saved": False, "start_watch": False}
     boot = {
         "token": token,
         "savePath": save_path.as_posix(),
+        "exists": save_path.exists(),
+        "initial": read_existing_config(save_path) if save_path.exists() else None,
         "formats": OUTPUT_FORMATS,
         "observers": list(available_observers),
         "logLevels": LOG_LEVELS,
@@ -320,7 +347,7 @@ def run_webui(
         threading.Thread(target=server.shutdown, daemon=True).start()
 
     url = f"http://{host}:{server.server_address[1]}/"
-    logger.info(f"{save_path.name} が見つからないため、設定用 Web UI を起動しました: {url}")
+    logger.info(f"設定ファイル作成用の Web UI を起動しました: {url}")
     logger.info("ブラウザで設定を保存してください（中止: Ctrl+C）")
     if open_browser:
         _ = webbrowser.open(url)
@@ -330,4 +357,4 @@ def run_webui(
         logger.info("Web UI を中止しました")
     finally:
         server.server_close()
-    return WebUIResult(saved=result["saved"], start_watch=result["start_watch"])
+    return ConfMakerResult(saved=result["saved"], start_watch=result["start_watch"])

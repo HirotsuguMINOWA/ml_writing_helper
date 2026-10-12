@@ -881,6 +881,21 @@ def _available_observer_backends() -> list[str]:
 
 CLI_COMMANDS: Final[tuple[str, ...]] = ("convert", "monitor", "watch")
 WATCH_MODES: Final[tuple[str, ...]] = ("img_conv", "copy")
+# `watch4ml` entry options: exactly one of them selects what to do (dest names)
+WATCH_LAUNCHERS: Final[tuple[str, ...]] = ("json", "mode", "conf_maker_web", "conf_maker_cli")
+# options usable only with --mode (dest names)
+WATCH_MODE_OPTIONS: Final[tuple[str, ...]] = (
+    "src", "dst", "ext", "gray", "no_crop", "root", "observer", "sleep_sec", "diff_sec", "log_level",
+)
+WATCH_EPILOG: Final[str] = f"""examples:
+  watch4ml --mode img_conv --ext pdf --gray
+  watch4ml --mode copy --src ~/Documents/BibTexExported --dst bib
+  watch4ml --json                       # use ./{CONFIG_FILENAME}
+  watch4ml --json my_tasks.json
+  watch4ml --json '{{"mode": "copy", "src": "a", "dst": "b"}}'
+  watch4ml --conf-maker-web             # create ./{CONFIG_FILENAME} in a web UI
+  watch4ml --conf-maker-cli             # create ./{CONFIG_FILENAME} interactively in the terminal
+"""
 
 
 def _add_common_conv_args(parser: argparse.ArgumentParser) -> None:
@@ -888,7 +903,7 @@ def _add_common_conv_args(parser: argparse.ArgumentParser) -> None:
     _ = parser.add_argument("--no-crop", action="store_true", help="disable cropping during conversion")
 
 
-def _add_common_monitor_args(parser: argparse.ArgumentParser) -> None:
+def _add_common_monitor_args(parser: argparse.ArgumentParser | argparse._ArgumentGroup) -> None:
     # defaults are None so that `watch` can tell whether an option was given. see _apply_monitor_defaults
     _ = parser.add_argument(
         "--observer",
@@ -914,9 +929,74 @@ def _add_common_monitor_args(parser: argparse.ArgumentParser) -> None:
     )
 
 
-def _add_watch_common_args(parser: argparse.ArgumentParser) -> None:
-    _add_common_monitor_args(parser)
-    _ = parser.add_argument(
+def _add_watch_parser(subparsers: "argparse._SubParsersAction[argparse.ArgumentParser]") -> None:
+    watch_parser = subparsers.add_parser(
+        "watch",
+        prog="watch4ml",
+        help="watch dirs: convert figures (img_conv) or copy files such as .bib (copy)",
+        description=(
+            "Watch folders and convert figures / copy files when they change. "
+            "Choose one of --json, --mode, --conf-maker-web, --conf-maker-cli. "
+            "With no argument, this help is shown."
+        ),
+        epilog=WATCH_EPILOG,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    watch_parser.set_defaults(print_watch_help=watch_parser.print_help)
+
+    launch = watch_parser.add_argument_group("how to run (choose one)")
+    _ = launch.add_argument(
+        "--json",
+        nargs="?",
+        const=CONFIG_FILENAME,
+        metavar="PATH_OR_JSON",
+        help=f"run tasks from a json file, or from a JSON string starting with '{{' (default: ./{CONFIG_FILENAME})",
+    )
+    _ = launch.add_argument(
+        "--mode",
+        choices=WATCH_MODES,
+        help="run one kind of task from CLI parameters below",
+    )
+    _ = launch.add_argument(
+        "--conf-maker-web",
+        nargs="?",
+        const=CONFIG_FILENAME,
+        metavar="PATH",
+        help=f"create/edit the json file in a web UI (default: ./{CONFIG_FILENAME})",
+    )
+    _ = launch.add_argument(
+        "--conf-maker-cli",
+        nargs="?",
+        const=CONFIG_FILENAME,
+        metavar="PATH",
+        help=f"create/edit the json file interactively in the terminal (default: ./{CONFIG_FILENAME})",
+    )
+
+    task = watch_parser.add_argument_group(
+        "--mode parameters",
+        "img_conv: --src/--dst/--ext once each, --gray, --no-crop. "
+        "copy: --src/--dst/--ext repeatable (--src and --dst required)",
+    )
+    _ = task.add_argument(
+        "--src", action="append", metavar="DIR",
+        help="source dir to watch (img_conv default: fig_src)",
+    )
+    _ = task.add_argument(
+        "--dst", action="append", metavar="DIR",
+        help="output dir, created if missing (img_conv default: fig_gen). "
+             "copy: paired with --src in order, or a single --dst receives all --src",
+    )
+    _ = task.add_argument(
+        "--ext", action="append", type=strip_dot, metavar="EXT",
+        help=f"img_conv: output format {'/'.join(OUTPUT_FORMATS)} (default: pdf). "
+             "copy: extension to copy (default: bib)",
+    )
+    _ = task.add_argument("--gray", action="store_true", help="img_conv: convert to grayscale")
+    _ = task.add_argument("--no-crop", action="store_true", help="img_conv: disable cropping")
+
+    common = watch_parser.add_argument_group("--mode common parameters")
+    _add_common_monitor_args(common)
+    _ = common.add_argument(
         "--root",
         metavar="DIR",
         help="base dir to resolve relative paths (default: current dir)",
@@ -943,56 +1023,7 @@ def _build_cli_parser() -> argparse.ArgumentParser:
     _add_common_conv_args(monitor_parser)
     _add_common_monitor_args(monitor_parser)
 
-    watch_parser = subparsers.add_parser(
-        "watch",
-        help="watch dirs: convert figures (img_conv) or copy files such as .bib (copy)",
-        description=(
-            "watch4ml [mode] [sub parameters...]. "
-            "mode: img_conv | copy. "
-            f"Without mode, tasks are read from --json (file path or JSON string) or ./{CONFIG_FILENAME}; "
-            "if neither exists, a web UI to create the json is opened. "
-            "--json cannot be combined with a mode."
-        ),
-    )
-    _ = watch_parser.add_argument(
-        "--json",
-        metavar="PATH_OR_JSON",
-        help="json file path, or tasks as a JSON string such as "
-             "'{\"mode\": \"copy\", \"src\": \"a\", \"dst\": \"b\"}' "
-             f"(default: ./{CONFIG_FILENAME} when no mode is given)",
-    )
-    mode_parsers = watch_parser.add_subparsers(dest="mode", metavar="mode")
-
-    img_parser = mode_parsers.add_parser(
-        "img_conv",
-        help="convert images/slides in src (e.g. .pptx, .png) into dst with a format (e.g. .eps, .pdf)",
-    )
-    _ = img_parser.add_argument("--src", metavar="DIR", help="figure source dir (default: fig_src)")
-    _ = img_parser.add_argument("--dst", metavar="DIR", help="figure output dir, created if missing (default: fig_gen)")
-    _ = img_parser.add_argument(
-        "--ext",
-        type=strip_dot,
-        choices=OUTPUT_FORMATS,
-        help="output format (default: pdf)",
-    )
-    _add_common_conv_args(img_parser)
-    _add_watch_common_args(img_parser)
-
-    copy_parser = mode_parsers.add_parser("copy", help="copy changed files in src into dst")
-    _ = copy_parser.add_argument(
-        "--src", dest="srcs", metavar="DIR", action="append", required=True,
-        help="copy changed files from DIR. can be repeated",
-    )
-    _ = copy_parser.add_argument(
-        "--dst", dest="dsts", metavar="DIR", action="append", required=True,
-        help="copy changed files to DIR. can be repeated: paired with --src in order, "
-             "or a single --dst receives all --src",
-    )
-    _ = copy_parser.add_argument(
-        "--ext", dest="exts", metavar="EXT", action="append", type=strip_dot,
-        help="extension to copy. can be repeated (default: bib)",
-    )
-    _add_watch_common_args(copy_parser)
+    _add_watch_parser(subparsers)
     return parser
 
 
@@ -1056,83 +1087,148 @@ def _run_monitor_cli(args: argparse.Namespace) -> int:
     return 0
 
 
+def _opt(dest: str) -> str:
+    return "--" + dest.replace("_", "-")
+
+
+_PARAM_ERROR: Final[str] = "パラメータに誤りがあります"
+
+
 def _watch_config_from_cli(args: argparse.Namespace) -> WatchConfig:
-    """Build WatchConfig from `watch <mode>` CLI options. Raises ConfigError."""
+    """Build WatchConfig from `--mode` CLI options. Raises ConfigError."""
     _apply_monitor_defaults(args)
     root = resolve_path(args.root or ".", Path.cwd())
     if not root.is_dir():
-        raise ConfigError([f"--root のフォルダが見つかりません\n指定値: \"{args.root}\"\n探した場所: {root}"], title="パラメータに誤りがあります")
+        raise ConfigError([f"--root のフォルダが見つかりません\n指定値: \"{args.root}\"\n探した場所: {root}"], title=_PARAM_ERROR)
+    srcs: list[str] = args.src or []
+    dsts: list[str] = args.dst or []
+    exts: list[str] = args.ext or []
     errors: list[str] = []
     tasks: list[ImgConvTaskConfig | CopyTaskConfig] = []
 
     if args.mode == "img_conv":
-        src = resolve_path(args.src or "fig_src", root)
+        for name, values in (("--src", srcs), ("--dst", dsts), ("--ext", exts)):
+            if len(values) > 1:
+                errors.append(f"--mode img_conv では {name} は1つだけ指定できます（{len(values)}個指定されています）")
+        ext = exts[0] if exts else "pdf"
+        if ext not in OUTPUT_FORMATS:
+            errors.append(f"--ext には {', '.join(OUTPUT_FORMATS)} のどれかを指定してください（指定値: \"{ext}\"）")
+        src_raw = srcs[0] if srcs else "fig_src"
+        src = resolve_path(src_raw, root)
         if not src.is_dir():
-            errors.append(f"--src のフォルダが見つかりません\n指定値: \"{args.src or 'fig_src'}\"\n探した場所: {src}")
+            errors.append(f"--src のフォルダが見つかりません\n指定値: \"{src_raw}\"\n探した場所: {src}")
+        if errors:
+            raise ConfigError(errors, title=_PARAM_ERROR, hint=f"相対パスは --root（{root}）を基準に探します")
         tasks.append(
             ImgConvTaskConfig(
                 src=src,
-                dst=resolve_path(args.dst or "fig_gen", root),
-                ext=args.ext or "pdf",
+                dst=resolve_path(dsts[0] if dsts else "fig_gen", root),
+                ext=ext,
                 gray=args.gray,
                 crop=not args.no_crop,
             )
         )
     else:
-        srcs: list[str] = args.srcs
-        dsts: list[str] = args.dsts
+        for flag in ("gray", "no_crop"):
+            if getattr(args, flag):
+                errors.append(f"{_opt(flag)} は --mode img_conv でだけ使えます")
+        if not srcs or not dsts:
+            missing = " と ".join(n for n, v in (("--src", srcs), ("--dst", dsts)) if not v)
+            errors.append(f"--mode copy では {missing} を指定してください")
+        elif len(dsts) != 1 and len(srcs) != len(dsts):
+            errors.append(f"--src（{len(srcs)}個）と --dst（{len(dsts)}個）の数が合いません")
+        if errors:
+            raise ConfigError(
+                errors, title=_PARAM_ERROR,
+                hint="例: watch4ml --mode copy --src ~/Documents/BibTexExported --dst bib\n"
+                     "--src と --dst は同じ数だけ指定するか、--dst を1つだけ指定してください",
+            )
         if len(dsts) == 1:
             dsts = dsts * len(srcs)
-        if len(srcs) != len(dsts):
-            raise ConfigError([
-                f"--src（{len(srcs)}個）と --dst（{len(dsts)}個）の数が合いません"],
-                title="パラメータに誤りがあります",
-                hint="--src と --dst を同じ数だけ指定するか、--dst を1つだけ指定してください",
-            )
-        exts = tuple(args.exts or DEFAULT_COPY_EXTS)
+        copy_exts = tuple(exts or DEFAULT_COPY_EXTS)
         for src_dir, dst_dir in zip(srcs, dsts):
             src = resolve_path(src_dir, root)
             if not src.is_dir():
                 errors.append(f"--src のフォルダが見つかりません\n指定値: \"{src_dir}\"\n探した場所: {src}")
-            tasks.append(CopyTaskConfig(src=src, dst=resolve_path(dst_dir, root), exts=exts, diff_sec=args.diff_sec))
+            tasks.append(CopyTaskConfig(src=src, dst=resolve_path(dst_dir, root), exts=copy_exts, diff_sec=args.diff_sec))
+        if errors:
+            raise ConfigError(errors, title=_PARAM_ERROR, hint=f"相対パスは --root（{root}）を基準に探します")
 
-    if errors:
-        raise ConfigError(errors, title="パラメータに誤りがあります", hint=f"相対パスは --root（{root}）を基準に探します")
     return WatchConfig(tasks=tasks, observer=args.observer, sleep_sec=args.sleep_sec, log_level=args.log_level)
 
 
-def _resolve_watch_config(args: argparse.Namespace) -> WatchConfig | None:
-    """Decide where tasks come from (mode / json / web UI) and return the config. None means nothing to run."""
+def _check_watch_args(args: argparse.Namespace) -> str | None:
+    """Check the combination of `watch4ml` options. Returns the chosen launcher, or None for help."""
+    launchers = [name for name in WATCH_LAUNCHERS if getattr(args, name) is not None]
+    mode_options = [_opt(name) for name in WATCH_MODE_OPTIONS if getattr(args, name) not in (None, False)]
+    how_to = (
+        "次のどれか1つを指定してください\n"
+        "  --json [ファイルのパス または JSON 文字列]\n"
+        "  --mode img_conv|copy [パラメータ...]\n"
+        "  --conf-maker-web [ファイルのパス]\n"
+        "  --conf-maker-cli [ファイルのパス]\n"
+        "使い方は watch4ml --help で確認できます"
+    )
+    if not launchers:
+        if not mode_options:
+            return None
+        raise ConfigError(
+            [f"{', '.join(mode_options)} は --mode と一緒に指定してください"],
+            title="起動方法が指定されていません",
+            hint=how_to,
+        )
+    if len(launchers) > 1:
+        raise ConfigError(
+            [f"{' と '.join(_opt(n) for n in launchers)} は同時に指定できません"],
+            title="パラメータの組み合わせが正しくありません",
+            hint=how_to,
+        )
+    launcher = launchers[0]
+    if launcher != "mode" and mode_options:
+        raise ConfigError(
+            [f"{_opt(launcher)} と一緒に {', '.join(mode_options)} は指定できません"],
+            title="パラメータの組み合わせが正しくありません",
+            hint="これらは --mode と一緒に使うパラメータです。設定ファイルを使う場合は、ファイルの中に書いてください",
+        )
+    return launcher
+
+
+def _maker_save_path(value: str, option: str) -> Path:
+    path = resolve_path(value, Path.cwd())
+    if path.is_dir():
+        path = path / CONFIG_FILENAME
+    if not path.parent.is_dir():
+        raise ConfigError(
+            [f"保存先のフォルダが見つかりません\n指定値: \"{value}\"\n探した場所: {path.parent}"],
+            title=f"{option} の保存先に誤りがあります",
+        )
+    return path
+
+
+def _resolve_watch_config(args: argparse.Namespace, launcher: str) -> WatchConfig | None:
+    """Return the config to watch for the chosen launcher. None means nothing to run."""
     observers = _available_observer_backends()
 
-    if args.json is not None:
-        if args.mode is not None:
-            raise ConfigError(
-                [f"--json と mode（{args.mode}）は同時に指定できません"],
-                title="パラメータの組み合わせが正しくありません",
-                hint="次のどちらかで実行してください\n"
-                     "  watch4ml --json <ファイルのパス または JSON 文字列>\n"
-                     "  watch4ml <mode> ...（例: watch4ml img_conv --ext pdf）",
-            )
+    if launcher == "json":
         logger.info(f"Load tasks from --json {args.json}")
         return load_config_arg(args.json, cwd=Path.cwd(), available_observers=observers)
 
-    default_json = Path.cwd().joinpath(CONFIG_FILENAME)
-    if args.mode is not None:
-        if default_json.is_file():
-            logger.info(f"mode（{args.mode}）が指定されたため {CONFIG_FILENAME} は使用しません")
+    if launcher == "mode":
         return _watch_config_from_cli(args)
 
-    if default_json.is_file():
-        logger.info(f"Load tasks from {default_json}")
-        return load_config(default_json, available_observers=observers)
+    if launcher == "conf_maker_web":
+        from ml_writing_helper.webui import run_webui
 
-    from ml_writing_helper.webui import run_webui
+        save_path = _maker_save_path(args.conf_maker_web, "--conf-maker-web")
+        result = run_webui(save_path=save_path, available_observers=observers)
+    else:
+        from ml_writing_helper.conf_maker_cli import run_cli_maker
 
-    result = run_webui(save_path=default_json, available_observers=observers)
+        save_path = _maker_save_path(args.conf_maker_cli, "--conf-maker-cli")
+        result = run_cli_maker(save_path=save_path, available_observers=observers)
     if not (result.saved and result.start_watch):
         return None
-    return load_config(default_json, available_observers=observers)
+    return load_config(save_path, available_observers=observers)
 
 
 def _run_watch_config(config: WatchConfig) -> int:
@@ -1164,9 +1260,13 @@ def _run_watch_config(config: WatchConfig) -> int:
 
 
 def _run_watch_cli(args: argparse.Namespace) -> int:
-    _set_log_level(getattr(args, "log_level", None) or DEFAULT_LOG_LEVEL)
+    _set_log_level(args.log_level or DEFAULT_LOG_LEVEL)
     try:
-        config = _resolve_watch_config(args)
+        launcher = _check_watch_args(args)
+        if launcher is None:
+            args.print_watch_help()
+            return 0
+        config = _resolve_watch_config(args, launcher)
     except ConfigError as e:
         print(format_config_error(e), file=sys.stderr)
         return 2

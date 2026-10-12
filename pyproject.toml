@@ -14,7 +14,7 @@ dependencies = [
     "typed-classproperties",
 ]
 name = "ml_writing_helper"
-version = "0.6.0"
+version = "0.6.2"
 description = "Helper tool to insert created diagrams to markup language such as LaTeX, Markdown and HTML and so on."
 authors = [{ name = "Hirotsugu Minowa" }]
 requires-python = ">=3.12"
