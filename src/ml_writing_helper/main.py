@@ -47,9 +47,9 @@ from ml_writing_helper.config import (
     CopyTaskConfig,
     ImgConvTaskConfig,
     WatchConfig,
+    format_config_error,
     load_config,
-    load_config_string,
-    looks_like_json,
+    load_config_arg,
     resolve_path,
     strip_dot,
 )
@@ -1061,14 +1061,14 @@ def _watch_config_from_cli(args: argparse.Namespace) -> WatchConfig:
     _apply_monitor_defaults(args)
     root = resolve_path(args.root or ".", Path.cwd())
     if not root.is_dir():
-        raise ConfigError([f"--root is not a directory: {root}"])
+        raise ConfigError([f"--root のフォルダが見つかりません\n指定値: \"{args.root}\"\n探した場所: {root}"], title="パラメータに誤りがあります")
     errors: list[str] = []
     tasks: list[ImgConvTaskConfig | CopyTaskConfig] = []
 
     if args.mode == "img_conv":
         src = resolve_path(args.src or "fig_src", root)
         if not src.is_dir():
-            errors.append(f"--src is not a directory: {src}")
+            errors.append(f"--src のフォルダが見つかりません\n指定値: \"{args.src or 'fig_src'}\"\n探した場所: {src}")
         tasks.append(
             ImgConvTaskConfig(
                 src=src,
@@ -1085,18 +1085,19 @@ def _watch_config_from_cli(args: argparse.Namespace) -> WatchConfig:
             dsts = dsts * len(srcs)
         if len(srcs) != len(dsts):
             raise ConfigError([
-                f"--src ({len(srcs)}) and --dst ({len(dsts)}) counts differ. "
-                "give the same number of --src and --dst, or a single --dst"
-            ])
+                f"--src（{len(srcs)}個）と --dst（{len(dsts)}個）の数が合いません"],
+                title="パラメータに誤りがあります",
+                hint="--src と --dst を同じ数だけ指定するか、--dst を1つだけ指定してください",
+            )
         exts = tuple(args.exts or DEFAULT_COPY_EXTS)
         for src_dir, dst_dir in zip(srcs, dsts):
             src = resolve_path(src_dir, root)
             if not src.is_dir():
-                errors.append(f"--src is not a directory: {src}")
+                errors.append(f"--src のフォルダが見つかりません\n指定値: \"{src_dir}\"\n探した場所: {src}")
             tasks.append(CopyTaskConfig(src=src, dst=resolve_path(dst_dir, root), exts=exts, diff_sec=args.diff_sec))
 
     if errors:
-        raise ConfigError(errors)
+        raise ConfigError(errors, title="パラメータに誤りがあります", hint=f"相対パスは --root（{root}）を基準に探します")
     return WatchConfig(tasks=tasks, observer=args.observer, sleep_sec=args.sleep_sec, log_level=args.log_level)
 
 
@@ -1106,18 +1107,15 @@ def _resolve_watch_config(args: argparse.Namespace) -> WatchConfig | None:
 
     if args.json is not None:
         if args.mode is not None:
-            raise ConfigError([
-                f"--json と mode（{args.mode}）は同時に指定できません。",
-                "watch4ml --json <PATH または JSON 文字列> だけを指定するか、watch4ml <mode> ... でタスクを指定してください。",
-            ])
-        if looks_like_json(args.json):
-            logger.info("Load tasks from --json string")
-            return load_config_string(args.json, base_dir=Path.cwd(), available_observers=observers)
-        json_path = resolve_path(args.json, Path.cwd())
-        if not json_path.is_file():
-            raise ConfigError([f"--json のファイルが見つかりません: {json_path}"])
-        logger.info(f"Load tasks from {json_path}")
-        return load_config(json_path, available_observers=observers)
+            raise ConfigError(
+                [f"--json と mode（{args.mode}）は同時に指定できません"],
+                title="パラメータの組み合わせが正しくありません",
+                hint="次のどちらかで実行してください\n"
+                     "  watch4ml --json <ファイルのパス または JSON 文字列>\n"
+                     "  watch4ml <mode> ...（例: watch4ml img_conv --ext pdf）",
+            )
+        logger.info(f"Load tasks from --json {args.json}")
+        return load_config_arg(args.json, cwd=Path.cwd(), available_observers=observers)
 
     default_json = Path.cwd().joinpath(CONFIG_FILENAME)
     if args.mode is not None:
@@ -1170,8 +1168,7 @@ def _run_watch_cli(args: argparse.Namespace) -> int:
     try:
         config = _resolve_watch_config(args)
     except ConfigError as e:
-        for msg in e.errors:
-            logger.error(msg)
+        print(format_config_error(e), file=sys.stderr)
         return 2
     if config is None:
         return 0
