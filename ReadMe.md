@@ -64,10 +64,23 @@ Choose how to run with one of the following options. They cannot be combined.
 - The parameters of `--mode` (`--src`, `--ext`, `--root`, `--log-level`, ...) can be used only with `--mode`. With `--json` or `--conf-maker-*`, write them in the json file instead.
 - To run multiple tasks at once (e.g. img_conv and copy), use the json file.
 
+#### Run once or keep watching (`--monitor`)
+
+- Without `--monitor`, all tasks run once (files that need it are converted / copied) and the command exits.
+- With `--monitor`, the command keeps running and processes files whenever they change. Stop it with Ctrl+C.
+- `--monitor` can be added to any of `--json`, `--mode`, `--conf-maker-web`, `--conf-maker-cli`.
+- In the json file, write `"monitor": true` instead. Watching continues if either `--monitor` or `"monitor": true` is given.
+
+```bash
+watch4ml --mode doc_conv --src docs --dst docs_out            # convert once and exit
+watch4ml --mode doc_conv --src docs --dst docs_out --monitor  # keep watching
+watch4ml --json --monitor                                     # tasks from ./ml_writing_helper.json, keep watching
+```
+
 #### Creating the json file (`--conf-maker-web` / `--conf-maker-cli`)
 
-- `--conf-maker-web`: opens a form in the browser. Add tasks, check the preview, then press "保存して監視開始" (save and start watching) or "保存のみ" (save only).
-- `--conf-maker-cli`: asks each setting in the terminal. Press Enter to accept the default shown in `[ ]`. Invalid answers (e.g. a folder that does not exist) are asked again. After saving, you can start watching right away.
+- `--conf-maker-web`: opens a form in the browser. Add tasks, check the preview, then press "保存して実行" (save and run) or "保存のみ" (save only). The "monitor" checkbox sets `"monitor"` in the json file.
+- `--conf-maker-cli`: asks each setting in the terminal. Press Enter to accept the default shown in `[ ]`. Invalid answers (e.g. a folder that does not exist) are asked again. After saving, you can run the tasks right away.
 - If the file already exists, its content is loaded as the initial values and is overwritten when you save.
 - If PATH is a folder, `ml_writing_helper.json` is created in it.
 
@@ -87,6 +100,7 @@ Multiple tasks can be defined in one file. Relative paths are resolved from `roo
   "observer": "polling",
   "sleep_sec": 1.0,
   "log_level": "INFO",
+  "monitor": true,
   "tasks": [
     {"type": "img_conv", "src": "fig_src", "dst": "fig_gen", "ext": "pdf", "gray": true, "crop": true},
     {"type": "img_conv", "src": "slides", "dst": "fig_gen", "ext": "eps"},
@@ -121,6 +135,8 @@ watch4ml --json '{"mode": "copy", "src": "~/Documents/BibTexExported", "dst": "b
 watch4ml --json '{"tasks": [{"mode": "img_conv", "src": "fig_src", "dst": "fig_gen", "ext": "pdf"}, {"mode": "copy", "src": "~/Documents/BibTexExported", "dst": "bib"}]}'
 ```
 
+Top-level `monitor` (bool, default `false`): `true` keeps watching for changes, `false` runs all tasks once and exits.
+
 Wrap the JSON string in single quotes `'...'` so that the shell passes the double quotes as they are.
 
 #### CLI instruction (`--mode`)
@@ -149,6 +165,7 @@ Available in every mode (e.g. `watch4ml --mode copy --src a --dst b --log-level 
 | `--diff-sec`       | `10`                | Skip when src/dst timestamps differ by this many seconds or less            |
 | `--log-level`      | `INFO`              | Console log level                                                           |
 | `--root root_PATH` | current folder(".") | The base PATH for this app to understand relative PATH                      |
+| `--monitor`        | off                 | Keep watching for changes. Without it, run once and exit (can also be used with `--json` / `--conf-maker-*`) |
 
 ##### Mode: img_conv
 

@@ -1,6 +1,32 @@
 # Change History
 
-## 2026-10-15 0.8.0
+## 2026-10-15(v0.9.0)
+
+### Added: `--monitor` option (run once or keep watching)
+
+- Without `--monitor`, `watch4ml` now runs all tasks once (converts / copies the files that need it) and exits
+- With `--monitor`, `watch4ml` keeps running and processes files whenever they change (stop with Ctrl+C)
+- How to specify
+  - CLI: `watch4ml --mode doc_conv --src docs --dst out --monitor`
+  - json: top-level `"monitor": true` (bool, default `false`). A non-bool value is reported as a config error
+  - Watching continues if either `--monitor` or `"monitor": true` is given
+- `--monitor` can be combined with any of `--json`, `--mode`, `--conf-maker-web`, `--conf-maker-cli` (an exception to the rule that `--json` cannot be combined with other CLI parameters). `watch4ml --monitor` alone is an error because no launcher is given
+- `--conf-maker-web`: added a "monitor" checkbox to the global settings, and renamed the button "保存して監視開始" to "保存して実行" (save and run)
+- `--conf-maker-cli`: added a question for `monitor`, and changed the final question to "この設定で実行しますか" (run with this config?)
+
+### Breaking change
+
+- The default behavior of `watch4ml` changed from "keep watching" to "run once and exit". To keep watching as before, add `--monitor` or write `"monitor": true` in the json file
+- Unchanged: calling `Monitor().start_monitors()` from Python (e.g. `start_watcher.py`) and the legacy `monitor` subcommand still keep watching
+
+### Files added/changed
+
+- Added: `test/test_monitor_option.py`
+- Changed: `main.py` (`--monitor` option, new `Monitor.run_once()`, `monitor` argument of `Monitor.start_monitors()`)
+- Changed: `config.py` (`monitor` in json and `WatchConfig.monitor`), `webui.py`, `conf_maker_cli.py`
+- Changed: `ReadMe.md` (section "Run once or keep watching (`--monitor`)")
+
+## 2026-10-15(v0.8.0)
 
 ### Added: Mode `doc_conv` (document conversion)
 

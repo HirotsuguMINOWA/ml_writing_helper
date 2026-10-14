@@ -7,6 +7,7 @@ Example::
       "observer": "polling",
       "sleep_sec": 1.0,
       "log_level": "INFO",
+      "monitor": true,
       "tasks": [
         {"type": "img_conv", "src": "fig_src", "dst": "fig_gen", "ext": "pdf", "gray": false, "crop": true},
         {"type": "copy", "src": "~/Documents/BibTexExported", "dst": "bib", "exts": ["bib"], "diff_sec": 10},
@@ -47,6 +48,7 @@ TASK_TYPES: Final[tuple[str, ...]] = ("img_conv", "copy", "doc_conv")
 DEFAULT_OBSERVER: Final[str] = "polling"
 DEFAULT_SLEEP_SEC: Final[float] = 1.0
 DEFAULT_LOG_LEVEL: Final[str] = "INFO"
+DEFAULT_MONITOR: Final[bool] = False
 DEFAULT_DIFF_SEC: Final[int] = 10
 DEFAULT_COPY_EXTS: Final[tuple[str, ...]] = ("bib",)
 
@@ -117,6 +119,7 @@ class WatchConfig:
     observer: str = DEFAULT_OBSERVER
     sleep_sec: float = DEFAULT_SLEEP_SEC
     log_level: str = DEFAULT_LOG_LEVEL
+    monitor: bool = DEFAULT_MONITOR  # True: keep watching for changes. False: process once and exit
 
 
 @dataclass(frozen=True)
@@ -170,7 +173,7 @@ def _choices(values: Sequence[str]) -> str:
     return ", ".join(values)
 
 
-_TOP_KEYS: Final[tuple[str, ...]] = ("root", "observer", "sleep_sec", "log_level", "tasks")
+_TOP_KEYS: Final[tuple[str, ...]] = ("root", "observer", "sleep_sec", "log_level", "monitor", "tasks")
 _TASK_KEYS: Final[dict[str, tuple[str, ...]]] = {
     "img_conv": ("type", "mode", "src", "dst", "ext", "gray", "crop"),
     "copy": ("type", "mode", "src", "dst", "exts", "ext", "diff_sec"),
@@ -405,6 +408,11 @@ def parse_config(
         errors.append(f"「log_level」には {_choices(LOG_LEVELS)} のどれかを指定してください（指定値: {_show(log_level)}）")
         log_level = DEFAULT_LOG_LEVEL
 
+    monitor = data.get("monitor", DEFAULT_MONITOR)
+    if not isinstance(monitor, bool):
+        errors.append(f"「monitor」には true（変更を監視し続ける）か false（一度処理して終了）を指定してください（指定値: {_show(monitor)}）")
+        monitor = DEFAULT_MONITOR
+
     tasks: list[TaskConfig] = []
     if is_shorthand:
         task = _parse_task(data, "タスク", root, check_paths, errors)
@@ -427,7 +435,9 @@ def parse_config(
 
     if errors:
         raise ConfigError(errors)
-    return WatchConfig(tasks=tasks, observer=observer, sleep_sec=float(sleep_sec), log_level=log_level.upper())
+    return WatchConfig(
+        tasks=tasks, observer=observer, sleep_sec=float(sleep_sec), log_level=log_level.upper(), monitor=monitor
+    )
 
 
 _JSON_REASONS: Final[tuple[tuple[str, str], ...]] = (

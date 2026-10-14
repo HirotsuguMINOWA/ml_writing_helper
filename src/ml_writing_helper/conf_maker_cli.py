@@ -214,6 +214,7 @@ def _run(w: _Wizard, save_path: Path, observers: Sequence[str], print_fn: PrintF
                             _check_number(positive=True, integer=False)))
     prev_level = str(existing.get("log_level", DEFAULT_LOG_LEVEL)).upper()
     log_level = w.choose("log_level", LOG_LEVELS, prev_level if prev_level in LOG_LEVELS else DEFAULT_LOG_LEVEL).upper()
+    monitor = w.yes_no("monitor（変更を監視し続ける。n なら一度処理して終了）", existing.get("monitor") is True)
 
     prev_tasks: list[Any] = list(existing.get("tasks", []))
     tasks: list[dict[str, Any]] = []
@@ -230,6 +231,7 @@ def _run(w: _Wizard, save_path: Path, observers: Sequence[str], print_fn: PrintF
         "observer": observer,
         "sleep_sec": sleep_sec,
         "log_level": log_level,
+        "monitor": monitor,
         "tasks": tasks,
     }
     print_fn("\n[作成した設定]")
@@ -248,5 +250,5 @@ def _run(w: _Wizard, save_path: Path, observers: Sequence[str], print_fn: PrintF
         return ConfMakerResult(saved=False, start_watch=False)
     save_path.write_text(json.dumps(config, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print_fn(f"保存しました: {save_path}")
-    start = w.yes_no("この設定で監視を開始しますか", True)
+    start = w.yes_no("この設定で実行しますか", True)
     return ConfMakerResult(saved=True, start_watch=start)

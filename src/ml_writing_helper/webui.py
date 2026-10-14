@@ -88,6 +88,7 @@ pre { background: var(--code); border-radius: 6px; padding: 12px; overflow-x: au
       <label>observer<select id="observer"></select></label>
       <label>sleep_sec<input type="number" id="sleep_sec" value="1" min="0.1" step="0.1"></label>
       <label>log_level<select id="log_level"></select></label>
+      <label class="check"><input type="checkbox" id="monitor"> monitor（変更を監視し続ける。オフなら一度処理して終了）</label>
     </div>
     <p class="hint">パスは json ファイルのあるフォルダ（root）からの相対パス、または絶対パスで指定します。</p>
   </section>
@@ -109,7 +110,7 @@ pre { background: var(--code); border-radius: 6px; padding: 12px; overflow-x: au
 
   <p id="msg"></p>
   <div class="row">
-    <button type="button" class="primary" onclick="save(true)">保存して監視開始</button>
+    <button type="button" class="primary" onclick="save(true)">保存して実行</button>
     <button type="button" onclick="save(false)">保存のみ</button>
     <button type="button" onclick="cancel()">キャンセル</button>
   </div>
@@ -182,6 +183,7 @@ function buildConfig() {
     observer: document.getElementById("observer").value,
     sleep_sec: Number(document.getElementById("sleep_sec").value),
     log_level: document.getElementById("log_level").value,
+    monitor: document.getElementById("monitor").checked,
     tasks: tasks.map(t => {
       const c = {...t};
       if (c.type === "doc_conv" && !c.dst) delete c.dst;
@@ -225,7 +227,7 @@ async function save(start) {
   try {
     const r = await post("/api/save", {config: buildConfig(), start});
     if (r.ok) {
-      showMsg(start ? "保存しました。ターミナルで監視を開始しました。このタブは閉じて構いません。"
+      showMsg(start ? "保存しました。ターミナルで実行を開始しました。このタブは閉じて構いません。"
                     : "保存しました。このタブは閉じて構いません。", "ok");
       document.querySelectorAll("button").forEach(b => b.disabled = true);
     } else {
@@ -248,6 +250,7 @@ opt(document.getElementById("log_level"), BOOT.logLevels, BOOT.defaultLogLevel);
 function loadInitial(c) {
   if (typeof c.root === "string") document.getElementById("root").value = c.root;
   if (typeof c.sleep_sec === "number") document.getElementById("sleep_sec").value = c.sleep_sec;
+  if (typeof c.monitor === "boolean") document.getElementById("monitor").checked = c.monitor;
   if (BOOT.observers.includes(c.observer)) document.getElementById("observer").value = c.observer;
   if (typeof c.log_level === "string" && BOOT.logLevels.includes(c.log_level.toUpperCase()))
     document.getElementById("log_level").value = c.log_level.toUpperCase();

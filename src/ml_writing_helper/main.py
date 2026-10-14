@@ -812,12 +812,27 @@ class Monitor(FileSystemEventHandler):
         self._observer.stop()
         logger.info("Observerを停止した")
 
-    def start_monitors(self, sleep_sec: int | float = 1, observer_backend: str | None = None) -> None:
+    def run_once(self) -> None:
+        """設定した全タスクを一度だけ実行する（監視はしない）"""
+        for task in self._tasks:
+            task.run_all_target_files_in_target_dir()
+        logger.info("All tasks finished")
+
+    def start_monitors(
+            self,
+            sleep_sec: int | float = 1,
+            observer_backend: str | None = None,
+            monitor: bool = True,
+    ) -> None:
         """
         Start monitoring change on FS according to set
         : param sleep_sec:
+        : param monitor: False なら一通り処理したら監視せずに戻る
         : return:
         """
+        if not monitor:
+            self.run_once()
+            return
         try:
             # ** ObserverをCLIパラで指定可能
             backend = (
@@ -922,13 +937,15 @@ CLI_COMMANDS: Final[tuple[str, ...]] = ("convert", "monitor", "watch")
 WATCH_MODES: Final[tuple[str, ...]] = ("img_conv", "copy", "doc_conv")
 # `watch4ml` entry options: exactly one of them selects what to do (dest names)
 WATCH_LAUNCHERS: Final[tuple[str, ...]] = ("json", "mode", "conf_maker_web", "conf_maker_cli")
+DEFAULT_MONITOR_HINT: Final[str] = "without --monitor, all tasks run once and the command exits"
 # options usable only with --mode (dest names)
 WATCH_MODE_OPTIONS: Final[tuple[str, ...]] = (
     "src", "dst", "ext", "gray", "no_crop", "engine", "pattern", "header",
     "root", "observer", "sleep_sec", "diff_sec", "log_level",
 )
 WATCH_EPILOG: Final[str] = f"""examples:
-  watch4ml --mode img_conv --ext pdf --gray
+  watch4ml --mode img_conv --ext pdf --gray          # convert once and exit
+  watch4ml --mode img_conv --ext pdf --monitor       # keep watching for changes
   watch4ml --mode copy --src ~/Documents/BibTexExported --dst bib
   watch4ml --mode doc_conv --src docs --dst docs_out --ext pdf --ext html
   watch4ml --json                       # use ./{CONFIG_FILENAME}
@@ -979,6 +996,7 @@ def _add_watch_parser(subparsers: "argparse._SubParsersAction[argparse.ArgumentP
         description=(
             "Watch folders and convert figures / copy files / convert documents when they change. "
             "Choose one of --json, --mode, --conf-maker-web, --conf-maker-cli. "
+            "Add --monitor to keep watching for changes; otherwise all tasks run once and the command exits. "
             "With no argument, this help is shown."
         ),
         epilog=WATCH_EPILOG,
@@ -1012,6 +1030,12 @@ def _add_watch_parser(subparsers: "argparse._SubParsersAction[argparse.ArgumentP
         const=CONFIG_FILENAME,
         metavar="PATH",
         help=f"create/edit the json file interactively in the terminal (default: ./{CONFIG_FILENAME})",
+    )
+    _ = launch.add_argument(
+        "--monitor",
+        action="store_true",
+        help="keep running and process files when they change (json: \"monitor\": true). "
+             f"Usable with all of the above; {DEFAULT_MONITOR_HINT}",
     )
 
     task = watch_parser.add_argument_group(
@@ -1216,7 +1240,9 @@ def _watch_config_from_cli(args: argparse.Namespace) -> WatchConfig:
         if errors:
             raise ConfigError(errors, title=_PARAM_ERROR, hint=f"相対パスは --root（{root}）を基準に探します")
 
-    return WatchConfig(tasks=tasks, observer=args.observer, sleep_sec=args.sleep_sec, log_level=args.log_level)
+    return WatchConfig(
+        tasks=tasks, observer=args.observer, sleep_sec=args.sleep_sec, log_level=args.log_level, monitor=args.monitor
+    )
 
 
 def _doc_conv_config_from_cli(
@@ -1271,9 +1297,16 @@ def _check_watch_args(args: argparse.Namespace) -> str | None:
         "  --mode img_conv|copy|doc_conv [パラメータ...]\n"
         "  --conf-maker-web [ファイルのパス]\n"
         "  --conf-maker-cli [ファイルのパス]\n"
+        "変更を監視し続けるには --monitor を付けてください\n"
         "使い方は watch4ml --help で確認できます"
     )
     if not launchers:
+        if args.monitor and not mode_options:
+            raise ConfigError(
+                ["--monitor は --json / --mode / --conf-maker-web / --conf-maker-cli と一緒に指定してください"],
+                title="起動方法が指定されていません",
+                hint=how_to,
+            )
         if not mode_options:
             return None
         raise ConfigError(
@@ -1335,7 +1368,8 @@ def _resolve_watch_config(args: argparse.Namespace, launcher: str) -> WatchConfi
     return load_config(save_path, available_observers=observers)
 
 
-def _run_watch_config(config: WatchConfig) -> int:
+def _run_watch_config(config: WatchConfig, monitor: bool = False) -> int:
+    """Run the tasks. Keep watching if ``monitor`` (CLI --monitor) or ``config.monitor`` (json) is True."""
     _set_log_level(config.log_level)
     monitor_ins = Monitor(observer_backend=config.observer)
     for task in config.tasks:
@@ -1372,7 +1406,10 @@ def _run_watch_config(config: WatchConfig) -> int:
                 src_suffixes=list(task.exts),
                 diff_sec=task.diff_sec,
             )
-    monitor_ins.start_monitors(sleep_sec=config.sleep_sec)
+    keep_watching = monitor or config.monitor
+    if not keep_watching:
+        logger.info("Run all tasks once (add --monitor or \"monitor\": true to keep watching)")
+    monitor_ins.start_monitors(sleep_sec=config.sleep_sec, monitor=keep_watching)
     return 0
 
 
@@ -1389,7 +1426,7 @@ def _run_watch_cli(args: argparse.Namespace) -> int:
         return 2
     if config is None:
         return 0
-    return _run_watch_config(config)
+    return _run_watch_config(config, monitor=args.monitor)
 
 
 def main(argv: list[str] | None = None) -> int:
