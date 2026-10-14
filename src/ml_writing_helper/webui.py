@@ -14,6 +14,7 @@ from typing import Any
 
 from loguru import logger
 
+from ml_writing_helper.converter.doc_converter import DOC_ENGINES, DOC_OUTPUT_FORMATS
 from ml_writing_helper.config import (
     DEFAULT_LOG_LEVEL,
     DEFAULT_OBSERVER,
@@ -97,6 +98,7 @@ pre { background: var(--code); border-radius: 6px; padding: 12px; overflow-x: au
     <div class="row">
       <button type="button" onclick="addTask('img_conv')">＋ 図の変換タスク</button>
       <button type="button" onclick="addTask('copy')">＋ コピータスク</button>
+      <button type="button" onclick="addTask('doc_conv')">＋ 文書の変換タスク</button>
     </div>
   </section>
 
@@ -128,6 +130,8 @@ function opt(sel, values, current) {
 function addTask(type) {
   if (type === "img_conv") {
     tasks.push({type, src: "fig_src", dst: "fig_gen", ext: "pdf", gray: false, crop: true});
+  } else if (type === "doc_conv") {
+    tasks.push({type, src: ".", dst: "", ext: ["pdf"], engine: "auto", pattern: ["*.md"]});
   } else {
     tasks.push({type, src: "", dst: "bib", exts: ["bib"], diff_sec: 10});
   }
@@ -145,18 +149,24 @@ function field(i, key, label, type, extra) {
     const opts = extra.map(v => `<option ${v === t[key] ? "selected" : ""}>${v}</option>`).join("");
     return `<label>${label}<select data-i="${i}" data-k="${key}">${opts}</select></label>`;
   }
-  const v = key === "exts" ? t.exts.join(", ") : t[key];
+  const v = Array.isArray(t[key]) ? t[key].join(", ") : (t[key] ?? "");
   return `<label>${label}<input type="${type}" data-i="${i}" data-k="${key}" value="${String(v).replace(/"/g, "&quot;")}" ${extra || ""}></label>`;
 }
 
 function render() {
   const box = document.getElementById("tasks");
   box.innerHTML = tasks.map((t, i) => {
-    const title = t.type === "img_conv" ? "図の変換 (img_conv)" : "コピー (copy)";
+    const title = {img_conv: "図の変換 (img_conv)", copy: "コピー (copy)", doc_conv: "文書の変換 (doc_conv)"}[t.type];
     const body = t.type === "img_conv"
       ? field(i, "src", "src（監視フォルダ）", "text") + field(i, "dst", "dst（出力フォルダ）", "text")
         + field(i, "ext", "出力形式", "select", BOOT.formats)
         + `<div>${field(i, "gray", "グレー化", "check")}${field(i, "crop", "クロップ", "check")}</div>`
+      : t.type === "doc_conv"
+      ? field(i, "src", "src（監視フォルダ。サブフォルダも対象）", "text")
+        + field(i, "dst", "dst（出力フォルダ。空なら src と同じ）", "text")
+        + field(i, "ext", `出力形式（カンマ区切り: ${BOOT.docFormats.join(", ")}）`, "text")
+        + field(i, "engine", "engine", "select", BOOT.docEngines)
+        + field(i, "pattern", "変換するファイル名（カンマ区切り）", "text")
       : field(i, "src", "src（監視フォルダ）", "text") + field(i, "dst", "dst（コピー先）", "text")
         + field(i, "exts", "拡張子（カンマ区切り）", "text") + field(i, "diff_sec", "diff_sec", "number", 'min="0" step="1"');
     return `<div class="task"><div class="task-head"><span class="badge">${i + 1}. ${title}</span>`
@@ -172,7 +182,11 @@ function buildConfig() {
     observer: document.getElementById("observer").value,
     sleep_sec: Number(document.getElementById("sleep_sec").value),
     log_level: document.getElementById("log_level").value,
-    tasks: tasks.map(t => ({...t})),
+    tasks: tasks.map(t => {
+      const c = {...t};
+      if (c.type === "doc_conv" && !c.dst) delete c.dst;
+      return c;
+    }),
   };
 }
 
@@ -185,7 +199,7 @@ document.addEventListener("input", e => {
   if (el.dataset.i !== undefined) {
     const t = tasks[Number(el.dataset.i)], k = el.dataset.k;
     if (el.type === "checkbox") t[k] = el.checked;
-    else if (k === "exts") t[k] = el.value.split(",").map(s => s.trim()).filter(Boolean);
+    else if (Array.isArray(t[k])) t[k] = el.value.split(",").map(s => s.trim()).filter(Boolean);
     else if (k === "diff_sec") t[k] = el.value === "" ? 0 : Math.trunc(Number(el.value));
     else t[k] = el.value;
   }
@@ -247,6 +261,11 @@ function loadInitial(c) {
       const e = t.exts ?? t.ext ?? ["bib"];
       tasks.push({type, src: t.src || "", dst: t.dst || "", exts: Array.isArray(e) ? e.map(String) : [String(e)],
                   diff_sec: Number.isInteger(t.diff_sec) ? t.diff_sec : 10});
+    } else if (type === "doc_conv") {
+      // header / marp_header などフォームに無い項目もそのまま残す
+      const list = (v, d) => v === undefined ? d : (Array.isArray(v) ? v.map(String) : [String(v)]);
+      tasks.push({...t, type, mode: undefined, src: t.src || ".", dst: t.dst || "",
+                  ext: list(t.ext, ["pdf"]), engine: t.engine || "auto", pattern: list(t.pattern, ["*.md"])});
     }
   }
   render();
@@ -281,6 +300,8 @@ def run_webui(
         "exists": save_path.exists(),
         "initial": read_existing_config(save_path) if save_path.exists() else None,
         "formats": OUTPUT_FORMATS,
+        "docFormats": list(DOC_OUTPUT_FORMATS),
+        "docEngines": list(DOC_ENGINES),
         "observers": list(available_observers),
         "logLevels": LOG_LEVELS,
         "defaultObserver": DEFAULT_OBSERVER,

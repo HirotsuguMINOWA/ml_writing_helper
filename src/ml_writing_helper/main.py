@@ -12,7 +12,7 @@ import shutil
 import sys
 import time
 import unicodedata  # for MacOS NDF
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from pathlib import Path
 from subprocess import STDOUT, check_output
 from typing import Final, override
@@ -34,6 +34,13 @@ from ml_writing_helper.task_runner.abc_runner import ABCTaskRunner
 from ml_writing_helper.enum_cls import MethodToFixEPS, StateMonitor
 from ml_writing_helper.task_runner.copy_runner import CopyTask
 from ml_writing_helper.task_runner.img_conv_runner import ImgConvTaskStruct
+from ml_writing_helper.task_runner.doc_conv_runner import DocConvTask
+from ml_writing_helper.converter.doc_converter import (
+    DEFAULT_DOC_ENGINE,
+    DOC_ENGINES,
+    DOC_OUTPUT_FORMATS,
+    normalize_input_patterns,
+)
 from ml_writing_helper.config import (
     CONFIG_FILENAME,
     DEFAULT_COPY_EXTS,
@@ -45,7 +52,9 @@ from ml_writing_helper.config import (
     OUTPUT_FORMATS,
     ConfigError,
     CopyTaskConfig,
+    DocConvTaskConfig,
     ImgConvTaskConfig,
+    TaskConfig,
     WatchConfig,
     format_config_error,
     load_config,
@@ -195,7 +204,7 @@ class Monitor(FileSystemEventHandler):
         # self._to_fmt: str | None = None
         # self._monitors: dict[tuple[Path, Path], MonitorCallback] = {}
         # self._monitor_fmts: dict[tuple[Path, Path], str] = {}
-        self._tasks: list[CopyTask | ABCTaskRunner | ImgConvTaskStruct] = list()
+        self._tasks: list[CopyTask | ABCTaskRunner | ImgConvTaskStruct | DocConvTask] = list()
         self._state: StateMonitor = StateMonitor.wait
         self._observer_backend: str = _normalize_observer_backend(observer_backend)
         # self._ppaths_soffice2: list[Path] = self._ppaths_soffice()
@@ -767,6 +776,36 @@ class Monitor(FileSystemEventHandler):
         )
         self._tasks.append(ins)
 
+    def set_doc_conv(
+            self,
+            src_dir: str | Path,
+            dst_dir: str | Path | None = None,
+            formats: Sequence[str] = ("pdf",),
+            engine: str = DEFAULT_DOC_ENGINE,
+            patterns: Sequence[str] | None = None,
+            headers: Sequence[str | Path] = (),
+            marp_headers: Sequence[str | Path] = (),
+            copy_exts: Sequence[str] = (),
+            diff_sec: int = 10,
+    ) -> None:
+        """Markdown/HTML を PDF/HTML/DOCX へ変換するタスク。dst_dir 省略時は src_dir へ出力する。"""
+        src_pl = self._get_internal_deal_path(path=src_dir)
+        dst_pl = src_pl if dst_dir is None else self._get_internal_deal_path(path=dst_dir)
+        dst_pl.mkdir(parents=True, exist_ok=True)
+        self._tasks.append(
+            DocConvTask(
+                src_dir_path=src_pl,
+                dst_dir_path=dst_pl,
+                output_formats=formats,
+                engine=engine,
+                input_patterns=patterns,
+                header_files=headers,
+                marp_header_files=marp_headers,
+                copy_exts=copy_exts,
+                diff_sec=diff_sec,
+            )
+        )
+
     def stop(self) -> None:
         if self._observer is None:
             return
@@ -880,16 +919,18 @@ def _available_observer_backends() -> list[str]:
 
 
 CLI_COMMANDS: Final[tuple[str, ...]] = ("convert", "monitor", "watch")
-WATCH_MODES: Final[tuple[str, ...]] = ("img_conv", "copy")
+WATCH_MODES: Final[tuple[str, ...]] = ("img_conv", "copy", "doc_conv")
 # `watch4ml` entry options: exactly one of them selects what to do (dest names)
 WATCH_LAUNCHERS: Final[tuple[str, ...]] = ("json", "mode", "conf_maker_web", "conf_maker_cli")
 # options usable only with --mode (dest names)
 WATCH_MODE_OPTIONS: Final[tuple[str, ...]] = (
-    "src", "dst", "ext", "gray", "no_crop", "root", "observer", "sleep_sec", "diff_sec", "log_level",
+    "src", "dst", "ext", "gray", "no_crop", "engine", "pattern", "header",
+    "root", "observer", "sleep_sec", "diff_sec", "log_level",
 )
 WATCH_EPILOG: Final[str] = f"""examples:
   watch4ml --mode img_conv --ext pdf --gray
   watch4ml --mode copy --src ~/Documents/BibTexExported --dst bib
+  watch4ml --mode doc_conv --src docs --dst docs_out --ext pdf --ext html
   watch4ml --json                       # use ./{CONFIG_FILENAME}
   watch4ml --json my_tasks.json
   watch4ml --json '{{"mode": "copy", "src": "a", "dst": "b"}}'
@@ -933,9 +974,10 @@ def _add_watch_parser(subparsers: "argparse._SubParsersAction[argparse.ArgumentP
     watch_parser = subparsers.add_parser(
         "watch",
         prog="watch4ml",
-        help="watch dirs: convert figures (img_conv) or copy files such as .bib (copy)",
+        help="watch dirs: convert figures (img_conv), copy files such as .bib (copy), "
+             "or convert documents such as .md (doc_conv)",
         description=(
-            "Watch folders and convert figures / copy files when they change. "
+            "Watch folders and convert figures / copy files / convert documents when they change. "
             "Choose one of --json, --mode, --conf-maker-web, --conf-maker-cli. "
             "With no argument, this help is shown."
         ),
@@ -975,24 +1017,39 @@ def _add_watch_parser(subparsers: "argparse._SubParsersAction[argparse.ArgumentP
     task = watch_parser.add_argument_group(
         "--mode parameters",
         "img_conv: --src/--dst/--ext once each, --gray, --no-crop. "
-        "copy: --src/--dst/--ext repeatable (--src and --dst required)",
+        "copy: --src/--dst/--ext repeatable (--src and --dst required). "
+        "doc_conv: --src/--dst once each, --ext/--pattern/--header repeatable, --engine",
     )
     _ = task.add_argument(
         "--src", action="append", metavar="DIR",
-        help="source dir to watch (img_conv default: fig_src)",
+        help="source dir to watch (img_conv default: fig_src, doc_conv default: current dir)",
     )
     _ = task.add_argument(
         "--dst", action="append", metavar="DIR",
-        help="output dir, created if missing (img_conv default: fig_gen). "
+        help="output dir, created if missing (img_conv default: fig_gen, doc_conv default: same as --src). "
              "copy: paired with --src in order, or a single --dst receives all --src",
     )
     _ = task.add_argument(
         "--ext", action="append", type=strip_dot, metavar="EXT",
         help=f"img_conv: output format {'/'.join(OUTPUT_FORMATS)} (default: pdf). "
-             "copy: extension to copy (default: bib)",
+             "copy: extension to copy (default: bib). "
+             f"doc_conv: output format {'/'.join(DOC_OUTPUT_FORMATS)}, repeatable (default: pdf)",
     )
     _ = task.add_argument("--gray", action="store_true", help="img_conv: convert to grayscale")
     _ = task.add_argument("--no-crop", action="store_true", help="img_conv: disable cropping")
+    _ = task.add_argument(
+        "--engine", choices=DOC_ENGINES,
+        help=f"doc_conv: conversion engine (default: {DEFAULT_DOC_ENGINE}; "
+             "auto uses marp/slidev by frontmatter and playwright for mermaid/plantuml)",
+    )
+    _ = task.add_argument(
+        "--pattern", action="append", metavar="GLOB",
+        help='doc_conv: file names to convert, repeatable (default: "*.md"). e.g. "*_marp.md", "*.html"',
+    )
+    _ = task.add_argument(
+        "--header", action="append", metavar="TEX",
+        help="doc_conv: TeX header file passed to pandoc for PDF, repeatable",
+    )
 
     common = watch_parser.add_argument_group("--mode common parameters")
     _add_common_monitor_args(common)
@@ -1104,9 +1161,17 @@ def _watch_config_from_cli(args: argparse.Namespace) -> WatchConfig:
     dsts: list[str] = args.dst or []
     exts: list[str] = args.ext or []
     errors: list[str] = []
-    tasks: list[ImgConvTaskConfig | CopyTaskConfig] = []
+    tasks: list[TaskConfig] = []
 
-    if args.mode == "img_conv":
+    doc_only = ("engine", "pattern", "header")
+    if args.mode != "doc_conv":
+        errors.extend(f"{_opt(flag)} は --mode doc_conv でだけ使えます" for flag in doc_only if getattr(args, flag))
+    if args.mode != "img_conv":
+        errors.extend(f"{_opt(flag)} は --mode img_conv でだけ使えます" for flag in ("gray", "no_crop") if getattr(args, flag))
+
+    if args.mode == "doc_conv":
+        tasks.append(_doc_conv_config_from_cli(args, root, srcs, dsts, exts, errors))
+    elif args.mode == "img_conv":
         for name, values in (("--src", srcs), ("--dst", dsts), ("--ext", exts)):
             if len(values) > 1:
                 errors.append(f"--mode img_conv では {name} は1つだけ指定できます（{len(values)}個指定されています）")
@@ -1129,9 +1194,6 @@ def _watch_config_from_cli(args: argparse.Namespace) -> WatchConfig:
             )
         )
     else:
-        for flag in ("gray", "no_crop"):
-            if getattr(args, flag):
-                errors.append(f"{_opt(flag)} は --mode img_conv でだけ使えます")
         if not srcs or not dsts:
             missing = " と ".join(n for n, v in (("--src", srcs), ("--dst", dsts)) if not v)
             errors.append(f"--mode copy では {missing} を指定してください")
@@ -1157,6 +1219,48 @@ def _watch_config_from_cli(args: argparse.Namespace) -> WatchConfig:
     return WatchConfig(tasks=tasks, observer=args.observer, sleep_sec=args.sleep_sec, log_level=args.log_level)
 
 
+def _doc_conv_config_from_cli(
+        args: argparse.Namespace,
+        root: Path,
+        srcs: list[str],
+        dsts: list[str],
+        exts: list[str],
+        errors: list[str],
+) -> DocConvTaskConfig:
+    """Build the doc_conv task of `--mode doc_conv`. Raises ConfigError."""
+    for name, values in (("--src", srcs), ("--dst", dsts)):
+        if len(values) > 1:
+            errors.append(f"--mode doc_conv では {name} は1つだけ指定できます（{len(values)}個指定されています）")
+    formats = tuple(dict.fromkeys(exts or ["pdf"]))
+    bad = [f for f in formats if f not in DOC_OUTPUT_FORMATS]
+    if bad:
+        errors.append(f"--ext には {', '.join(DOC_OUTPUT_FORMATS)} を指定してください（指定値: {', '.join(bad)}）")
+    patterns = tuple(args.pattern or ["*.md"])
+    try:
+        _ = normalize_input_patterns(patterns)
+    except ValueError as e:
+        errors.append(f"--pattern の書き方に誤りがあります（{e}）")
+    src_raw = srcs[0] if srcs else "."
+    src = resolve_path(src_raw, root)
+    if not src.is_dir():
+        errors.append(f"--src のフォルダが見つかりません\n指定値: \"{src_raw}\"\n探した場所: {src}")
+    headers = tuple(resolve_path(h, root) for h in args.header or [])
+    for raw, h in zip(args.header or [], headers):
+        if not h.is_file():
+            errors.append(f"--header のファイルが見つかりません\n指定値: \"{raw}\"\n探した場所: {h}")
+    if errors:
+        raise ConfigError(errors, title=_PARAM_ERROR, hint=f"相対パスは --root（{root}）を基準に探します")
+    return DocConvTaskConfig(
+        src=src,
+        dst=resolve_path(dsts[0], root) if dsts else src,
+        formats=formats,
+        engine=args.engine or DEFAULT_DOC_ENGINE,
+        patterns=patterns,
+        headers=headers,
+        diff_sec=args.diff_sec,
+    )
+
+
 def _check_watch_args(args: argparse.Namespace) -> str | None:
     """Check the combination of `watch4ml` options. Returns the chosen launcher, or None for help."""
     launchers = [name for name in WATCH_LAUNCHERS if getattr(args, name) is not None]
@@ -1164,7 +1268,7 @@ def _check_watch_args(args: argparse.Namespace) -> str | None:
     how_to = (
         "次のどれか1つを指定してください\n"
         "  --json [ファイルのパス または JSON 文字列]\n"
-        "  --mode img_conv|copy [パラメータ...]\n"
+        "  --mode img_conv|copy|doc_conv [パラメータ...]\n"
         "  --conf-maker-web [ファイルのパス]\n"
         "  --conf-maker-cli [ファイルのパス]\n"
         "使い方は watch4ml --help で確認できます"
@@ -1244,6 +1348,19 @@ def _run_watch_config(config: WatchConfig) -> int:
                 is_crop=task.crop,
                 gray=task.gray,
                 mk_dst_dir=True,
+            )
+        elif isinstance(task, DocConvTaskConfig):
+            logger.info(f"Document conversion: {task.src} -> {task.dst} ({', '.join(task.formats)}, engine={task.engine})")
+            monitor_ins.set_doc_conv(
+                src_dir=task.src,
+                dst_dir=task.dst,
+                formats=task.formats,
+                engine=task.engine,
+                patterns=task.patterns,
+                headers=task.headers,
+                marp_headers=task.marp_headers,
+                copy_exts=task.copy_exts,
+                diff_sec=task.diff_sec,
             )
         else:
             if not task.dst.suffix:

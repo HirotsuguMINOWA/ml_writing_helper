@@ -16,6 +16,8 @@ This package is a helper tool for writing documents and papers using Markup Lang
    1. This can copy files such as .bib file exported from document manager to target folder by detecting their change or export and so on.
 1. Grayscale
    1. This can convert to gray scale image.
+1. Document conversion
+   1. This can convert Markdown (.md) / HTML files into PDF, HTML or DOCX when they change, rendering mermaid / PlantUML diagrams, math (KaTeX) and Marp / Slidev slides.
 
 
 ## Build package
@@ -55,6 +57,7 @@ Choose how to run with one of the following options. They cannot be combined.
 | `watch4ml --json '{...}'`                   | Tasks from a JSON string (see below)                                                     |
 | `watch4ml --mode img_conv [params...]`      | Mode `img_conv`: one figure conversion task from CLI parameters                          |
 | `watch4ml --mode copy [params...]`          | Mode `copy`: copy tasks from CLI parameters                                              |
+| `watch4ml --mode doc_conv [params...]`      | Mode `doc_conv`: one document conversion task from CLI parameters                        |
 | `watch4ml --conf-maker-web [PATH]`          | Create/edit the json file in a web UI (browser). Without PATH, `./ml_writing_helper.json` |
 | `watch4ml --conf-maker-cli [PATH]`          | Create/edit the json file interactively in the terminal. Without PATH, `./ml_writing_helper.json` |
 
@@ -87,20 +90,22 @@ Multiple tasks can be defined in one file. Relative paths are resolved from `roo
   "tasks": [
     {"type": "img_conv", "src": "fig_src", "dst": "fig_gen", "ext": "pdf", "gray": true, "crop": true},
     {"type": "img_conv", "src": "slides", "dst": "fig_gen", "ext": "eps"},
-    {"type": "copy", "src": "~/Documents/BibTexExported", "dst": "bib", "exts": ["bib"], "diff_sec": 10}
+    {"type": "copy", "src": "~/Documents/BibTexExported", "dst": "bib", "exts": ["bib"], "diff_sec": 10},
+    {"type": "doc_conv", "src": "docs", "dst": "docs_out", "ext": ["pdf", "html"]}
   ]
 }
 ```
 
 | Task key       | Type                | Default         | Description                                                                   |
 | -------------- | ------------------- | --------------- | ----------------------------------------------------------------------------- |
-| `type`         | `img_conv` / `copy` | required        | Task kind                                                                     |
+| `type`         | `img_conv` / `copy` / `doc_conv` | required        | Task kind                                                                     |
 | `src`, `dst`   | path                | required        | Watched dir / output dir (`dst` is created if missing)                        |
 | `ext`          | string              | `pdf`           | `img_conv` only. eps, pdf, png, jpg, jpeg, gif, bmp, tiff                     |
 | `gray`, `crop` | bool                | `false`, `true` | `img_conv` only                                                               |
 | `exts`         | list                | `["bib"]`       | `copy` only. Extensions to copy                                               |
 | `diff_sec`     | int                 | `10`            | `copy` only. Skip when src/dst timestamps differ by this many seconds or less |
 
+- For `doc_conv` keys, see [Mode: doc_conv](#mode-doc_conv).
 - `mode` can be used instead of `type` (same meaning as the CLI mode).
 - In `copy` tasks, `ext` can be used instead of `exts` (string or list).
 
@@ -121,13 +126,16 @@ Wrap the JSON string in single quotes `'...'` so that the shell passes the doubl
 #### CLI instruction (`--mode`)
 
 ```bash
-watch4ml --mode [img_conv|copy] [sub parameters...] [--root [root PATH]]
+watch4ml --mode [img_conv|copy|doc_conv] [sub parameters...] [--root [root PATH]]
 
 # fig_src/ -> fig_gen/ as grayscale .pdf
 watch4ml --mode img_conv --ext pdf --gray
 
 # copy exported .bib into bib/
 watch4ml --mode copy --src ~/Documents/BibTexExported --dst bib
+
+# docs/**/*.md -> docs_out/**/*.pdf and .html
+watch4ml --mode doc_conv --src docs --dst docs_out --ext pdf --ext html
 ```
 
 ##### Common parameters
@@ -170,9 +178,57 @@ When `--src` and `--dst` are given multiple times, they are matched as follows:
 - If only one `--dst` is given, every `--src` is copied into it.
 - Any other combination of counts is an error.
 
-##### [Not implement yet] Mode: doc_conv
+##### Mode: doc_conv
 
-This mode convert document type(e.g.: markdown) into other type(e.g.:pdf) if src files are changed.
+This mode converts documents (`.md`, `.html`) under src (subfolders included) into PDF / HTML / DOCX when they change.
+The folder structure under src is reproduced in dst.
+
+| Option         | Default          | Description                                                                          |
+| -------------- | ---------------- | ------------------------------------------------------------------------------------ |
+| `--src DIR`    | `.`              | Document source dir (subfolders included). Once only                                 |
+| `--dst DIR`    | same as `--src`  | Output dir (created if missing). Once only                                           |
+| `--ext FMT`    | `pdf`            | Output format: pdf, html, docx. Repeatable (e.g. `--ext pdf --ext html`)             |
+| `--engine`     | `auto`           | `auto` / `pandoc` / `playwright` / `marp` / `slidev` (see below)                     |
+| `--pattern`    | `*.md`           | File names to convert. `*` matches any characters. Repeatable (e.g. `"*_marp.md"`, `"*.html"`) |
+| `--header TEX` | Japanese header  | TeX header file passed to pandoc for PDF. Repeatable                                 |
+
+json task keys (`"type": "doc_conv"`):
+
+| Task key      | Type          | Default        | Description                                                            |
+| ------------- | ------------- | -------------- | ---------------------------------------------------------------------- |
+| `src`         | path          | required       | Watched dir (subfolders included)                                      |
+| `dst`         | path          | same as `src`  | Output dir                                                             |
+| `ext`         | string / list | `"pdf"`        | pdf, html, docx                                                        |
+| `engine`      | string        | `"auto"`       | auto, pandoc, playwright, marp, slidev                                 |
+| `pattern`     | string / list | `"*.md"`       | File names to convert                                                  |
+| `header`      | path / list   | Japanese header | TeX header file(s) for pandoc PDF                                     |
+| `marp_header` | path / list   | none           | YAML fragment file(s) added to the Marp frontmatter                    |
+| `copy_exts`   | list          | none           | Extensions copied to dst as they are (e.g. `["png", "jpg"]` for images referenced from HTML) |
+| `diff_sec`    | int           | `10`           | At startup, convert only when src is newer than the output by more than this many seconds |
+
+`engine: auto` chooses the converter for each file:
+
+| File                                                     | pdf                    | html                                  | docx   |
+| -------------------------------------------------------- | ---------------------- | ------------------------------------- | ------ |
+| Marp (`marp: true` in frontmatter)                       | marp                   | marp                                  | pandoc |
+| Slidev (frontmatter with `theme:` / `layout:` ...)       | slidev                 | browser HTML                          | pandoc |
+| contains ` ```mermaid ` / ` ```plantuml ` blocks         | playwright             | browser HTML                          | pandoc |
+| others                                                   | pandoc (lualatex)      | browser HTML                          | pandoc |
+| `.html` (when `--pattern "*.html"`)                      | Chrome headless print  | copied as is                          | pandoc |
+
+- "browser HTML" embeds marked.js / mermaid.js / highlight.js / KaTeX from CDN, so viewing it needs an internet connection.
+- Files in dst are not converted again when dst is inside src. Hidden files/folders and `node_modules` are skipped.
+- While watching, a file is converted when it is newer than its output.
+- If a tool is missing, a warning is shown and pandoc is used instead where possible.
+
+Requirements for doc_conv (only what you use):
+
+- pandoc + LuaLaTeX (PDF): `brew install pandoc` and `brew install --cask mactex-no-gui` / `sudo apt-get install pandoc texlive-luatex texlive-lang-japanese`
+- playwright (mermaid / PlantUML in PDF): `pipx inject ml_writing_helper playwright` (or `pip install "ml_writing_helper[doc]"`), then `playwright install chromium`. If Chromium is missing, it is installed automatically on first use.
+- PlantUML: `brew install plantuml`
+- Marp: `npm install -g @marp-team/marp-cli` (or `npx` is used)
+- Slidev: `npm install -g @slidev/cli` (or `npx` is used)
+- Chrome / Chromium (`.html` → PDF)
 
 
 ### single file conversion

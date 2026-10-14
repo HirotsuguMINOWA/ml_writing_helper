@@ -12,6 +12,7 @@ class FormatInput(StrEnum):
 class TaskType(StrEnum):
     copy = auto()
     img_conv = auto()
+    doc_conv = auto()
 
 
 class ImgConvType(StrEnum):

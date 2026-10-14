@@ -9,7 +9,8 @@ Example::
       "log_level": "INFO",
       "tasks": [
         {"type": "img_conv", "src": "fig_src", "dst": "fig_gen", "ext": "pdf", "gray": false, "crop": true},
-        {"type": "copy", "src": "~/Documents/BibTexExported", "dst": "bib", "exts": ["bib"], "diff_sec": 10}
+        {"type": "copy", "src": "~/Documents/BibTexExported", "dst": "bib", "exts": ["bib"], "diff_sec": 10},
+        {"type": "doc_conv", "src": "docs", "dst": "docs_out", "ext": ["pdf", "html"], "engine": "auto"}
       ]
     }
 
@@ -28,12 +29,20 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Final
 
+from ml_writing_helper.converter.doc_converter import (
+    DEFAULT_DOC_ENGINE,
+    DEFAULT_DOC_OUTPUT_FORMATS,
+    DEFAULT_INPUT_PATTERNS,
+    DOC_ENGINES,
+    DOC_OUTPUT_FORMATS,
+    normalize_input_patterns,
+)
 from ml_writing_helper.converter.slide_img_converter import ImgConvOutputType
 
 CONFIG_FILENAME: Final[str] = "ml_writing_helper.json"
 OUTPUT_FORMATS: Final[list[str]] = [str(x) for x in ImgConvOutputType]
 LOG_LEVELS: Final[list[str]] = ["TRACE", "DEBUG", "INFO", "SUCCESS", "WARNING", "ERROR", "CRITICAL"]
-TASK_TYPES: Final[tuple[str, ...]] = ("img_conv", "copy")
+TASK_TYPES: Final[tuple[str, ...]] = ("img_conv", "copy", "doc_conv")
 
 DEFAULT_OBSERVER: Final[str] = "polling"
 DEFAULT_SLEEP_SEC: Final[float] = 1.0
@@ -86,9 +95,25 @@ class CopyTaskConfig:
     diff_sec: int = DEFAULT_DIFF_SEC
 
 
+@dataclass(frozen=True)
+class DocConvTaskConfig:
+    src: Path
+    dst: Path
+    formats: tuple[str, ...] = DEFAULT_DOC_OUTPUT_FORMATS
+    engine: str = DEFAULT_DOC_ENGINE
+    patterns: tuple[str, ...] = DEFAULT_INPUT_PATTERNS
+    headers: tuple[Path, ...] = ()
+    marp_headers: tuple[Path, ...] = ()
+    copy_exts: tuple[str, ...] = ()
+    diff_sec: int = DEFAULT_DIFF_SEC
+
+
+TaskConfig = ImgConvTaskConfig | CopyTaskConfig | DocConvTaskConfig
+
+
 @dataclass
 class WatchConfig:
-    tasks: list[ImgConvTaskConfig | CopyTaskConfig] = field(default_factory=list)
+    tasks: list[TaskConfig] = field(default_factory=list)
     observer: str = DEFAULT_OBSERVER
     sleep_sec: float = DEFAULT_SLEEP_SEC
     log_level: str = DEFAULT_LOG_LEVEL
@@ -149,6 +174,8 @@ _TOP_KEYS: Final[tuple[str, ...]] = ("root", "observer", "sleep_sec", "log_level
 _TASK_KEYS: Final[dict[str, tuple[str, ...]]] = {
     "img_conv": ("type", "mode", "src", "dst", "ext", "gray", "crop"),
     "copy": ("type", "mode", "src", "dst", "exts", "ext", "diff_sec"),
+    "doc_conv": ("type", "mode", "src", "dst", "ext", "engine", "pattern", "header", "marp_header", "copy_exts",
+                 "diff_sec"),
 }
 _TASK_KEYS_ANY: Final[tuple[str, ...]] = tuple(dict.fromkeys(k for keys in _TASK_KEYS.values() for k in keys))
 _EXAMPLE: Final[str] = '{"mode": "img_conv", "src": "fig_src", "dst": "fig_gen", "ext": "pdf"}'
@@ -173,7 +200,7 @@ def _parse_task(
         root: Path,
         check_paths: bool,
         errors: list[str],
-) -> ImgConvTaskConfig | CopyTaskConfig | None:
+) -> TaskConfig | None:
     """Validate one task. Appends problems to errors and returns None if any."""
     n_errors = len(errors)
     if not isinstance(t, dict):
@@ -198,6 +225,8 @@ def _parse_task(
     labels = {"src": "監視するフォルダ", "dst": "出力先のフォルダ"}
     for key in ("src", "dst"):
         v = t.get(key)
+        if v is None and key == "dst" and task_type == "doc_conv":
+            continue  # doc_conv の dst は省略可（src と同じフォルダへ出力）
         if v is None:
             errors.append(f"{where}: 「{key}」（{labels[key]}）を指定してください")
         elif not isinstance(v, str) or not v.strip():
@@ -208,6 +237,9 @@ def _parse_task(
         problem = _dir_problem(f"{where}: 「src」の", t["src"], paths["src"])
         if problem:
             errors.append(problem)
+
+    if task_type == "doc_conv":
+        return _parse_doc_conv_task(t, where, root, check_paths, errors, n_errors, paths)
 
     if task_type == "img_conv":
         ext = t.get("ext", "pdf")
@@ -243,6 +275,78 @@ def _parse_task(
         return None
     return CopyTaskConfig(
         src=paths["src"], dst=paths["dst"], exts=tuple(strip_dot(e) for e in exts), diff_sec=diff_sec
+    )
+
+
+def _str_list(v: Any) -> list[str] | None:
+    """A string or a list of strings as a list. None if the value has another shape."""
+    if isinstance(v, str):
+        v = [v]
+    if isinstance(v, list) and all(isinstance(x, str) and x.strip() for x in v):
+        return [x.strip() for x in v]
+    return None
+
+
+def _parse_doc_conv_task(
+        t: dict[str, Any],
+        where: str,
+        root: Path,
+        check_paths: bool,
+        errors: list[str],
+        n_errors: int,
+        paths: dict[str, Path],
+) -> DocConvTaskConfig | None:
+    formats = _str_list(t.get("ext", list(DEFAULT_DOC_OUTPUT_FORMATS)))
+    if not formats or not all(strip_dot(f) in DOC_OUTPUT_FORMATS for f in formats):
+        errors.append(
+            f'{where}: 「ext」には {_choices(DOC_OUTPUT_FORMATS)} を "pdf" や ["pdf", "html"] の形で指定してください'
+            f"（指定値: {_show(t.get('ext'))}）"
+        )
+    engine = t.get("engine", DEFAULT_DOC_ENGINE)
+    if engine not in DOC_ENGINES:
+        errors.append(f"{where}: 「engine」には {_choices(DOC_ENGINES)} のどれかを指定してください（指定値: {_show(engine)}）")
+    patterns = _str_list(t.get("pattern", list(DEFAULT_INPUT_PATTERNS)))
+    if patterns is None:
+        errors.append(
+            f'{where}: 「pattern」には変換するファイル名のパターンを "*.md" や ["*.md", "*.html"] の形で指定してください'
+            f"（指定値: {_show(t.get('pattern'))}）"
+        )
+    else:
+        try:
+            _ = normalize_input_patterns(patterns)
+        except ValueError as e:
+            errors.append(f"{where}: 「pattern」の書き方に誤りがあります（{e}）")
+    header_paths: dict[str, list[Path]] = {}
+    for key, label in (("header", "pandoc で PDF にするときの TeX ヘッダー"), ("marp_header", "Marp の frontmatter に足す断片")):
+        values = _str_list(t.get(key, []))
+        if values is None:
+            errors.append(f'{where}: 「{key}」（{label}）はファイルのパスを文字列か ["a.tex", "b.tex"] の形で指定してください'
+                          f"（指定値: {_show(t.get(key))}）")
+            continue
+        header_paths[key] = [resolve_path(v, root) for v in values]
+        if check_paths:
+            for v, p in zip(values, header_paths[key]):
+                if not p.is_file():
+                    errors.append(f"{where}: 「{key}」のファイルが見つかりません\n指定値: {_show(v)}\n探した場所: {p}")
+    copy_exts = _str_list(t.get("copy_exts", []))
+    if copy_exts is None or not all(strip_dot(e) for e in copy_exts):
+        errors.append(f'{where}: 「copy_exts」には一緒にコピーする拡張子を ["png", "jpg"] の形で指定してください'
+                      f"（指定値: {_show(t.get('copy_exts'))}）")
+    diff_sec = t.get("diff_sec", DEFAULT_DIFF_SEC)
+    if not isinstance(diff_sec, int) or isinstance(diff_sec, bool) or diff_sec < 0:
+        errors.append(f"{where}: 「diff_sec」には 0 以上の整数（秒）を指定してください（指定値: {_show(diff_sec)}）")
+    if len(errors) > n_errors:
+        return None
+    return DocConvTaskConfig(
+        src=paths["src"],
+        dst=paths.get("dst", paths["src"]),
+        formats=tuple(dict.fromkeys(strip_dot(f) for f in formats or [])),
+        engine=engine,
+        patterns=tuple(patterns or []),
+        headers=tuple(header_paths.get("header", [])),
+        marp_headers=tuple(header_paths.get("marp_header", [])),
+        copy_exts=tuple(strip_dot(e) for e in copy_exts or []),
+        diff_sec=diff_sec,
     )
 
 
@@ -301,7 +405,7 @@ def parse_config(
         errors.append(f"「log_level」には {_choices(LOG_LEVELS)} のどれかを指定してください（指定値: {_show(log_level)}）")
         log_level = DEFAULT_LOG_LEVEL
 
-    tasks: list[ImgConvTaskConfig | CopyTaskConfig] = []
+    tasks: list[TaskConfig] = []
     if is_shorthand:
         task = _parse_task(data, "タスク", root, check_paths, errors)
         if task is not None:

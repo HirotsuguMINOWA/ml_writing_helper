@@ -8,6 +8,13 @@ from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Any
 
+from ml_writing_helper.converter.doc_converter import (
+    DEFAULT_DOC_ENGINE,
+    DEFAULT_DOC_OUTPUT_FORMATS,
+    DEFAULT_INPUT_PATTERNS,
+    DOC_ENGINES,
+    DOC_OUTPUT_FORMATS,
+)
 from ml_writing_helper.config import (
     DEFAULT_COPY_EXTS,
     DEFAULT_DIFF_SEC,
@@ -95,11 +102,51 @@ def _check_exts(a: str) -> str | None:
     return None if exts and all(exts) else '拡張子をカンマ区切りで入力してください（例: bib, txt）'
 
 
+def _check_doc_formats(a: str) -> str | None:
+    formats = [strip_dot(e) for e in a.split(",")]
+    if formats and all(f in DOC_OUTPUT_FORMATS for f in formats):
+        return None
+    return f"{', '.join(DOC_OUTPUT_FORMATS)} をカンマ区切りで入力してください（例: pdf, html）"
+
+
+def _as_list(v: Any) -> list[str]:
+    return [str(x) for x in v] if isinstance(v, list) else [str(v)]
+
+
+def _split(a: str) -> list[str]:
+    return [x.strip() for x in a.split(",") if x.strip()]
+
+
+def _ask_doc_conv_task(w: _Wizard, root: Path, prev: dict[str, Any]) -> dict[str, Any]:
+    src = w.ask("src（監視するフォルダ。サブフォルダも対象）", prev.get("src", "."), _check_dir(root))
+    dst = w.ask("dst（出力先のフォルダ。無ければ作成）", prev.get("dst", src))
+    formats = w.ask(
+        f"ext（出力形式。{', '.join(DOC_OUTPUT_FORMATS)} をカンマ区切り）",
+        ", ".join(_as_list(prev.get("ext", list(DEFAULT_DOC_OUTPUT_FORMATS)))),
+        _check_doc_formats,
+    )
+    prev_engine = prev.get("engine", DEFAULT_DOC_ENGINE)
+    engine = w.choose("engine", DOC_ENGINES, prev_engine if prev_engine in DOC_ENGINES else DEFAULT_DOC_ENGINE)
+    patterns = w.ask(
+        "pattern（変換するファイル名。カンマ区切り）",
+        ", ".join(_as_list(prev.get("pattern", list(DEFAULT_INPUT_PATTERNS)))),
+    )
+    # header などウィザードで聞かない項目は既存の値を残す
+    kept = {k: prev[k] for k in ("header", "marp_header", "copy_exts", "diff_sec") if k in prev}
+    task: dict[str, Any] = {"type": "doc_conv", "src": src}
+    if dst != src:
+        task["dst"] = dst
+    return {**task, "ext": [strip_dot(f) for f in _split(formats)], "engine": engine,
+            "pattern": _split(patterns), **kept}
+
+
 def _ask_task(w: _Wizard, root: Path, prev: dict[str, Any] | None) -> dict[str, Any]:
     prev = prev or {}
     prev_type = prev.get("type", prev.get("mode"))
     mode = w.choose("mode", TASK_TYPES, prev_type if prev_type in TASK_TYPES else "img_conv")
     same = prev_type == mode
+    if mode == "doc_conv":
+        return _ask_doc_conv_task(w, root, prev if same else {})
     if mode == "img_conv":
         return {
             "type": "img_conv",
