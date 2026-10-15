@@ -1,5 +1,32 @@
 # Change History
 
+## 2026-10-15(v0.10.0)
+
+### Changed: the two commands were merged into `ml_writing_helper`
+
+- `convert4ml` and `watch4ml` were removed and replaced by the single command `ml_writing_helper`
+  - `[project.scripts]` is now `ml_writing_helper = "ml_writing_helper.main:main"`
+- The former `watch4ml` behavior is the default: `ml_writing_helper --json / --mode / --conf-maker-web / --conf-maker-cli`
+  - `--monitor` branches the behavior as before: with it the command keeps watching, without it all tasks run once and exit
+  - `ml_writing_helper` with no argument shows the help message (exit code 0)
+- The former `convert4ml` behavior is the `convert` subcommand
+  - `ml_writing_helper convert src_path dst_dir to_fmt [--gray] [--no-crop]`
+  - The subcommand name can be omitted (`ml_writing_helper fig_src/fig1.pptx fig_gen pdf`), so old command lines keep working
+- Kept for backward compatibility
+  - The legacy `monitor` subcommand (watch one folder; it keeps watching without `--monitor`)
+  - A leading `watch` token is accepted and ignored (`ml_writing_helper watch --mode img_conv` == `ml_writing_helper --mode img_conv`)
+  - `main.watch()` / `main.convert()` / `main.monitor()` still exist but are deprecated (DeprecationWarning); use `main.main()`
+
+### Upgrade
+
+- Reinstall so that the old commands are removed: `pipx install --force .`
+- Replace `watch4ml` with `ml_writing_helper`, and `convert4ml X Y Z` with `ml_writing_helper convert X Y Z` in your scripts
+
+### Files added/changed
+
+- Changed: `pyproject.toml` (`[project.scripts]`), `main.py` (one top-level parser, `_add_watch_args()`, `_parse_cli_args()`, `main()` dispatch)
+- Changed: `config.py` (error messages), `sandbox/start_watcher.py`, `ReadMe.md`, `test/test_monitor_option.py`
+
 ## 2026-10-15(v0.9.0)
 
 ### Added: `--monitor` option (run once or keep watching)

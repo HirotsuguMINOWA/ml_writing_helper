@@ -467,7 +467,7 @@ def _json_syntax_error(e: json.JSONDecodeError, title: str, is_inline: bool) -> 
     if is_inline:
         hint = (
             "JSON 文字列は全体をシングルクォートで囲んでください。囲まないとシェルが \" を消してしまいます\n"
-            f"例: watch4ml --json '{_EXAMPLE}'"
+            f"例: ml_writing_helper --json '{_EXAMPLE}'"
         )
     return ConfigError([detail], title=title, hint=hint)
 
@@ -489,7 +489,7 @@ def load_config(path: Path, available_observers: Sequence[str] | None = None) ->
     if not text.strip():
         raise ConfigError(["ファイルが空です"], title=title,
                           hint=f"例: {{\"tasks\": [{_EXAMPLE}]}}\n"
-                               "watch4ml --conf-maker-web（ブラウザ）か --conf-maker-cli（ターミナル）で作成できます")
+                               "ml_writing_helper --conf-maker-web（ブラウザ）か --conf-maker-cli（ターミナル）で作成できます")
     try:
         data = json.loads(text)
     except json.JSONDecodeError as e:
@@ -529,12 +529,12 @@ def load_config_arg(value: str, cwd: Path, available_observers: Sequence[str] | 
         if stripped.startswith("[") or '"' in stripped or (":" in stripped and not Path(stripped).anchor):
             hint = (
                 "JSON 文字列を渡すつもりなら、{ } で囲み、全体をシングルクォートで囲んでください\n"
-                f"例: watch4ml --json '{_EXAMPLE}'"
+                f"例: ml_writing_helper --json '{_EXAMPLE}'"
             )
         else:
             hint = (
                 "ファイル名の綴りと、今いるフォルダを確認してください\n"
-                "ファイルは watch4ml --conf-maker-web（ブラウザ）か --conf-maker-cli（ターミナル）で作成できます"
+                "ファイルは ml_writing_helper --conf-maker-web（ブラウザ）か --conf-maker-cli（ターミナル）で作成できます"
             )
         raise ConfigError(
             [f"ファイルが見つかりません\n指定値: {_show(value)}\n探した場所: {path}"],

@@ -933,9 +933,13 @@ def _available_observer_backends() -> list[str]:
     return backends
 
 
-CLI_COMMANDS: Final[tuple[str, ...]] = ("convert", "monitor", "watch")
+PROG_NAME: Final[str] = "ml_writing_helper"
+# legacy subcommands of `ml_writing_helper`, each doing a single task
+CLI_COMMANDS: Final[tuple[str, ...]] = ("convert", "monitor")
+# `watch` used to be a subcommand (watch4ml); it is now the default behavior. see _parse_cli_args
+LEGACY_WATCH_COMMAND: Final[str] = "watch"
 WATCH_MODES: Final[tuple[str, ...]] = ("img_conv", "copy", "doc_conv")
-# `watch4ml` entry options: exactly one of them selects what to do (dest names)
+# `ml_writing_helper` entry options: exactly one of them selects what to do (dest names)
 WATCH_LAUNCHERS: Final[tuple[str, ...]] = ("json", "mode", "conf_maker_web", "conf_maker_cli")
 DEFAULT_MONITOR_HINT: Final[str] = "without --monitor, all tasks run once and the command exits"
 # options usable only with --mode (dest names)
@@ -944,15 +948,18 @@ WATCH_MODE_OPTIONS: Final[tuple[str, ...]] = (
     "root", "observer", "sleep_sec", "diff_sec", "log_level",
 )
 WATCH_EPILOG: Final[str] = f"""examples:
-  watch4ml --mode img_conv --ext pdf --gray          # convert once and exit
-  watch4ml --mode img_conv --ext pdf --monitor       # keep watching for changes
-  watch4ml --mode copy --src ~/Documents/BibTexExported --dst bib
-  watch4ml --mode doc_conv --src docs --dst docs_out --ext pdf --ext html
-  watch4ml --json                       # use ./{CONFIG_FILENAME}
-  watch4ml --json my_tasks.json
-  watch4ml --json '{{"mode": "copy", "src": "a", "dst": "b"}}'
-  watch4ml --conf-maker-web             # create ./{CONFIG_FILENAME} in a web UI
-  watch4ml --conf-maker-cli             # create ./{CONFIG_FILENAME} interactively in the terminal
+  {PROG_NAME} --mode img_conv --ext pdf --gray          # convert once and exit
+  {PROG_NAME} --mode img_conv --ext pdf --monitor       # keep watching for changes
+  {PROG_NAME} --mode copy --src ~/Documents/BibTexExported --dst bib
+  {PROG_NAME} --mode doc_conv --src docs --dst docs_out --ext pdf --ext html
+  {PROG_NAME} --json                       # use ./{CONFIG_FILENAME}
+  {PROG_NAME} --json my_tasks.json
+  {PROG_NAME} --json '{{"mode": "copy", "src": "a", "dst": "b"}}'
+  {PROG_NAME} --conf-maker-web             # create ./{CONFIG_FILENAME} in a web UI
+  {PROG_NAME} --conf-maker-cli             # create ./{CONFIG_FILENAME} interactively in the terminal
+  {PROG_NAME} convert fig_src/fig1.pptx fig_gen pdf     # convert one file (legacy subcommand)
+
+watchdog observerは既定でpollingです。クラウドストレージの変更追従を優先します。
 """
 
 
@@ -987,24 +994,11 @@ def _add_common_monitor_args(parser: argparse.ArgumentParser | argparse._Argumen
     )
 
 
-def _add_watch_parser(subparsers: "argparse._SubParsersAction[argparse.ArgumentParser]") -> None:
-    watch_parser = subparsers.add_parser(
-        "watch",
-        prog="watch4ml",
-        help="watch dirs: convert figures (img_conv), copy files such as .bib (copy), "
-             "or convert documents such as .md (doc_conv)",
-        description=(
-            "Watch folders and convert figures / copy files / convert documents when they change. "
-            "Choose one of --json, --mode, --conf-maker-web, --conf-maker-cli. "
-            "Add --monitor to keep watching for changes; otherwise all tasks run once and the command exits. "
-            "With no argument, this help is shown."
-        ),
-        epilog=WATCH_EPILOG,
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-    )
-    watch_parser.set_defaults(print_watch_help=watch_parser.print_help)
+def _add_watch_args(parser: argparse.ArgumentParser) -> None:
+    """Add the main options of `ml_writing_helper` (the former `watch4ml`) to its top level parser."""
+    parser.set_defaults(print_watch_help=parser.print_help)
 
-    launch = watch_parser.add_argument_group("how to run (choose one)")
+    launch = parser.add_argument_group("how to run (choose one)")
     _ = launch.add_argument(
         "--json",
         nargs="?",
@@ -1038,7 +1032,7 @@ def _add_watch_parser(subparsers: "argparse._SubParsersAction[argparse.ArgumentP
              f"Usable with all of the above; {DEFAULT_MONITOR_HINT}",
     )
 
-    task = watch_parser.add_argument_group(
+    task = parser.add_argument_group(
         "--mode parameters",
         "img_conv: --src/--dst/--ext once each, --gray, --no-crop. "
         "copy: --src/--dst/--ext repeatable (--src and --dst required). "
@@ -1075,7 +1069,7 @@ def _add_watch_parser(subparsers: "argparse._SubParsersAction[argparse.ArgumentP
         help="doc_conv: TeX header file passed to pandoc for PDF, repeatable",
     )
 
-    common = watch_parser.add_argument_group("--mode common parameters")
+    common = parser.add_argument_group("--mode common parameters")
     _add_common_monitor_args(common)
     _ = common.add_argument(
         "--root",
@@ -1086,38 +1080,55 @@ def _add_watch_parser(subparsers: "argparse._SubParsersAction[argparse.ArgumentP
 
 def _build_cli_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Markuplanguage(.md, .tex) Helper",
-        epilog="watchdog observerは既定でpollingです。クラウドストレージの変更追従を優先します。",
+        prog=PROG_NAME,
+        description=(
+            "Markuplanguage(.md, .tex) Helper: convert figures / copy files / convert documents. "
+            "Choose one of --json, --mode, --conf-maker-web, --conf-maker-cli. "
+            "Add --monitor to keep watching for changes; otherwise all tasks run once and the command exits. "
+            "With no argument, this help is shown."
+        ),
+        epilog=WATCH_EPILOG,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    subparsers = parser.add_subparsers(dest="command")
+    _add_watch_args(parser)
 
-    convert_parser = subparsers.add_parser("convert", help="convert a single file")
+    subparsers = parser.add_subparsers(
+        dest="command",
+        title="legacy subcommands (one task only, --monitor is not used)",
+        metavar="{%s}" % ",".join(CLI_COMMANDS),
+    )
+
+    convert_parser = subparsers.add_parser(
+        "convert", prog=f"{PROG_NAME} convert", help="convert a single file and exit (the former convert4ml)"
+    )
     _ = convert_parser.add_argument("src_path", type=str, help="source file path")
     _ = convert_parser.add_argument("dst_dir_apath", help="destination directory")
     _ = convert_parser.add_argument("to_fmt", help="destination format such as png or .png")
     _add_common_conv_args(convert_parser)
 
-    monitor_parser = subparsers.add_parser("monitor", help="watch a directory and convert changed files")
+    monitor_parser = subparsers.add_parser(
+        "monitor", prog=f"{PROG_NAME} monitor",
+        help="watch one directory and convert changed files (keeps watching without --monitor)",
+    )
     _ = monitor_parser.add_argument("src_dir", help="source directory to monitor")
     _ = monitor_parser.add_argument("dst_dir", help="destination directory")
     _ = monitor_parser.add_argument("to_fmt", help="destination format such as png or .png")
     _add_common_conv_args(monitor_parser)
     _add_common_monitor_args(monitor_parser)
-
-    _add_watch_parser(subparsers)
     return parser
 
 
 def _parse_cli_args(argv: list[str] | None = None) -> argparse.Namespace:
+    """Parse argv of `ml_writing_helper`. ``command`` is None when the main (watch) options are used."""
     parser = _build_cli_parser()
     args_in = list(sys.argv[1:] if argv is None else argv)
-    if args_in and args_in[0] not in (*CLI_COMMANDS, "-h", "--help"):
+    if args_in and args_in[0] == LEGACY_WATCH_COMMAND:
+        # `watch4ml watch ...` / `watch4ml ...`: the former subcommand is now the default behavior
+        args_in = args_in[1:]
+    elif args_in and args_in[0] not in CLI_COMMANDS and not args_in[0].startswith("-"):
+        # `ml_writing_helper fig.pptx fig_gen pdf` works like the former convert4ml
         args_in = ["convert", *args_in]
-    args = parser.parse_args(args_in)
-    if args.command is None:
-        parser.print_help()
-        raise SystemExit(1)
-    return args
+    return parser.parse_args(args_in)
 
 
 def _set_log_level(level: str) -> None:
@@ -1226,7 +1237,7 @@ def _watch_config_from_cli(args: argparse.Namespace) -> WatchConfig:
         if errors:
             raise ConfigError(
                 errors, title=_PARAM_ERROR,
-                hint="例: watch4ml --mode copy --src ~/Documents/BibTexExported --dst bib\n"
+                hint=f"例: {PROG_NAME} --mode copy --src ~/Documents/BibTexExported --dst bib\n"
                      "--src と --dst は同じ数だけ指定するか、--dst を1つだけ指定してください",
             )
         if len(dsts) == 1:
@@ -1288,7 +1299,7 @@ def _doc_conv_config_from_cli(
 
 
 def _check_watch_args(args: argparse.Namespace) -> str | None:
-    """Check the combination of `watch4ml` options. Returns the chosen launcher, or None for help."""
+    """Check the combination of `ml_writing_helper` options. Returns the chosen launcher, or None for help."""
     launchers = [name for name in WATCH_LAUNCHERS if getattr(args, name) is not None]
     mode_options = [_opt(name) for name in WATCH_MODE_OPTIONS if getattr(args, name) not in (None, False)]
     how_to = (
@@ -1298,7 +1309,7 @@ def _check_watch_args(args: argparse.Namespace) -> str | None:
         "  --conf-maker-web [ファイルのパス]\n"
         "  --conf-maker-cli [ファイルのパス]\n"
         "変更を監視し続けるには --monitor を付けてください\n"
-        "使い方は watch4ml --help で確認できます"
+        f"使い方は {PROG_NAME} --help で確認できます"
     )
     if not launchers:
         if args.monitor and not mode_options:
@@ -1430,12 +1441,13 @@ def _run_watch_cli(args: argparse.Namespace) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Entry point of the `ml_writing_helper` command. --monitor decides run-once or keep-watching."""
     args = _parse_cli_args(argv=argv)
-    if args.command == "watch":
-        return _run_watch_cli(args)
+    if args.command == "convert":
+        return _run_convert_cli(args)
     if args.command == "monitor":
         return _run_monitor_cli(args)
-    return _run_convert_cli(args)
+    return _run_watch_cli(args)
 
 
 def _main_with_command(command: str, argv: list[str] | None) -> int:
@@ -1445,14 +1457,20 @@ def _main_with_command(command: str, argv: list[str] | None) -> int:
     return main(args_in)
 
 
+_ENTRY_REMOVED: Final[str] = f"廃止。watch4ml/convert4ml は {PROG_NAME} コマンド（main）に統合された"
+
+
+@removals.remove(message=_ENTRY_REMOVED)
 def watch(argv: list[str] | None = None) -> int:
-    return _main_with_command("watch", argv)
+    return _main_with_command(LEGACY_WATCH_COMMAND, argv)
 
 
+@removals.remove(message=_ENTRY_REMOVED)
 def monitor(argv: list[str] | None = None) -> int:
     return _main_with_command("monitor", argv)
 
 
+@removals.remove(message=_ENTRY_REMOVED)
 def convert(argv: list[str] | None = None) -> int:
     logger.debug("sys.argv:%s" % sys.argv)
     return main(argv)

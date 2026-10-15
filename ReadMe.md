@@ -46,20 +46,23 @@ Please install the following software before using this package.
   - If you want to do multi tasks, you had better to use `--json` mode.
 
 
-### watcher (`watch4ml`)
+### main command (`ml_writing_helper`)
+
+All functions are provided by the single command `ml_writing_helper`
+(the former `watch4ml` and `convert4ml` were merged into it; `--monitor` decides run-once or keep-watching).
 
 Choose how to run with one of the following options. They cannot be combined.
 
 | Command                                     | Behavior                                                                                 |
 | ------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| `watch4ml` (no argument) / `watch4ml --help` | Show the help message                                                                    |
-| `watch4ml --json [PATH]`                    | Tasks from the json file. Without PATH, `./ml_writing_helper.json` is used               |
-| `watch4ml --json '{...}'`                   | Tasks from a JSON string (see below)                                                     |
-| `watch4ml --mode img_conv [params...]`      | Mode `img_conv`: one figure conversion task from CLI parameters                          |
-| `watch4ml --mode copy [params...]`          | Mode `copy`: copy tasks from CLI parameters                                              |
-| `watch4ml --mode doc_conv [params...]`      | Mode `doc_conv`: one document conversion task from CLI parameters                        |
-| `watch4ml --conf-maker-web [PATH]`          | Create/edit the json file in a web UI (browser). Without PATH, `./ml_writing_helper.json` |
-| `watch4ml --conf-maker-cli [PATH]`          | Create/edit the json file interactively in the terminal. Without PATH, `./ml_writing_helper.json` |
+| `ml_writing_helper` (no argument) / `ml_writing_helper --help` | Show the help message                                                  |
+| `ml_writing_helper --json [PATH]`                    | Tasks from the json file. Without PATH, `./ml_writing_helper.json` is used               |
+| `ml_writing_helper --json '{...}'`                   | Tasks from a JSON string (see below)                                                     |
+| `ml_writing_helper --mode img_conv [params...]`      | Mode `img_conv`: one figure conversion task from CLI parameters                          |
+| `ml_writing_helper --mode copy [params...]`          | Mode `copy`: copy tasks from CLI parameters                                              |
+| `ml_writing_helper --mode doc_conv [params...]`      | Mode `doc_conv`: one document conversion task from CLI parameters                        |
+| `ml_writing_helper --conf-maker-web [PATH]`          | Create/edit the json file in a web UI (browser). Without PATH, `./ml_writing_helper.json` |
+| `ml_writing_helper --conf-maker-cli [PATH]`          | Create/edit the json file interactively in the terminal. Without PATH, `./ml_writing_helper.json` |
 
 - The parameters of `--mode` (`--src`, `--ext`, `--root`, `--log-level`, ...) can be used only with `--mode`. With `--json` or `--conf-maker-*`, write them in the json file instead.
 - To run multiple tasks at once (e.g. img_conv and copy), use the json file.
@@ -72,9 +75,9 @@ Choose how to run with one of the following options. They cannot be combined.
 - In the json file, write `"monitor": true` instead. Watching continues if either `--monitor` or `"monitor": true` is given.
 
 ```bash
-watch4ml --mode doc_conv --src docs --dst docs_out            # convert once and exit
-watch4ml --mode doc_conv --src docs --dst docs_out --monitor  # keep watching
-watch4ml --json --monitor                                     # tasks from ./ml_writing_helper.json, keep watching
+ml_writing_helper --mode doc_conv --src docs --dst docs_out            # convert once and exit
+ml_writing_helper --mode doc_conv --src docs --dst docs_out --monitor  # keep watching
+ml_writing_helper --json --monitor                                     # tasks from ./ml_writing_helper.json, keep watching
 ```
 
 #### Creating the json file (`--conf-maker-web` / `--conf-maker-cli`)
@@ -90,7 +93,7 @@ watch4ml --json --monitor                                     # tasks from ./ml_
 
 - If the value starts with `{`, it is parsed as a JSON string and run as the task instruction.
 - Otherwise it is treated as a json file path.
-- Without a value (`watch4ml --json`), `./ml_writing_helper.json` is used.
+- Without a value (`ml_writing_helper --json`), `./ml_writing_helper.json` is used.
 
 Multiple tasks can be defined in one file. Relative paths are resolved from `root`, which is resolved from the json file's directory (for a JSON string, from the current directory).
 
@@ -129,10 +132,10 @@ The same format as the json file. A single task can also be written at the top l
 
 ```bash
 # single task (shorthand)
-watch4ml --json '{"mode": "copy", "src": "~/Documents/BibTexExported", "dst": "bib", "ext": "bib"}'
+ml_writing_helper --json '{"mode": "copy", "src": "~/Documents/BibTexExported", "dst": "bib", "ext": "bib"}'
 
 # multiple tasks (same format as the json file)
-watch4ml --json '{"tasks": [{"mode": "img_conv", "src": "fig_src", "dst": "fig_gen", "ext": "pdf"}, {"mode": "copy", "src": "~/Documents/BibTexExported", "dst": "bib"}]}'
+ml_writing_helper --json '{"tasks": [{"mode": "img_conv", "src": "fig_src", "dst": "fig_gen", "ext": "pdf"}, {"mode": "copy", "src": "~/Documents/BibTexExported", "dst": "bib"}]}'
 ```
 
 Top-level `monitor` (bool, default `false`): `true` keeps watching for changes, `false` runs all tasks once and exits.
@@ -142,21 +145,21 @@ Wrap the JSON string in single quotes `'...'` so that the shell passes the doubl
 #### CLI instruction (`--mode`)
 
 ```bash
-watch4ml --mode [img_conv|copy|doc_conv] [sub parameters...] [--root [root PATH]]
+ml_writing_helper --mode [img_conv|copy|doc_conv] [sub parameters...] [--root [root PATH]]
 
 # fig_src/ -> fig_gen/ as grayscale .pdf
-watch4ml --mode img_conv --ext pdf --gray
+ml_writing_helper --mode img_conv --ext pdf --gray
 
 # copy exported .bib into bib/
-watch4ml --mode copy --src ~/Documents/BibTexExported --dst bib
+ml_writing_helper --mode copy --src ~/Documents/BibTexExported --dst bib
 
 # docs/**/*.md -> docs_out/**/*.pdf and .html
-watch4ml --mode doc_conv --src docs --dst docs_out --ext pdf --ext html
+ml_writing_helper --mode doc_conv --src docs --dst docs_out --ext pdf --ext html
 ```
 
 ##### Common parameters
 
-Available in every mode (e.g. `watch4ml --mode copy --src a --dst b --log-level DEBUG`).
+Available in every mode (e.g. `ml_writing_helper --mode copy --src a --dst b --log-level DEBUG`).
 
 | Option             | Default             | Description                                                                 |
 | ------------------ | ------------------- | --------------------------------------------------------------------------- |
@@ -248,9 +251,11 @@ Requirements for doc_conv (only what you use):
 - Chrome / Chromium (`.html` → PDF)
 
 
-### single file conversion
+### single file conversion (legacy subcommand)
 
-- `convert4ml src_path dst_dir to_fmt [--gray] [--no-crop]`
+- `ml_writing_helper convert src_path dst_dir to_fmt [--gray] [--no-crop]`
+- The subcommand name can be omitted: `ml_writing_helper src_path dst_dir to_fmt` (as the former `convert4ml`)
+- `ml_writing_helper monitor src_dir dst_dir to_fmt` watches one folder and keeps watching without `--monitor`
 
 ## Install
 

@@ -14,7 +14,7 @@ dependencies = [
     "typed-classproperties",
 ]
 name = "ml_writing_helper"
-version = "0.9.0"
+version = "0.10.0"
 description = "Helper tool to insert created diagrams to markup language such as LaTeX, Markdown and HTML and so on."
 authors = [{ name = "Hirotsugu Minowa" }]
 requires-python = ">=3.12"
@@ -37,8 +37,7 @@ dev = [
 ]
 
 [project.scripts]
-convert4ml = "ml_writing_helper.main:convert"
-watch4ml = "ml_writing_helper.main:watch"
+ml_writing_helper = "ml_writing_helper.main:main"
 
 [tool.setuptools]
 package-dir = { "" = "src" }
