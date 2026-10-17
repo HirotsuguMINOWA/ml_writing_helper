@@ -1,5 +1,7 @@
 # ML Writing Helper
 
+[English] | [[日本語](ReadMe.ja.md)]
+
 ## Summary
 
 This package is a helper tool for writing documents and papers using Markup Language (ML) such as LaTeX, HTML, or Markdown.
@@ -53,16 +55,16 @@ All functions are provided by the single command `ml_writing_helper`
 
 Choose how to run with one of the following options. They cannot be combined.
 
-| Command                                     | Behavior                                                                                 |
-| ------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| `ml_writing_helper` (no argument) / `ml_writing_helper --help` | Show the help message                                                  |
-| `ml_writing_helper --json [PATH]`                    | Tasks from the json file. Without PATH, `./ml_writing_helper.json` is used               |
-| `ml_writing_helper --json '{...}'`                   | Tasks from a JSON string (see below)                                                     |
-| `ml_writing_helper --mode img_conv [params...]`      | Mode `img_conv`: one figure conversion task from CLI parameters                          |
-| `ml_writing_helper --mode copy [params...]`          | Mode `copy`: copy tasks from CLI parameters                                              |
-| `ml_writing_helper --mode doc_conv [params...]`      | Mode `doc_conv`: one document conversion task from CLI parameters                        |
-| `ml_writing_helper --conf-maker-web [PATH]`          | Create/edit the json file in a web UI (browser). Without PATH, `./ml_writing_helper.json` |
-| `ml_writing_helper --conf-maker-cli [PATH]`          | Create/edit the json file interactively in the terminal. Without PATH, `./ml_writing_helper.json` |
+| Command                                                        | Behavior                                                                                          |
+| -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `ml_writing_helper` (no argument) / `ml_writing_helper --help` | Show the help message                                                                             |
+| `ml_writing_helper --json [PATH]`                              | Tasks from the json file. Without PATH, `./ml_writing_helper.json` is used                        |
+| `ml_writing_helper --json '{...}'`                             | Tasks from a JSON string (see below)                                                              |
+| `ml_writing_helper --mode img_conv [params...]`                | Mode `img_conv`: one figure conversion task from CLI parameters                                   |
+| `ml_writing_helper --mode copy [params...]`                    | Mode `copy`: copy tasks from CLI parameters                                                       |
+| `ml_writing_helper --mode doc_conv [params...]`                | Mode `doc_conv`: one document conversion task from CLI parameters                                 |
+| `ml_writing_helper --conf-maker-web [PATH]`                    | Create/edit the json file in a web UI (browser). Without PATH, `./ml_writing_helper.json`         |
+| `ml_writing_helper --conf-maker-cli [PATH]`                    | Create/edit the json file interactively in the terminal. Without PATH, `./ml_writing_helper.json` |
 
 - The parameters of `--mode` (`--src`, `--ext`, `--root`, `--log-level`, ...) can be used only with `--mode`. With `--json` or `--conf-maker-*`, write them in the json file instead.
 - To run multiple tasks at once (e.g. img_conv and copy), use the json file.
@@ -113,14 +115,14 @@ Multiple tasks can be defined in one file. Relative paths are resolved from `roo
 }
 ```
 
-| Task key       | Type                | Default         | Description                                                                   |
-| -------------- | ------------------- | --------------- | ----------------------------------------------------------------------------- |
+| Task key       | Type                             | Default         | Description                                                                   |
+| -------------- | -------------------------------- | --------------- | ----------------------------------------------------------------------------- |
 | `type`         | `img_conv` / `copy` / `doc_conv` | required        | Task kind                                                                     |
-| `src`, `dst`   | path                | required        | Watched dir / output dir (`dst` is created if missing)                        |
-| `ext`          | string              | `pdf`           | `img_conv` only. eps, pdf, png, jpg, jpeg, gif, bmp, tiff                     |
-| `gray`, `crop` | bool                | `false`, `true` | `img_conv` only                                                               |
-| `exts`         | list                | `["bib"]`       | `copy` only. Extensions to copy                                               |
-| `diff_sec`     | int                 | `10`            | `copy` only. Skip when src/dst timestamps differ by this many seconds or less |
+| `src`, `dst`   | path                             | required        | Watched dir / output dir (`dst` is created if missing)                        |
+| `ext`          | string                           | `pdf`           | `img_conv` only. eps, pdf, png, jpg, jpeg, gif, bmp, tiff                     |
+| `gray`, `crop` | bool                             | `false`, `true` | `img_conv` only                                                               |
+| `exts`         | list                             | `["bib"]`       | `copy` only. Extensions to copy                                               |
+| `diff_sec`     | int                              | `10`            | `copy` only. Skip when src/dst timestamps differ by this many seconds or less |
 
 - For `doc_conv` keys, see [Mode: doc_conv](#mode-doc_conv).
 - `mode` can be used instead of `type` (same meaning as the CLI mode).
@@ -161,13 +163,13 @@ ml_writing_helper --mode doc_conv --src docs --dst docs_out --ext pdf --ext html
 
 Available in every mode (e.g. `ml_writing_helper --mode copy --src a --dst b --log-level DEBUG`).
 
-| Option             | Default             | Description                                                                 |
-| ------------------ | ------------------- | --------------------------------------------------------------------------- |
-| `--observer`       | `polling`           | watchdog backend (`polling` is cloud-storage friendly, `native` is lighter) |
-| `--sleep-sec`      | `1.0`               | Main loop sleep time                                                        |
-| `--diff-sec`       | `10`                | Skip when src/dst timestamps differ by this many seconds or less            |
-| `--log-level`      | `INFO`              | Console log level                                                           |
-| `--root root_PATH` | current folder(".") | The base PATH for this app to understand relative PATH                      |
+| Option             | Default             | Description                                                                                                  |
+| ------------------ | ------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `--observer`       | `polling`           | watchdog backend (`polling` is cloud-storage friendly, `native` is lighter)                                  |
+| `--sleep-sec`      | `1.0`               | Main loop sleep time                                                                                         |
+| `--diff-sec`       | `10`                | Skip when src/dst timestamps differ by this many seconds or less                                             |
+| `--log-level`      | `INFO`              | Console log level                                                                                            |
+| `--root root_PATH` | current folder(".") | The base PATH for this app to understand relative PATH                                                       |
 | `--monitor`        | off                 | Keep watching for changes. Without it, run once and exit (can also be used with `--json` / `--conf-maker-*`) |
 
 ##### Mode: img_conv
@@ -203,38 +205,38 @@ When `--src` and `--dst` are given multiple times, they are matched as follows:
 This mode converts documents (`.md`, `.html`) under src (subfolders included) into PDF / HTML / DOCX when they change.
 The folder structure under src is reproduced in dst.
 
-| Option         | Default          | Description                                                                          |
-| -------------- | ---------------- | ------------------------------------------------------------------------------------ |
-| `--src DIR`    | `.`              | Document source dir (subfolders included). Once only                                 |
-| `--dst DIR`    | same as `--src`  | Output dir (created if missing). Once only                                           |
-| `--ext FMT`    | `pdf`            | Output format: pdf, html, docx. Repeatable (e.g. `--ext pdf --ext html`)             |
-| `--engine`     | `auto`           | `auto` / `pandoc` / `playwright` / `marp` / `slidev` (see below)                     |
-| `--pattern`    | `*.md`           | File names to convert. `*` matches any characters. Repeatable (e.g. `"*_marp.md"`, `"*.html"`) |
-| `--header TEX` | Japanese header  | TeX header file passed to pandoc for PDF. Repeatable                                 |
+| Option         | Default         | Description                                                                                    |
+| -------------- | --------------- | ---------------------------------------------------------------------------------------------- |
+| `--src DIR`    | `.`             | Document source dir (subfolders included). Once only                                           |
+| `--dst DIR`    | same as `--src` | Output dir (created if missing). Once only                                                     |
+| `--ext FMT`    | `pdf`           | Output format: pdf, html, docx. Repeatable (e.g. `--ext pdf --ext html`)                       |
+| `--engine`     | `auto`          | `auto` / `pandoc` / `playwright` / `marp` / `slidev` (see below)                               |
+| `--pattern`    | `*.md`          | File names to convert. `*` matches any characters. Repeatable (e.g. `"*_marp.md"`, `"*.html"`) |
+| `--header TEX` | Japanese header | TeX header file passed to pandoc for PDF. Repeatable                                           |
 
 json task keys (`"type": "doc_conv"`):
 
-| Task key      | Type          | Default        | Description                                                            |
-| ------------- | ------------- | -------------- | ---------------------------------------------------------------------- |
-| `src`         | path          | required       | Watched dir (subfolders included)                                      |
-| `dst`         | path          | same as `src`  | Output dir                                                             |
-| `ext`         | string / list | `"pdf"`        | pdf, html, docx                                                        |
-| `engine`      | string        | `"auto"`       | auto, pandoc, playwright, marp, slidev                                 |
-| `pattern`     | string / list | `"*.md"`       | File names to convert                                                  |
-| `header`      | path / list   | Japanese header | TeX header file(s) for pandoc PDF                                     |
-| `marp_header` | path / list   | none           | YAML fragment file(s) added to the Marp frontmatter                    |
-| `copy_exts`   | list          | none           | Extensions copied to dst as they are (e.g. `["png", "jpg"]` for images referenced from HTML) |
-| `diff_sec`    | int           | `10`           | At startup, convert only when src is newer than the output by more than this many seconds |
+| Task key      | Type          | Default         | Description                                                                                  |
+| ------------- | ------------- | --------------- | -------------------------------------------------------------------------------------------- |
+| `src`         | path          | required        | Watched dir (subfolders included)                                                            |
+| `dst`         | path          | same as `src`   | Output dir                                                                                   |
+| `ext`         | string / list | `"pdf"`         | pdf, html, docx                                                                              |
+| `engine`      | string        | `"auto"`        | auto, pandoc, playwright, marp, slidev                                                       |
+| `pattern`     | string / list | `"*.md"`        | File names to convert                                                                        |
+| `header`      | path / list   | Japanese header | TeX header file(s) for pandoc PDF                                                            |
+| `marp_header` | path / list   | none            | YAML fragment file(s) added to the Marp frontmatter                                          |
+| `copy_exts`   | list          | none            | Extensions copied to dst as they are (e.g. `["png", "jpg"]` for images referenced from HTML) |
+| `diff_sec`    | int           | `10`            | At startup, convert only when src is newer than the output by more than this many seconds    |
 
 `engine: auto` chooses the converter for each file:
 
-| File                                                     | pdf                    | html                                  | docx   |
-| -------------------------------------------------------- | ---------------------- | ------------------------------------- | ------ |
-| Marp (`marp: true` in frontmatter)                       | marp                   | marp                                  | pandoc |
-| Slidev (frontmatter with `theme:` / `layout:` ...)       | slidev                 | browser HTML                          | pandoc |
-| contains ` ```mermaid ` / ` ```plantuml ` blocks         | playwright             | browser HTML                          | pandoc |
-| others                                                   | pandoc (lualatex)      | browser HTML                          | pandoc |
-| `.html` (when `--pattern "*.html"`)                      | Chrome headless print  | copied as is                          | pandoc |
+| File                                               | pdf                   | html         | docx   |
+| -------------------------------------------------- | --------------------- | ------------ | ------ |
+| Marp (`marp: true` in frontmatter)                 | marp                  | marp         | pandoc |
+| Slidev (frontmatter with `theme:` / `layout:` ...) | slidev                | browser HTML | pandoc |
+| contains ` ```mermaid ` / ` ```plantuml ` blocks   | playwright            | browser HTML | pandoc |
+| others                                             | pandoc (lualatex)     | browser HTML | pandoc |
+| `.html` (when `--pattern "*.html"`)                | Chrome headless print | copied as is | pandoc |
 
 - "browser HTML" embeds marked.js / mermaid.js / highlight.js / KaTeX from CDN, so viewing it needs an internet connection.
 - Files in dst are not converted again when dst is inside src. Hidden files/folders and `node_modules` are skipped.
