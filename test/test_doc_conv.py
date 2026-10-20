@@ -2,12 +2,15 @@ from __future__ import annotations
 
 import os
 import shutil
+import zipfile
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import pytest
 
 from ml_writing_helper.config import ConfigError, DocConvTaskConfig, parse_config
 from ml_writing_helper.converter.doc_converter import DocConverter, normalize_input_patterns
+from ml_writing_helper.converter.scorm12 import Scorm12Error, build_scorm12_package, parse_quiz
 from ml_writing_helper.main import _parse_cli_args, _watch_config_from_cli
 from ml_writing_helper.task_runner.doc_conv_runner import DocConvTask
 
@@ -59,6 +62,37 @@ def test_cli_doc_conv_only_options(tmp_path: Path, monkeypatch: pytest.MonkeyPat
     args = _parse_cli_args(["watch", "--mode", "img_conv", "--engine", "pandoc"])
     with pytest.raises(ConfigError):
         _ = _watch_config_from_cli(args)
+
+
+def test_scorm12_package_and_cli(tmp_path: Path) -> None:
+    source = tmp_path / "quiz.md"
+    output = tmp_path / "out" / "quiz.zip"
+    source.write_text(
+        "# Python 基礎\n\n## 変数とは？\n値を **保存** する仕組みです。\n"
+        "- [ ] A. 関数\n- [x] B. 名前付きの領域\n\n"
+        "## 型とは？\nデータの種類です。\n- [x] A. データの種類\n- [ ] B. ファイル\n",
+        encoding="utf-8",
+    )
+    from ml_writing_helper.main import main
+
+    assert main(["scorm", str(source), "--output", str(output)]) == 0
+    with zipfile.ZipFile(output) as package:
+        assert package.namelist() == ["imsmanifest.xml", "index.html"]
+        manifest = ET.fromstring(package.read("imsmanifest.xml"))
+        page = package.read("index.html").decode("utf-8")
+    assert manifest.find("{http://www.imsproject.org/xsd/imscp_rootv1p1p2}metadata/{http://www.imsproject.org/xsd/imscp_rootv1p1p2}schemaversion").text == "1.2"
+    assert manifest.find(".//{http://www.imsproject.org/xsd/imscp_rootv1p1p2}resource").attrib[
+        "{http://www.adlnet.org/xsd/adlcp_rootv1p2}scormtype"
+    ] == "sco"
+    assert "cmi.core.score.raw" in page
+    assert "cmi.interactions." in page
+    assert "padStart(4, '0')" in page
+    assert "\\u003cstrong>保存\\u003c/strong>" in page
+
+
+def test_parse_quiz_requires_one_correct_answer() -> None:
+    with pytest.raises(Scorm12Error, match="正解は1つだけ"):
+        parse_quiz("## 問題\n問い\n- [ ] A. いいえ\n- [ ] B. はい\n")
 
 
 def test_browser_html_keeps_mermaid_block(tmp_path: Path) -> None:

@@ -20,6 +20,8 @@
     1. グレースケールの画像に変換できます。
 1. ドキュメント変換
     1. Markdown (.md) / HTML ファイルが変更されたときに、PDF、HTML、DOCX へ変換でき、mermaid / PlantUML ダイアグラム、数式 (KaTeX)、Marp / Slidev スライドをレンダリングできます。
+1. 小テストのSCORM出力
+  1. Markdownで作成した単一選択式の問題をSCORM 1.2形式のZIPパッケージに変換できます。
 
 
 ## パッケージのビルド
@@ -55,6 +57,25 @@ python -m build --wheel
 
 以下のいずれかのオプションで実行方法を選択します。これらは組み合わせて使用できません。
 
+#### MarkdownからSCORM 1.2を作成
+
+問題ごとに `##` 見出しを付け、選択肢を `- [ ] A. 選択肢` と記述します。正解の選択肢は `[x]` にします。1問につき正解は1つ、選択肢は2つ以上必要です。
+
+```markdown
+# Python 基礎
+
+## 変数とは？
+値を保存する仕組みです。
+- [ ] A. 関数
+- [x] B. 名前付きの領域
+```
+
+```bash
+ml_writing_helper scorm quiz.md --output quiz_scorm12.zip
+```
+
+生成したZIPをLMSにコース教材として登録します。受講時に得点と完了状態をSCORM 1.2 APIへ送信します。
+
 | コマンド                                                    | 動作                                                                                       |
 | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
 | `ml_writing_helper` (引数なし) / `ml_writing_helper --help` | ヘルプメッセージを表示                                                                     |
@@ -65,6 +86,7 @@ python -m build --wheel
 | `ml_writing_helper --mode doc_conv [params...]`             | モード `doc_conv`: CLI パラメータからの 1 つのドキュメント変換タスク                       |
 | `ml_writing_helper --conf-maker-web [PATH]`                 | Web UI (ブラウザ) で json ファイルを作成/編集。PATH なしの場合、`./ml_writing_helper.json` |
 | `ml_writing_helper --conf-maker-cli [PATH]`                 | ターミナルで対話的に json ファイルを作成/編集。PATH なしの場合、`./ml_writing_helper.json` |
+| `ml_writing_helper scorm INPUT.md --output OUTPUT.zip`      | Markdownの単一選択式問題をSCORM 1.2パッケージに変換                                        |
 
 - `--mode` のパラメータ (`--src`、`--ext`、`--root`、`--log-level` など) は、`--mode` と同時に使用するのみ可能です。`--json` や `--conf-maker-*` の場合は、代わりに json ファイルに記述してください。
 - 複数のタスクを一度に実行する (例: img_conv と copy) には、json ファイルを使用してください。

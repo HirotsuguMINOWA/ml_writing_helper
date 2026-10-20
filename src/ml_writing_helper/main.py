@@ -41,6 +41,7 @@ from ml_writing_helper.converter.doc_converter import (
     DOC_OUTPUT_FORMATS,
     normalize_input_patterns,
 )
+from ml_writing_helper.converter.scorm12 import Scorm12Error, build_scorm12_package
 from ml_writing_helper.config import (
     CONFIG_FILENAME,
     DEFAULT_COPY_EXTS,
@@ -934,8 +935,8 @@ def _available_observer_backends() -> list[str]:
 
 
 PROG_NAME: Final[str] = "ml_writing_helper"
-# legacy subcommands of `ml_writing_helper`, each doing a single task
-CLI_COMMANDS: Final[tuple[str, ...]] = ("convert", "monitor")
+# standalone subcommands of `ml_writing_helper`, each doing a single task
+CLI_COMMANDS: Final[tuple[str, ...]] = ("convert", "monitor", "scorm")
 # `watch` used to be a subcommand (watch4ml); it is now the default behavior. see _parse_cli_args
 LEGACY_WATCH_COMMAND: Final[str] = "watch"
 WATCH_MODES: Final[tuple[str, ...]] = ("img_conv", "copy", "doc_conv")
@@ -1094,7 +1095,7 @@ def _build_cli_parser() -> argparse.ArgumentParser:
 
     subparsers = parser.add_subparsers(
         dest="command",
-        title="legacy subcommands (one task only, --monitor is not used)",
+        title="subcommands (one task only, --monitor is not used)",
         metavar="{%s}" % ",".join(CLI_COMMANDS),
     )
 
@@ -1115,6 +1116,12 @@ def _build_cli_parser() -> argparse.ArgumentParser:
     _ = monitor_parser.add_argument("to_fmt", help="destination format such as png or .png")
     _add_common_conv_args(monitor_parser)
     _add_common_monitor_args(monitor_parser)
+
+    scorm_parser = subparsers.add_parser(
+        "scorm", prog=f"{PROG_NAME} scorm", help="build a SCORM 1.2 package from a Markdown quiz"
+    )
+    _ = scorm_parser.add_argument("src_path", help="Markdown quiz file")
+    _ = scorm_parser.add_argument("-o", "--output", required=True, help="output SCORM ZIP file")
     return parser
 
 
@@ -1447,6 +1454,14 @@ def main(argv: list[str] | None = None) -> int:
         return _run_convert_cli(args)
     if args.command == "monitor":
         return _run_monitor_cli(args)
+    if args.command == "scorm":
+        try:
+            build_scorm12_package(Path(args.src_path), Path(args.output))
+        except Scorm12Error as e:
+            print(f"SCORM変換エラー: {e}", file=sys.stderr)
+            return 2
+        logger.info("SCORM 1.2 package created: {}", args.output)
+        return 0
     return _run_watch_cli(args)
 
 
