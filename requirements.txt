@@ -1,7 +1,0 @@
-# requirements.txt
-
-loguru
-pdf2image
-Pillow
-watchdog
-pdfCropMargins
