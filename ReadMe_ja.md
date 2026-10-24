@@ -53,7 +53,7 @@ python -m build --wheel
 ### メインコマンド (`ml_writing_helper`)
 
 すべての機能は、単一のコマンド `ml_writing_helper` によって提供されます
-(かつての `watch4ml` と `convert4ml` はこれに統合されました。1 回だけ実行するか監視を続けるかは `--monitor` で指定します)。
+(かつての `watch4ml` と `convert4ml` はこれに統合されました。1 回だけ実行するか監視を続けるかは `--watch` で指定します)。
 
 以下のいずれかのオプションで実行方法を選択します。これらは組み合わせて使用できません。
 
@@ -72,17 +72,17 @@ python -m build --wheel
 - `--mode` のパラメータ (`--src`、`--ext`、`--root`、`--log-level` など) は、`--mode` と同時に使用するのみ可能です。`--json` や `--conf-maker-*` の場合は、代わりに json ファイルに記述してください。
 - 複数のタスクを一度に実行する (例: img_conv と copy) には、json ファイルを使用してください。
 
-#### 1 回だけ実行するか監視を続けるか (`--monitor`)
+#### 1 回だけ実行するか監視を続けるか (`--watch`)
 
-- `--monitor` なしの場合、すべてのタスクが 1 回だけ実行され (必要なファイルが変換 / コピーされる)、コマンドは終了します。
-- `--monitor` 付きの場合、コマンドは継続して動作し、ファイルが変更されるたびに処理を行います。停止するには Ctrl+C を押してください。
-- `--monitor` は、`--json`、`--mode`、`--conf-maker-web`、`--conf-maker-cli` のいずれにも追加できます。
-- json ファイル内では、代わりに `"monitor": true` と記述します。`--monitor` と `"monitor": true` のいずれかが指定されれば、監視が継続します。
+- `--watch` なしの場合、すべてのタスクが 1 回だけ実行され (必要なファイルが変換 / コピーされる)、コマンドは終了します。
+- `--watch` 付きの場合、コマンドは継続して動作し、ファイルが変更されるたびに処理を行います。停止するには Ctrl+C を押してください。
+- `--watch` は、`--json`、`--mode`、`--conf-maker-web`、`--conf-maker-cli` のいずれにも追加できます。
+- json ファイル内では、代わりに `"monitor": true` と記述します。`--watch` と `"monitor": true` のいずれかが指定されれば、監視が継続します。
 
 ```bash
 ml_writing_helper --mode doc_conv --src docs --dst docs_out            # 1 回変換して終了
-ml_writing_helper --mode doc_conv --src docs --dst docs_out --monitor  # 監視を継続
-ml_writing_helper --json --monitor                                     # ./ml_writing_helper.json からのタスク、監視を継続
+ml_writing_helper --mode doc_conv --src docs --dst docs_out --watch    # 監視を継続
+ml_writing_helper --json --watch                                       # ./ml_writing_helper.json からのタスク、監視を継続
 ```
 
 #### json ファイルの作成 (`--conf-maker-web` / `--conf-maker-cli`)
@@ -173,7 +173,7 @@ ml_writing_helper --mode doc_conv --src docs --dst docs_out --ext pdf --ext html
 | `--diff-sec`       | `10`                    | src/dst のタイムスタンプの差がこの秒数以下ならスキップ                                          |
 | `--log-level`      | `INFO`                  | コンソールのログレベル                                                                          |
 | `--root root_PATH` | カレントフォルダー(".") | このアプリが相対パスを理解するための基準 PATH                                                   |
-| `--monitor`        | オフ                    | 変更の監視を継続。なしの場合、1 回だけ実行して終了 (`--json` / `--conf-maker-*` との併用も可能) |
+| `--watch`          | オフ                    | 変更の監視を継続。なしの場合、1 回だけ実行して終了 (`--json` / `--conf-maker-*` との併用も可能) |
 
 
 ##### モード: img_conv
@@ -267,14 +267,14 @@ doc_conv の必要条件 (使用する分のみ):
 | `--src PATH` | `.`                  | 小テストの Markdown ファイル、またはフォルダー（直下の `--pattern` に合うファイルが対象）。1 回のみ                                 |
 | `--dst PATH` | `--src` のフォルダー | 出力フォルダー（存在しなければ作成）。`<ファイル名>_scorm12.zip` で出力。`--src` がファイルのときは `.zip` のパスも指定可。1 回のみ |
 | `--pattern`  | `*.md`               | `--src` がフォルダーのときの変換対象ファイル名。繰り返し指定可（例: `"*_quiz.md"`）                                                 |
-| `--monitor`  | オフ                 | 終了せずに監視を続け、小テストのファイルが更新されるたびにパッケージを作り直す（Ctrl+C で停止）                                     |
+| `--watch`    | オフ                 | 終了せずに監視を続け、小テストのファイルが更新されるたびにパッケージを作り直す（Ctrl+C で停止）                                     |
 
 ```bash
 # 1 ファイル -> quiz_scorm12.zip（1 回だけ実行して終了）
 ml_writing_helper --mode scorm --src quiz.md --dst quiz_scorm12.zip
 
 # quiz/*_quiz.md -> scorm_out/<ファイル名>_scorm12.zip。更新されるたびに作り直す
-ml_writing_helper --mode scorm --src quiz --dst scorm_out --pattern "*_quiz.md" --monitor
+ml_writing_helper --mode scorm --src quiz --dst scorm_out --pattern "*_quiz.md" --watch
 ```
 
 json タスクのキー（`"type": "scorm"`）: `src`（必須）、`dst`（既定: `src` のフォルダー）、`pattern`（文字列 / リスト、既定 `"*.md"`）、`diff_sec`（整数、既定 `10`）。
@@ -304,7 +304,7 @@ json タスクのキー（`"type": "scorm"`）: `src`（必須）、`dst`（既�
 ```
 
 - 書式に合わないファイルはエラーをログに出してスキップします（他のファイルは変換されます）。
-- 起動時は、小テストがパッケージより `--diff-sec` 秒を超えて新しいときだけ作り直します。監視中（`--monitor`）は、小テストの方が新しければ作り直します。
+- 起動時は、小テストがパッケージより `--diff-sec` 秒を超えて新しいときだけ作り直します。監視中（`--watch`）は、小テストの方が新しければ作り直します。
 
 
 ### 単一ファイル変換 (レガシーサブコマンド)
@@ -313,7 +313,7 @@ json タスクのキー（`"type": "scorm"`）: `src`（必須）、`dst`（既�
 
 - `ml_writing_helper convert src_path dst_dir to_fmt [--gray] [--no-crop]`
 - サブコマンド名は省略可能: `ml_writing_helper src_path dst_dir to_fmt` (かつての `convert4ml` と同じ)
-- `ml_writing_helper monitor src_dir dst_dir to_fmt` は 1 つのフォルダーを監視し、`--monitor` なしで監視を継続します
+- `ml_writing_helper monitor src_dir dst_dir to_fmt` は 1 つのフォルダーを監視し、`--watch` なしで監視を継続します
 
 ## インストール
 

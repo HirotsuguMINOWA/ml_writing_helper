@@ -28,7 +28,7 @@ def test_cli_monitor_flag(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> No
     monkeypatch.chdir(tmp_path)
     args = _parse_cli_args(["--mode", "doc_conv", "--src", "docs"])
     assert _watch_config_from_cli(args).monitor is False
-    args = _parse_cli_args(["--mode", "doc_conv", "--src", "docs", "--monitor"])
+    args = _parse_cli_args(["--mode", "doc_conv", "--src", "docs", "--watch"])
     assert _watch_config_from_cli(args).monitor is True
 
 
@@ -41,7 +41,7 @@ def test_options_without_subcommand_are_the_watch_flow() -> None:
 
 def test_legacy_watch_token_is_ignored() -> None:
     """The former `watch` subcommand is accepted as a no-op alias."""
-    args = _parse_cli_args(["watch", "--mode", "doc_conv", "--src", "docs", "--monitor"])
+    args = _parse_cli_args(["watch", "--mode", "doc_conv", "--src", "docs", "--watch"])
     assert args.command is None
     assert args.mode == "doc_conv" and args.monitor is True
 
@@ -62,16 +62,16 @@ def test_monitor_subcommand_is_kept() -> None:
 
 def test_no_argument_shows_help(capsys: pytest.CaptureFixture[str]) -> None:
     assert main_mod.main([]) == 0
-    assert "--monitor" in capsys.readouterr().out
+    assert "--watch" in capsys.readouterr().out
 
 
 def test_cli_monitor_usable_with_json() -> None:
-    args = _parse_cli_args(["--json", "x.json", "--monitor"])
+    args = _parse_cli_args(["--json", "x.json", "--watch"])
     assert _check_watch_args(args) == "json"
 
 
 def test_cli_monitor_alone_is_error() -> None:
-    args = _parse_cli_args(["--monitor"])
+    args = _parse_cli_args(["--watch"])
     with pytest.raises(ConfigError):
         _ = _check_watch_args(args)
 
@@ -83,7 +83,7 @@ def test_without_monitor_runs_once_and_exits(tmp_path: Path, monkeypatch: pytest
     monkeypatch.chdir(tmp_path)
 
     def fail(*_args, **_kwargs):
-        raise AssertionError("observer must not be built without --monitor")
+        raise AssertionError("observer must not be built without --watch")
 
     monkeypatch.setattr(main_mod, "_build_observer", fail)
     code = main_mod.main(["--mode", "doc_conv", "--src", "docs", "--dst", "out",

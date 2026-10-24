@@ -53,7 +53,7 @@ Please install the following software before using this package.
 ### main command (`ml_writing_helper`)
 
 All functions are provided by the single command `ml_writing_helper`
-(the former `watch4ml` and `convert4ml` were merged into it; `--monitor` decides run-once or keep-watching).
+(the former `watch4ml` and `convert4ml` were merged into it; `--watch` decides run-once or keep-watching).
 
 Choose how to run with one of the following options. They cannot be combined.
 
@@ -72,17 +72,17 @@ Choose how to run with one of the following options. They cannot be combined.
 - The parameters of `--mode` (`--src`, `--ext`, `--root`, `--log-level`, ...) can be used only with `--mode`. With `--json` or `--conf-maker-*`, write them in the json file instead.
 - To run multiple tasks at once (e.g. img_conv and copy), use the json file.
 
-#### Run once or keep watching (`--monitor`)
+#### Run once or keep watching (`--watch`)
 
-- Without `--monitor`, all tasks run once (files that need it are converted / copied) and the command exits.
-- With `--monitor`, the command keeps running and processes files whenever they change. Stop it with Ctrl+C.
-- `--monitor` can be added to any of `--json`, `--mode`, `--conf-maker-web`, `--conf-maker-cli`.
-- In the json file, write `"monitor": true` instead. Watching continues if either `--monitor` or `"monitor": true` is given.
+- Without `--watch`, all tasks run once (files that need it are converted / copied) and the command exits.
+- With `--watch`, the command keeps running and processes files whenever they change. Stop it with Ctrl+C.
+- `--watch` can be added to any of `--json`, `--mode`, `--conf-maker-web`, `--conf-maker-cli`.
+- In the json file, write `"monitor": true` instead. Watching continues if either `--watch` or `"monitor": true` is given.
 
 ```bash
 ml_writing_helper --mode doc_conv --src docs --dst docs_out            # convert once and exit
-ml_writing_helper --mode doc_conv --src docs --dst docs_out --monitor  # keep watching
-ml_writing_helper --json --monitor                                     # tasks from ./ml_writing_helper.json, keep watching
+ml_writing_helper --mode doc_conv --src docs --dst docs_out --watch    # keep watching
+ml_writing_helper --json --watch                                       # tasks from ./ml_writing_helper.json, keep watching
 ```
 
 #### Creating the json file (`--conf-maker-web` / `--conf-maker-cli`)
@@ -176,7 +176,7 @@ Available in every mode (e.g. `ml_writing_helper --mode copy --src a --dst b --l
 | `--diff-sec`       | `10`                | Skip when src/dst timestamps differ by this many seconds or less                                             |
 | `--log-level`      | `INFO`              | Console log level                                                                                            |
 | `--root root_PATH` | current folder(".") | The base PATH for this app to understand relative PATH                                                       |
-| `--monitor`        | off                 | Keep watching for changes. Without it, run once and exit (can also be used with `--json` / `--conf-maker-*`) |
+| `--watch`          | off                 | Keep watching for changes. Without it, run once and exit (can also be used with `--json` / `--conf-maker-*`) |
 
 ##### Mode: img_conv
 
@@ -268,14 +268,14 @@ When a learner submits the quiz, the score (`cmi.core.score.raw`), completion st
 | `--src PATH` | `.`               | A Markdown quiz file, or a folder (files matching `--pattern` directly under it). Once only                                                |
 | `--dst PATH` | folder of `--src` | Output folder (created if missing), written as `<name>_scorm12.zip`. When `--src` is a file, a `.zip` path can be given instead. Once only |
 | `--pattern`  | `*.md`            | File names to convert when `--src` is a folder. Repeatable (e.g. `"*_quiz.md"`)                                                            |
-| `--monitor`  | off               | Keep running and rebuild the package whenever a quiz file is updated (stop with Ctrl+C)                                                    |
+| `--watch`    | off               | Keep running and rebuild the package whenever a quiz file is updated (stop with Ctrl+C)                                                    |
 
 ```bash
 # one file -> quiz_scorm12.zip (run once and exit)
 ml_writing_helper --mode scorm --src quiz.md --dst quiz_scorm12.zip
 
 # every quiz/*_quiz.md -> scorm_out/<name>_scorm12.zip, and keep rebuilding when they are updated
-ml_writing_helper --mode scorm --src quiz --dst scorm_out --pattern "*_quiz.md" --monitor
+ml_writing_helper --mode scorm --src quiz --dst scorm_out --pattern "*_quiz.md" --watch
 ```
 
 json task keys (`"type": "scorm"`): `src` (required), `dst` (default: folder of `src`), `pattern` (string / list, default `"*.md"`), `diff_sec` (int, default `10`).
@@ -305,7 +305,7 @@ A mechanism to **store** a value.
 ```
 
 - If a file does not follow the format, an error is logged and that file is skipped (other files are still converted).
-- At startup, a package is rebuilt only when the quiz is newer than it by more than `--diff-sec` seconds. While watching (`--monitor`), it is rebuilt whenever the quiz is newer.
+- At startup, a package is rebuilt only when the quiz is newer than it by more than `--diff-sec` seconds. While watching (`--watch`), it is rebuilt whenever the quiz is newer.
 
 
 ### single file conversion (legacy subcommand)
@@ -314,7 +314,7 @@ These legacy subcommands still work but are not shown in `--help`. Use `--mode` 
 
 - `ml_writing_helper convert src_path dst_dir to_fmt [--gray] [--no-crop]`
 - The subcommand name can be omitted: `ml_writing_helper src_path dst_dir to_fmt` (as the former `convert4ml`)
-- `ml_writing_helper monitor src_dir dst_dir to_fmt` watches one folder and keeps watching without `--monitor`
+- `ml_writing_helper monitor src_dir dst_dir to_fmt` watches one folder and keeps watching without `--watch`
 
 ## Install
 

@@ -1,5 +1,14 @@
 # Change History
 
+## 2026-10-25
+
+### Changed: the `--monitor` option was renamed to `--watch`
+
+- `ml_writing_helper --mode doc_conv --src docs --dst out --watch` keeps watching; without `--watch` all tasks run once and exit
+- `--monitor` is no longer accepted (argparse error). Replace it with `--watch` in your scripts
+- Unchanged: the json key `"monitor": true`, the legacy `monitor` subcommand, and `Monitor().start_monitors(monitor=...)` from Python
+- Changed: `main.py`, `ReadMe.md`, `ReadMe_ja.md`, `sandbox/start_watcher.py`, `test/test_monitor_option.py`
+
 ## 2026-10-15(v0.10.0)
 
 ### Changed: the two commands were merged into `ml_writing_helper`

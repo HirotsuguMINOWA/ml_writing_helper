@@ -960,7 +960,7 @@ LEGACY_WATCH_COMMAND: Final[str] = "watch"
 WATCH_MODES: Final[tuple[str, ...]] = ("img_conv", "copy", "doc_conv", "scorm")
 # `ml_writing_helper` entry options: exactly one of them selects what to do (dest names)
 WATCH_LAUNCHERS: Final[tuple[str, ...]] = ("json", "mode", "conf_maker_web", "conf_maker_cli")
-DEFAULT_MONITOR_HINT: Final[str] = "without --monitor, all tasks run once and the command exits"
+DEFAULT_MONITOR_HINT: Final[str] = "without --watch, all tasks run once and the command exits"
 # options usable only with --mode (dest names)
 WATCH_MODE_OPTIONS: Final[tuple[str, ...]] = (
     "src", "dst", "ext", "gray", "no_crop", "engine", "pattern", "header",
@@ -968,11 +968,11 @@ WATCH_MODE_OPTIONS: Final[tuple[str, ...]] = (
 )
 WATCH_EPILOG: Final[str] = f"""examples:
   {PROG_NAME} --mode img_conv --ext pdf --gray          # convert once and exit
-  {PROG_NAME} --mode img_conv --ext pdf --monitor       # keep watching for changes
+  {PROG_NAME} --mode img_conv --ext pdf --watch         # keep watching for changes
   {PROG_NAME} --mode copy --src ~/Documents/BibTexExported --dst bib
   {PROG_NAME} --mode doc_conv --src docs --dst docs_out --ext pdf --ext html
   {PROG_NAME} --mode scorm --src quiz.md --dst quiz_scorm12.zip
-  {PROG_NAME} --mode scorm --src quiz --dst scorm_out --monitor   # rebuild when a quiz .md changes
+  {PROG_NAME} --mode scorm --src quiz --dst scorm_out --watch     # rebuild when a quiz .md changes
   {PROG_NAME} --json                       # use ./{CONFIG_FILENAME}
   {PROG_NAME} --json my_tasks.json
   {PROG_NAME} --json '{{"mode": "copy", "src": "a", "dst": "b"}}'
@@ -1046,7 +1046,8 @@ def _add_watch_args(parser: argparse.ArgumentParser) -> None:
         help=f"create/edit the json file interactively in the terminal (default: ./{CONFIG_FILENAME})",
     )
     _ = launch.add_argument(
-        "--monitor",
+        "--watch",
+        dest="monitor",
         action="store_true",
         help="keep running and process files when they change (json: \"monitor\": true). "
              f"Usable with all of the above; {DEFAULT_MONITOR_HINT}",
@@ -1107,7 +1108,7 @@ def _build_cli_parser() -> argparse.ArgumentParser:
         description=(
             "Markuplanguage(.md, .tex) Helper: convert figures / copy files / convert documents / build SCORM 1.2 quizzes. "
             "Choose one of --json, --mode, --conf-maker-web, --conf-maker-cli. "
-            "Add --monitor to keep watching for changes; otherwise all tasks run once and the command exits. "
+            "Add --watch to keep watching for changes; otherwise all tasks run once and the command exits. "
             "With no argument, this help is shown."
         ),
         epilog=WATCH_EPILOG,
@@ -1133,7 +1134,7 @@ def _build_legacy_parser() -> argparse.ArgumentParser:
 
     monitor_parser = subparsers.add_parser(
         "monitor", prog=f"{PROG_NAME} monitor",
-        help="watch one directory and convert changed files (keeps watching without --monitor)",
+        help="watch one directory and convert changed files (keeps watching without --watch)",
     )
     _ = monitor_parser.add_argument("src_dir", help="source directory to monitor")
     _ = monitor_parser.add_argument("dst_dir", help="destination directory")
@@ -1373,13 +1374,13 @@ def _check_watch_args(args: argparse.Namespace) -> str | None:
         "  --mode img_conv|copy|doc_conv|scorm [パラメータ...]\n"
         "  --conf-maker-web [ファイルのパス]\n"
         "  --conf-maker-cli [ファイルのパス]\n"
-        "変更を監視し続けるには --monitor を付けてください\n"
+        "変更を監視し続けるには --watch を付けてください\n"
         f"使い方は {PROG_NAME} --help で確認できます"
     )
     if not launchers:
         if args.monitor and not mode_options:
             raise ConfigError(
-                ["--monitor は --json / --mode / --conf-maker-web / --conf-maker-cli と一緒に指定してください"],
+                ["--watch は --json / --mode / --conf-maker-web / --conf-maker-cli と一緒に指定してください"],
                 title="起動方法が指定されていません",
                 hint=how_to,
             )
@@ -1445,7 +1446,7 @@ def _resolve_watch_config(args: argparse.Namespace, launcher: str) -> WatchConfi
 
 
 def _run_watch_config(config: WatchConfig, monitor: bool = False) -> int:
-    """Run the tasks. Keep watching if ``monitor`` (CLI --monitor) or ``config.monitor`` (json) is True."""
+    """Run the tasks. Keep watching if ``monitor`` (CLI --watch) or ``config.monitor`` (json) is True."""
     _set_log_level(config.log_level)
     monitor_ins = Monitor(observer_backend=config.observer)
     for task in config.tasks:
@@ -1487,7 +1488,7 @@ def _run_watch_config(config: WatchConfig, monitor: bool = False) -> int:
             )
     keep_watching = monitor or config.monitor
     if not keep_watching:
-        logger.info("Run all tasks once (add --monitor or \"monitor\": true to keep watching)")
+        logger.info("Run all tasks once (add --watch or \"monitor\": true to keep watching)")
     monitor_ins.start_monitors(sleep_sec=config.sleep_sec, monitor=keep_watching)
     return 0
 
@@ -1509,7 +1510,7 @@ def _run_watch_cli(args: argparse.Namespace) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
-    """Entry point of the `ml_writing_helper` command. --monitor decides run-once or keep-watching."""
+    """Entry point of the `ml_writing_helper` command. --watch decides run-once or keep-watching."""
     args = _parse_cli_args(argv=argv)
     if args.command == "convert":
         return _run_convert_cli(args)
