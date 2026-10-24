@@ -41,10 +41,11 @@ from ml_writing_helper.converter.doc_converter import (
     DOC_OUTPUT_FORMATS,
     normalize_input_patterns,
 )
-from ml_writing_helper.converter.scorm12 import Scorm12Error, build_scorm12_package
+from ml_writing_helper.task_runner.scorm_runner import ScormTask
 from ml_writing_helper.config import (
     CONFIG_FILENAME,
     DEFAULT_COPY_EXTS,
+    DEFAULT_SCORM_PATTERNS,
     DEFAULT_DIFF_SEC,
     DEFAULT_LOG_LEVEL,
     DEFAULT_OBSERVER,
@@ -55,6 +56,7 @@ from ml_writing_helper.config import (
     CopyTaskConfig,
     DocConvTaskConfig,
     ImgConvTaskConfig,
+    ScormTaskConfig,
     TaskConfig,
     WatchConfig,
     format_config_error,
@@ -205,7 +207,7 @@ class Monitor(FileSystemEventHandler):
         # self._to_fmt: str | None = None
         # self._monitors: dict[tuple[Path, Path], MonitorCallback] = {}
         # self._monitor_fmts: dict[tuple[Path, Path], str] = {}
-        self._tasks: list[CopyTask | ABCTaskRunner | ImgConvTaskStruct | DocConvTask] = list()
+        self._tasks: list[CopyTask | ABCTaskRunner | ImgConvTaskStruct | DocConvTask | ScormTask] = list()
         self._state: StateMonitor = StateMonitor.wait
         self._observer_backend: str = _normalize_observer_backend(observer_backend)
         # self._ppaths_soffice2: list[Path] = self._ppaths_soffice()
@@ -807,6 +809,22 @@ class Monitor(FileSystemEventHandler):
             )
         )
 
+    def set_scorm(
+            self,
+            src: str | Path,
+            dst: str | Path | None = None,
+            patterns: Sequence[str] = DEFAULT_SCORM_PATTERNS,
+            diff_sec: int = 10,
+    ) -> None:
+        """Markdown の小テストを SCORM 1.2 の ZIP へ変換するタスク。src はファイルかフォルダ。dst 省略時は src のフォルダへ出力する。"""
+        src_pl = self._get_internal_deal_path(path=src)
+        if dst is None:
+            dst_pl = src_pl.parent if src_pl.is_file() else src_pl
+        else:
+            dst_pl = self._get_internal_deal_path(path=dst)
+        (dst_pl.parent if dst_pl.suffix.lower() == ".zip" else dst_pl).mkdir(parents=True, exist_ok=True)
+        self._tasks.append(ScormTask(src_path=src_pl, dst_path=dst_pl, patterns=patterns, diff_sec=diff_sec))
+
     def stop(self) -> None:
         if self._observer is None:
             return
@@ -935,11 +953,11 @@ def _available_observer_backends() -> list[str]:
 
 
 PROG_NAME: Final[str] = "ml_writing_helper"
-# standalone subcommands of `ml_writing_helper`, each doing a single task
-CLI_COMMANDS: Final[tuple[str, ...]] = ("convert", "monitor", "scorm")
+# legacy subcommands (the former convert4ml / monitor). Hidden from --help; use --mode instead
+CLI_COMMANDS: Final[tuple[str, ...]] = ("convert", "monitor")
 # `watch` used to be a subcommand (watch4ml); it is now the default behavior. see _parse_cli_args
 LEGACY_WATCH_COMMAND: Final[str] = "watch"
-WATCH_MODES: Final[tuple[str, ...]] = ("img_conv", "copy", "doc_conv")
+WATCH_MODES: Final[tuple[str, ...]] = ("img_conv", "copy", "doc_conv", "scorm")
 # `ml_writing_helper` entry options: exactly one of them selects what to do (dest names)
 WATCH_LAUNCHERS: Final[tuple[str, ...]] = ("json", "mode", "conf_maker_web", "conf_maker_cli")
 DEFAULT_MONITOR_HINT: Final[str] = "without --monitor, all tasks run once and the command exits"
@@ -953,12 +971,13 @@ WATCH_EPILOG: Final[str] = f"""examples:
   {PROG_NAME} --mode img_conv --ext pdf --monitor       # keep watching for changes
   {PROG_NAME} --mode copy --src ~/Documents/BibTexExported --dst bib
   {PROG_NAME} --mode doc_conv --src docs --dst docs_out --ext pdf --ext html
+  {PROG_NAME} --mode scorm --src quiz.md --dst quiz_scorm12.zip
+  {PROG_NAME} --mode scorm --src quiz --dst scorm_out --monitor   # rebuild when a quiz .md changes
   {PROG_NAME} --json                       # use ./{CONFIG_FILENAME}
   {PROG_NAME} --json my_tasks.json
   {PROG_NAME} --json '{{"mode": "copy", "src": "a", "dst": "b"}}'
   {PROG_NAME} --conf-maker-web             # create ./{CONFIG_FILENAME} in a web UI
   {PROG_NAME} --conf-maker-cli             # create ./{CONFIG_FILENAME} interactively in the terminal
-  {PROG_NAME} convert fig_src/fig1.pptx fig_gen pdf     # convert one file (legacy subcommand)
 
 watchdog observerは既定でpollingです。クラウドストレージの変更追従を優先します。
 """
@@ -1037,16 +1056,19 @@ def _add_watch_args(parser: argparse.ArgumentParser) -> None:
         "--mode parameters",
         "img_conv: --src/--dst/--ext once each, --gray, --no-crop. "
         "copy: --src/--dst/--ext repeatable (--src and --dst required). "
-        "doc_conv: --src/--dst once each, --ext/--pattern/--header repeatable, --engine",
+        "doc_conv: --src/--dst once each, --ext/--pattern/--header repeatable, --engine. "
+        "scorm: --src (Markdown quiz file or dir)/--dst once each, --pattern repeatable",
     )
     _ = task.add_argument(
         "--src", action="append", metavar="DIR",
-        help="source dir to watch (img_conv default: fig_src, doc_conv default: current dir)",
+        help="source dir to watch (img_conv default: fig_src, doc_conv/scorm default: current dir). "
+             "scorm: a Markdown quiz file is also accepted",
     )
     _ = task.add_argument(
         "--dst", action="append", metavar="DIR",
-        help="output dir, created if missing (img_conv default: fig_gen, doc_conv default: same as --src). "
-             "copy: paired with --src in order, or a single --dst receives all --src",
+        help="output dir, created if missing (img_conv default: fig_gen, doc_conv/scorm default: same as --src). "
+             "copy: paired with --src in order, or a single --dst receives all --src. "
+             "scorm: a .zip path is also accepted when --src is a file",
     )
     _ = task.add_argument(
         "--ext", action="append", type=strip_dot, metavar="EXT",
@@ -1063,7 +1085,7 @@ def _add_watch_args(parser: argparse.ArgumentParser) -> None:
     )
     _ = task.add_argument(
         "--pattern", action="append", metavar="GLOB",
-        help='doc_conv: file names to convert, repeatable (default: "*.md"). e.g. "*_marp.md", "*.html"',
+        help='doc_conv/scorm: file names to convert, repeatable (default: "*.md"). e.g. "*_marp.md", "*.html"',
     )
     _ = task.add_argument(
         "--header", action="append", metavar="TEX",
@@ -1083,7 +1105,7 @@ def _build_cli_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog=PROG_NAME,
         description=(
-            "Markuplanguage(.md, .tex) Helper: convert figures / copy files / convert documents. "
+            "Markuplanguage(.md, .tex) Helper: convert figures / copy files / convert documents / build SCORM 1.2 quizzes. "
             "Choose one of --json, --mode, --conf-maker-web, --conf-maker-cli. "
             "Add --monitor to keep watching for changes; otherwise all tasks run once and the command exits. "
             "With no argument, this help is shown."
@@ -1092,12 +1114,14 @@ def _build_cli_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     _add_watch_args(parser)
+    parser.set_defaults(command=None)
+    return parser
 
-    subparsers = parser.add_subparsers(
-        dest="command",
-        title="subcommands (one task only, --monitor is not used)",
-        metavar="{%s}" % ",".join(CLI_COMMANDS),
-    )
+
+def _build_legacy_parser() -> argparse.ArgumentParser:
+    """Parser of the legacy subcommands `convert` / `monitor`. They are kept working but not shown in --help."""
+    parser = argparse.ArgumentParser(prog=PROG_NAME)
+    subparsers = parser.add_subparsers(dest="command", required=True)
 
     convert_parser = subparsers.add_parser(
         "convert", prog=f"{PROG_NAME} convert", help="convert a single file and exit (the former convert4ml)"
@@ -1116,26 +1140,21 @@ def _build_cli_parser() -> argparse.ArgumentParser:
     _ = monitor_parser.add_argument("to_fmt", help="destination format such as png or .png")
     _add_common_conv_args(monitor_parser)
     _add_common_monitor_args(monitor_parser)
-
-    scorm_parser = subparsers.add_parser(
-        "scorm", prog=f"{PROG_NAME} scorm", help="build a SCORM 1.2 package from a Markdown quiz"
-    )
-    _ = scorm_parser.add_argument("src_path", help="Markdown quiz file")
-    _ = scorm_parser.add_argument("-o", "--output", required=True, help="output SCORM ZIP file")
     return parser
 
 
 def _parse_cli_args(argv: list[str] | None = None) -> argparse.Namespace:
     """Parse argv of `ml_writing_helper`. ``command`` is None when the main (watch) options are used."""
-    parser = _build_cli_parser()
     args_in = list(sys.argv[1:] if argv is None else argv)
     if args_in and args_in[0] == LEGACY_WATCH_COMMAND:
         # `watch4ml watch ...` / `watch4ml ...`: the former subcommand is now the default behavior
         args_in = args_in[1:]
-    elif args_in and args_in[0] not in CLI_COMMANDS and not args_in[0].startswith("-"):
-        # `ml_writing_helper fig.pptx fig_gen pdf` works like the former convert4ml
-        args_in = ["convert", *args_in]
-    return parser.parse_args(args_in)
+    elif args_in and not args_in[0].startswith("-"):
+        if args_in[0] not in CLI_COMMANDS:
+            # `ml_writing_helper fig.pptx fig_gen pdf` works like the former convert4ml
+            args_in = ["convert", *args_in]
+        return _build_legacy_parser().parse_args(args_in)
+    return _build_cli_parser().parse_args(args_in)
 
 
 def _set_log_level(level: str) -> None:
@@ -1205,14 +1224,18 @@ def _watch_config_from_cli(args: argparse.Namespace) -> WatchConfig:
     errors: list[str] = []
     tasks: list[TaskConfig] = []
 
-    doc_only = ("engine", "pattern", "header")
+    doc_only = ("engine", "header")
     if args.mode != "doc_conv":
         errors.extend(f"{_opt(flag)} は --mode doc_conv でだけ使えます" for flag in doc_only if getattr(args, flag))
+    if args.mode not in ("doc_conv", "scorm") and args.pattern:
+        errors.append("--pattern は --mode doc_conv / scorm でだけ使えます")
     if args.mode != "img_conv":
         errors.extend(f"{_opt(flag)} は --mode img_conv でだけ使えます" for flag in ("gray", "no_crop") if getattr(args, flag))
 
     if args.mode == "doc_conv":
         tasks.append(_doc_conv_config_from_cli(args, root, srcs, dsts, exts, errors))
+    elif args.mode == "scorm":
+        tasks.append(_scorm_config_from_cli(args, root, srcs, dsts, exts, errors))
     elif args.mode == "img_conv":
         for name, values in (("--src", srcs), ("--dst", dsts), ("--ext", exts)):
             if len(values) > 1:
@@ -1305,6 +1328,41 @@ def _doc_conv_config_from_cli(
     )
 
 
+def _scorm_config_from_cli(
+        args: argparse.Namespace,
+        root: Path,
+        srcs: list[str],
+        dsts: list[str],
+        exts: list[str],
+        errors: list[str],
+) -> ScormTaskConfig:
+    """Build the scorm task of `--mode scorm`. Raises ConfigError."""
+    for name, values in (("--src", srcs), ("--dst", dsts)):
+        if len(values) > 1:
+            errors.append(f"--mode scorm では {name} は1つだけ指定できます（{len(values)}個指定されています）")
+    if exts:
+        errors.append("--mode scorm では --ext は使えません（出力は常に SCORM 1.2 の .zip です）")
+    patterns = tuple(args.pattern or DEFAULT_SCORM_PATTERNS)
+    try:
+        _ = normalize_input_patterns(patterns)
+    except ValueError as e:
+        errors.append(f"--pattern の書き方に誤りがあります（{e}）")
+    src_raw = srcs[0] if srcs else "."
+    src = resolve_path(src_raw, root)
+    if not src.exists():
+        errors.append(f"--src の Markdown ファイルかフォルダが見つかりません\n指定値: \"{src_raw}\"\n探した場所: {src}")
+    dst = resolve_path(dsts[0], root) if dsts else (src.parent if src.is_file() else src)
+    if dst.suffix.lower() == ".zip" and src.is_dir():
+        errors.append("--src がフォルダのときは --dst に .zip ではなく出力先のフォルダを指定してください")
+    if errors:
+        raise ConfigError(
+            errors, title=_PARAM_ERROR,
+            hint=f"例: {PROG_NAME} --mode scorm --src quiz.md --dst quiz_scorm12.zip\n"
+                 f"相対パスは --root（{root}）を基準に探します",
+        )
+    return ScormTaskConfig(src=src, dst=dst, patterns=patterns, diff_sec=args.diff_sec)
+
+
 def _check_watch_args(args: argparse.Namespace) -> str | None:
     """Check the combination of `ml_writing_helper` options. Returns the chosen launcher, or None for help."""
     launchers = [name for name in WATCH_LAUNCHERS if getattr(args, name) is not None]
@@ -1312,7 +1370,7 @@ def _check_watch_args(args: argparse.Namespace) -> str | None:
     how_to = (
         "次のどれか1つを指定してください\n"
         "  --json [ファイルのパス または JSON 文字列]\n"
-        "  --mode img_conv|copy|doc_conv [パラメータ...]\n"
+        "  --mode img_conv|copy|doc_conv|scorm [パラメータ...]\n"
         "  --conf-maker-web [ファイルのパス]\n"
         "  --conf-maker-cli [ファイルのパス]\n"
         "変更を監視し続けるには --monitor を付けてください\n"
@@ -1414,6 +1472,9 @@ def _run_watch_config(config: WatchConfig, monitor: bool = False) -> int:
                 copy_exts=task.copy_exts,
                 diff_sec=task.diff_sec,
             )
+        elif isinstance(task, ScormTaskConfig):
+            logger.info(f"SCORM 1.2: {task.src} -> {task.dst} ({', '.join(task.patterns)})")
+            monitor_ins.set_scorm(src=task.src, dst=task.dst, patterns=task.patterns, diff_sec=task.diff_sec)
         else:
             if not task.dst.suffix:
                 task.dst.mkdir(parents=True, exist_ok=True)
@@ -1454,14 +1515,6 @@ def main(argv: list[str] | None = None) -> int:
         return _run_convert_cli(args)
     if args.command == "monitor":
         return _run_monitor_cli(args)
-    if args.command == "scorm":
-        try:
-            build_scorm12_package(Path(args.src_path), Path(args.output))
-        except Scorm12Error as e:
-            print(f"SCORM変換エラー: {e}", file=sys.stderr)
-            return 2
-        logger.info("SCORM 1.2 package created: {}", args.output)
-        return 0
     return _run_watch_cli(args)
 
 

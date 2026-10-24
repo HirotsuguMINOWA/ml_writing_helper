@@ -11,7 +11,8 @@ Example::
       "tasks": [
         {"type": "img_conv", "src": "fig_src", "dst": "fig_gen", "ext": "pdf", "gray": false, "crop": true},
         {"type": "copy", "src": "~/Documents/BibTexExported", "dst": "bib", "exts": ["bib"], "diff_sec": 10},
-        {"type": "doc_conv", "src": "docs", "dst": "docs_out", "ext": ["pdf", "html"], "engine": "auto"}
+        {"type": "doc_conv", "src": "docs", "dst": "docs_out", "ext": ["pdf", "html"], "engine": "auto"},
+        {"type": "scorm", "src": "quiz", "dst": "scorm_out", "pattern": "*.md"}
       ]
     }
 
@@ -43,7 +44,7 @@ from ml_writing_helper.converter.slide_img_converter import ImgConvOutputType
 CONFIG_FILENAME: Final[str] = "ml_writing_helper.json"
 OUTPUT_FORMATS: Final[list[str]] = [str(x) for x in ImgConvOutputType]
 LOG_LEVELS: Final[list[str]] = ["TRACE", "DEBUG", "INFO", "SUCCESS", "WARNING", "ERROR", "CRITICAL"]
-TASK_TYPES: Final[tuple[str, ...]] = ("img_conv", "copy", "doc_conv")
+TASK_TYPES: Final[tuple[str, ...]] = ("img_conv", "copy", "doc_conv", "scorm")
 
 DEFAULT_OBSERVER: Final[str] = "polling"
 DEFAULT_SLEEP_SEC: Final[float] = 1.0
@@ -51,6 +52,7 @@ DEFAULT_LOG_LEVEL: Final[str] = "INFO"
 DEFAULT_MONITOR: Final[bool] = False
 DEFAULT_DIFF_SEC: Final[int] = 10
 DEFAULT_COPY_EXTS: Final[tuple[str, ...]] = ("bib",)
+DEFAULT_SCORM_PATTERNS: Final[tuple[str, ...]] = ("*.md",)
 
 
 class ConfigError(ValueError):
@@ -110,7 +112,15 @@ class DocConvTaskConfig:
     diff_sec: int = DEFAULT_DIFF_SEC
 
 
-TaskConfig = ImgConvTaskConfig | CopyTaskConfig | DocConvTaskConfig
+@dataclass(frozen=True)
+class ScormTaskConfig:
+    src: Path  # Markdown file, or a folder whose files matching ``patterns`` are converted
+    dst: Path  # output folder, or a .zip path when ``src`` is a file
+    patterns: tuple[str, ...] = DEFAULT_SCORM_PATTERNS
+    diff_sec: int = DEFAULT_DIFF_SEC
+
+
+TaskConfig = ImgConvTaskConfig | CopyTaskConfig | DocConvTaskConfig | ScormTaskConfig
 
 
 @dataclass
@@ -179,6 +189,7 @@ _TASK_KEYS: Final[dict[str, tuple[str, ...]]] = {
     "copy": ("type", "mode", "src", "dst", "exts", "ext", "diff_sec"),
     "doc_conv": ("type", "mode", "src", "dst", "ext", "engine", "pattern", "header", "marp_header", "copy_exts",
                  "diff_sec"),
+    "scorm": ("type", "mode", "src", "dst", "pattern", "diff_sec"),
 }
 _TASK_KEYS_ANY: Final[tuple[str, ...]] = tuple(dict.fromkeys(k for keys in _TASK_KEYS.values() for k in keys))
 _EXAMPLE: Final[str] = '{"mode": "img_conv", "src": "fig_src", "dst": "fig_gen", "ext": "pdf"}'
@@ -228,14 +239,17 @@ def _parse_task(
     labels = {"src": "監視するフォルダ", "dst": "出力先のフォルダ"}
     for key in ("src", "dst"):
         v = t.get(key)
-        if v is None and key == "dst" and task_type == "doc_conv":
-            continue  # doc_conv の dst は省略可（src と同じフォルダへ出力）
+        if v is None and key == "dst" and task_type in ("doc_conv", "scorm"):
+            continue  # doc_conv / scorm の dst は省略可（src と同じフォルダへ出力）
         if v is None:
             errors.append(f"{where}: 「{key}」（{labels[key]}）を指定してください")
         elif not isinstance(v, str) or not v.strip():
             errors.append(f"{where}: 「{key}」（{labels[key]}）はパスを文字列で指定してください（指定値: {_show(v)}）")
         else:
             paths[key] = resolve_path(v, root)
+    if task_type == "scorm":
+        return _parse_scorm_task(t, where, check_paths, errors, n_errors, paths)
+
     if "src" in paths and check_paths:
         problem = _dir_problem(f"{where}: 「src」の", t["src"], paths["src"])
         if problem:
@@ -351,6 +365,41 @@ def _parse_doc_conv_task(
         copy_exts=tuple(strip_dot(e) for e in copy_exts or []),
         diff_sec=diff_sec,
     )
+
+
+def _parse_scorm_task(
+        t: dict[str, Any],
+        where: str,
+        check_paths: bool,
+        errors: list[str],
+        n_errors: int,
+        paths: dict[str, Path],
+) -> ScormTaskConfig | None:
+    src = paths.get("src")
+    if src is not None and check_paths and not src.exists():
+        errors.append(f"{where}: 「src」の Markdown ファイルかフォルダが見つかりません\n指定値: {_show(t['src'])}\n探した場所: {src}")
+    patterns = _str_list(t.get("pattern", list(DEFAULT_SCORM_PATTERNS)))
+    if patterns is None:
+        errors.append(
+            f'{where}: 「pattern」には変換するファイル名のパターンを "*.md" や ["*_quiz.md"] の形で指定してください'
+            f"（指定値: {_show(t.get('pattern'))}）"
+        )
+    else:
+        try:
+            _ = normalize_input_patterns(patterns)
+        except ValueError as e:
+            errors.append(f"{where}: 「pattern」の書き方に誤りがあります（{e}）")
+    dst = paths.get("dst")
+    if dst is not None and dst.suffix.lower() == ".zip" and src is not None and src.is_dir():
+        errors.append(f"{where}: 「src」がフォルダのときは「dst」に .zip ではなく出力先のフォルダを指定してください")
+    diff_sec = t.get("diff_sec", DEFAULT_DIFF_SEC)
+    if not isinstance(diff_sec, int) or isinstance(diff_sec, bool) or diff_sec < 0:
+        errors.append(f"{where}: 「diff_sec」には 0 以上の整数（秒）を指定してください（指定値: {_show(diff_sec)}）")
+    if len(errors) > n_errors or src is None:
+        return None
+    if dst is None:
+        dst = src.parent if src.is_file() else src
+    return ScormTaskConfig(src=src, dst=dst, patterns=tuple(patterns or []), diff_sec=diff_sec)
 
 
 def parse_config(

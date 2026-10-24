@@ -143,7 +143,9 @@ def _ask_doc_conv_task(w: _Wizard, root: Path, prev: dict[str, Any]) -> dict[str
 def _ask_task(w: _Wizard, root: Path, prev: dict[str, Any] | None) -> dict[str, Any]:
     prev = prev or {}
     prev_type = prev.get("type", prev.get("mode"))
-    mode = w.choose("mode", TASK_TYPES, prev_type if prev_type in TASK_TYPES else "img_conv")
+    # scorm は json に直接書く（ウィザード未対応）
+    types = [t for t in TASK_TYPES if t != "scorm"]
+    mode = w.choose("mode", types, prev_type if prev_type in types else "img_conv")
     same = prev_type == mode
     if mode == "doc_conv":
         return _ask_doc_conv_task(w, root, prev if same else {})

@@ -224,7 +224,20 @@ class ImgConvTaskStruct(ABCTaskRunner):
             logger.exception(e)
 
     @override
+    def run_all_target_files_in_target_dir(self) -> None:
+        """src_dir_path内(サブフォルダ含む)の全てのソース・ファイルに対してrunする。"""
+        dst_root = self._dest_dir_path.resolve()
+        for ext in self._src_suffixes:
+            for target_f_path in self.src_dir_path.rglob(f"*.{ext}"):
+                # dstがsrc配下にある場合、生成物を再変換しないようにskip
+                if target_f_path.resolve().is_relative_to(dst_root):
+                    continue
+                self.run(update_file_path=target_f_path)
+
+    @override
     def _run_internal(self, update_file_path: Path) -> None:
+        # サブフォルダ内のファイルの場合、dst側に同じフォルダ構成を作る
+        self.dst_file_path(update_file_path=update_file_path).parent.mkdir(parents=True, exist_ok=True)
         self.convert(
             src_file_apath=update_file_path,  # pathlib.Path,
             # dst_dir_apath=self.dest_file_path(update_file_path=update_file_path).parent,  # TODO: 二度手間
@@ -236,7 +249,12 @@ class ImgConvTaskStruct(ABCTaskRunner):
 
     @override
     def dst_file_path(self, update_file_path: Path) -> Path:
-        return self._dest_dir_path.joinpath(f"{update_file_path.stem}.{self._dst_suffix}")
+        # src_dir_pathからの相対フォルダ構成をdst側でも維持する
+        try:
+            rel_dir = update_file_path.parent.resolve().relative_to(self._src_dir_path.resolve())
+        except ValueError:
+            rel_dir = Path()
+        return self._dest_dir_path.joinpath(rel_dir, f"{update_file_path.stem}.{self._dst_suffix}")
 
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, ImgConvTaskStruct):

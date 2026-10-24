@@ -20,6 +20,8 @@ This package is a helper tool for writing documents and papers using Markup Lang
    1. This can convert to gray scale image.
 1. Document conversion
    1. This can convert Markdown (.md) / HTML files into PDF, HTML or DOCX when they change, rendering mermaid / PlantUML diagrams, math (KaTeX) and Marp / Slidev slides.
+1. SCORM 1.2 quiz
+   1. This can convert single-choice quizzes written in Markdown into SCORM 1.2 packages (.zip) for an LMS.
 
 
 ## Build package
@@ -63,6 +65,7 @@ Choose how to run with one of the following options. They cannot be combined.
 | `ml_writing_helper --mode img_conv [params...]`                | Mode `img_conv`: one figure conversion task from CLI parameters                                   |
 | `ml_writing_helper --mode copy [params...]`                    | Mode `copy`: copy tasks from CLI parameters                                                       |
 | `ml_writing_helper --mode doc_conv [params...]`                | Mode `doc_conv`: one document conversion task from CLI parameters                                 |
+| `ml_writing_helper --mode scorm [params...]`                   | Mode `scorm`: build SCORM 1.2 packages from Markdown quizzes (see [Mode: scorm](#mode-scorm))     |
 | `ml_writing_helper --conf-maker-web [PATH]`                    | Create/edit the json file in a web UI (browser). Without PATH, `./ml_writing_helper.json`         |
 | `ml_writing_helper --conf-maker-cli [PATH]`                    | Create/edit the json file interactively in the terminal. Without PATH, `./ml_writing_helper.json` |
 
@@ -115,16 +118,16 @@ Multiple tasks can be defined in one file. Relative paths are resolved from `roo
 }
 ```
 
-| Task key       | Type                             | Default         | Description                                                                   |
-| -------------- | -------------------------------- | --------------- | ----------------------------------------------------------------------------- |
-| `type`         | `img_conv` / `copy` / `doc_conv` | required        | Task kind                                                                     |
-| `src`, `dst`   | path                             | required        | Watched dir / output dir (`dst` is created if missing)                        |
-| `ext`          | string                           | `pdf`           | `img_conv` only. eps, pdf, png, jpg, jpeg, gif, bmp, tiff                     |
-| `gray`, `crop` | bool                             | `false`, `true` | `img_conv` only                                                               |
-| `exts`         | list                             | `["bib"]`       | `copy` only. Extensions to copy                                               |
-| `diff_sec`     | int                              | `10`            | `copy` only. Skip when src/dst timestamps differ by this many seconds or less |
+| Task key       | Type                                       | Default         | Description                                                                   |
+| -------------- | ------------------------------------------ | --------------- | ----------------------------------------------------------------------------- |
+| `type`         | `img_conv` / `copy` / `doc_conv` / `scorm` | required        | Task kind                                                                     |
+| `src`, `dst`   | path                                       | required        | Watched dir / output dir (`dst` is created if missing)                        |
+| `ext`          | string                                     | `pdf`           | `img_conv` only. eps, pdf, png, jpg, jpeg, gif, bmp, tiff                     |
+| `gray`, `crop` | bool                                       | `false`, `true` | `img_conv` only                                                               |
+| `exts`         | list                                       | `["bib"]`       | `copy` only. Extensions to copy                                               |
+| `diff_sec`     | int                                        | `10`            | `copy` only. Skip when src/dst timestamps differ by this many seconds or less |
 
-- For `doc_conv` keys, see [Mode: doc_conv](#mode-doc_conv).
+- For `doc_conv` keys, see [Mode: doc_conv](#mode-doc_conv). For `scorm` keys, see [Mode: scorm](#mode-scorm).
 - `mode` can be used instead of `type` (same meaning as the CLI mode).
 - In `copy` tasks, `ext` can be used instead of `exts` (string or list).
 
@@ -147,7 +150,7 @@ Wrap the JSON string in single quotes `'...'` so that the shell passes the doubl
 #### CLI instruction (`--mode`)
 
 ```bash
-ml_writing_helper --mode [img_conv|copy|doc_conv] [sub parameters...] [--root [root PATH]]
+ml_writing_helper --mode [img_conv|copy|doc_conv|scorm] [sub parameters...] [--root [root PATH]]
 
 # fig_src/ -> fig_gen/ as grayscale .pdf
 ml_writing_helper --mode img_conv --ext pdf --gray
@@ -157,6 +160,9 @@ ml_writing_helper --mode copy --src ~/Documents/BibTexExported --dst bib
 
 # docs/**/*.md -> docs_out/**/*.pdf and .html
 ml_writing_helper --mode doc_conv --src docs --dst docs_out --ext pdf --ext html
+
+# quiz.md -> quiz_scorm12.zip (SCORM 1.2)
+ml_writing_helper --mode scorm --src quiz.md --dst quiz_scorm12.zip
 ```
 
 ##### Common parameters
@@ -252,8 +258,59 @@ Requirements for doc_conv (only what you use):
 - Slidev: `npm install -g @slidev/cli` (or `npx` is used)
 - Chrome / Chromium (`.html` → PDF)
 
+##### Mode: scorm
+
+This mode converts Markdown quizzes (single-choice questions) into SCORM 1.2 packages (`.zip`) that can be uploaded to an LMS (e.g. Moodle) as course material.
+When a learner submits the quiz, the score (`cmi.core.score.raw`), completion status and each answer (`cmi.interactions.*`) are sent to the LMS through the SCORM 1.2 API.
+
+| Option       | Default           | Description                                                                                                                                |
+| ------------ | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `--src PATH` | `.`               | A Markdown quiz file, or a folder (files matching `--pattern` directly under it). Once only                                                |
+| `--dst PATH` | folder of `--src` | Output folder (created if missing), written as `<name>_scorm12.zip`. When `--src` is a file, a `.zip` path can be given instead. Once only |
+| `--pattern`  | `*.md`            | File names to convert when `--src` is a folder. Repeatable (e.g. `"*_quiz.md"`)                                                            |
+| `--monitor`  | off               | Keep running and rebuild the package whenever a quiz file is updated (stop with Ctrl+C)                                                    |
+
+```bash
+# one file -> quiz_scorm12.zip (run once and exit)
+ml_writing_helper --mode scorm --src quiz.md --dst quiz_scorm12.zip
+
+# every quiz/*_quiz.md -> scorm_out/<name>_scorm12.zip, and keep rebuilding when they are updated
+ml_writing_helper --mode scorm --src quiz --dst scorm_out --pattern "*_quiz.md" --monitor
+```
+
+json task keys (`"type": "scorm"`): `src` (required), `dst` (default: folder of `src`), `pattern` (string / list, default `"*.md"`), `diff_sec` (int, default `10`).
+
+```json
+{"monitor": true, "tasks": [{"type": "scorm", "src": "quiz", "dst": "scorm_out", "pattern": "*_quiz.md"}]}
+```
+
+Quiz format:
+
+- `# Title` (optional, before the first question): the quiz title. Without it, the file name is used.
+- `## Question title`: starts a question. The lines below it (until the choices) are the question text (`**bold**`, `*italic*`, `` `code` `` are supported).
+- `- [ ] A. choice`: a choice labeled with an uppercase letter. Mark the correct one with `[x]`.
+- Each question needs 2 or more choices and exactly 1 correct answer. Labels must not be duplicated in a question.
+
+```markdown
+# Python basics
+
+## What is a variable?
+A mechanism to **store** a value.
+- [ ] A. A function
+- [x] B. A named storage area
+
+## What is a type?
+- [x] A. The kind of data
+- [ ] B. A file
+```
+
+- If a file does not follow the format, an error is logged and that file is skipped (other files are still converted).
+- At startup, a package is rebuilt only when the quiz is newer than it by more than `--diff-sec` seconds. While watching (`--monitor`), it is rebuilt whenever the quiz is newer.
+
 
 ### single file conversion (legacy subcommand)
+
+These legacy subcommands still work but are not shown in `--help`. Use `--mode` instead.
 
 - `ml_writing_helper convert src_path dst_dir to_fmt [--gray] [--no-crop]`
 - The subcommand name can be omitted: `ml_writing_helper src_path dst_dir to_fmt` (as the former `convert4ml`)

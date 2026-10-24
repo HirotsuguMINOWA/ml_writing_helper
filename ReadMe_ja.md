@@ -57,36 +57,17 @@ python -m build --wheel
 
 以下のいずれかのオプションで実行方法を選択します。これらは組み合わせて使用できません。
 
-#### MarkdownからSCORM 1.2を作成
-
-問題ごとに `##` 見出しを付け、選択肢を `- [ ] A. 選択肢` と記述します。正解の選択肢は `[x]` にします。1問につき正解は1つ、選択肢は2つ以上必要です。
-
-```markdown
-# Python 基礎
-
-## 変数とは？
-値を保存する仕組みです。
-- [ ] A. 関数
-- [x] B. 名前付きの領域
-```
-
-```bash
-ml_writing_helper scorm quiz.md --output quiz_scorm12.zip
-```
-
-生成したZIPをLMSにコース教材として登録します。受講時に得点と完了状態をSCORM 1.2 APIへ送信します。
-
-| コマンド                                                    | 動作                                                                                       |
-| ----------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| `ml_writing_helper` (引数なし) / `ml_writing_helper --help` | ヘルプメッセージを表示                                                                     |
-| `ml_writing_helper --json [PATH]`                           | json ファイルからのタスク。PATH なしの場合、`./ml_writing_helper.json` が使用されます      |
-| `ml_writing_helper --json '{...}'`                          | JSON 文字列からのタスク (下記参照)                                                         |
-| `ml_writing_helper --mode img_conv [params...]`             | モード `img_conv`: CLI パラメータからの 1 つの図表変換タスク                               |
-| `ml_writing_helper --mode copy [params...]`                 | モード `copy`: CLI パラメータからのコピータスク                                            |
-| `ml_writing_helper --mode doc_conv [params...]`             | モード `doc_conv`: CLI パラメータからの 1 つのドキュメント変換タスク                       |
-| `ml_writing_helper --conf-maker-web [PATH]`                 | Web UI (ブラウザ) で json ファイルを作成/編集。PATH なしの場合、`./ml_writing_helper.json` |
-| `ml_writing_helper --conf-maker-cli [PATH]`                 | ターミナルで対話的に json ファイルを作成/編集。PATH なしの場合、`./ml_writing_helper.json` |
-| `ml_writing_helper scorm INPUT.md --output OUTPUT.zip`      | Markdownの単一選択式問題をSCORM 1.2パッケージに変換                                        |
+| コマンド                                                    | 動作                                                                                              |
+| ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `ml_writing_helper` (引数なし) / `ml_writing_helper --help` | ヘルプメッセージを表示                                                                            |
+| `ml_writing_helper --json [PATH]`                           | json ファイルからのタスク。PATH なしの場合、`./ml_writing_helper.json` が使用されます             |
+| `ml_writing_helper --json '{...}'`                          | JSON 文字列からのタスク (下記参照)                                                                |
+| `ml_writing_helper --mode img_conv [params...]`             | モード `img_conv`: CLI パラメータからの 1 つの図表変換タスク                                      |
+| `ml_writing_helper --mode copy [params...]`                 | モード `copy`: CLI パラメータからのコピータスク                                                   |
+| `ml_writing_helper --mode doc_conv [params...]`             | モード `doc_conv`: CLI パラメータからの 1 つのドキュメント変換タスク                              |
+| `ml_writing_helper --mode scorm [params...]`                | モード `scorm`: Markdown の小テストを SCORM 1.2 パッケージに変換 ([モード: scorm](#モード-scorm)) |
+| `ml_writing_helper --conf-maker-web [PATH]`                 | Web UI (ブラウザ) で json ファイルを作成/編集。PATH なしの場合、`./ml_writing_helper.json`        |
+| `ml_writing_helper --conf-maker-cli [PATH]`                 | ターミナルで対話的に json ファイルを作成/編集。PATH なしの場合、`./ml_writing_helper.json`        |
 
 - `--mode` のパラメータ (`--src`、`--ext`、`--root`、`--log-level` など) は、`--mode` と同時に使用するのみ可能です。`--json` や `--conf-maker-*` の場合は、代わりに json ファイルに記述してください。
 - 複数のタスクを一度に実行する (例: img_conv と copy) には、json ファイルを使用してください。
@@ -137,16 +118,16 @@ ml_writing_helper --json --monitor                                     # ./ml_wr
 }
 ```
 
-| タスクキー     | 型                               | 既定値          | 説明                                                                         |
-| -------------- | -------------------------------- | --------------- | ---------------------------------------------------------------------------- |
-| `type`         | `img_conv` / `copy` / `doc_conv` | 必須            | タスクの種類                                                                 |
-| `src`, `dst`   | パス                             | 必須            | 監視対象ディレクトリ / 出力ディレクトリ (`dst` は存在しなければ作成されます) |
-| `ext`          | 文字列                           | `pdf`           | `img_conv` のみ。eps, pdf, png, jpg, jpeg, gif, bmp, tiff                    |
-| `gray`, `crop` | 真偽値                           | `false`, `true` | `img_conv` のみ                                                              |
-| `exts`         | リスト                           | `["bib"]`       | `copy` のみ。コピー対象の拡張子                                              |
-| `diff_sec`     | 整数                             | `10`            | `copy` のみ。src/dst のタイムスタンプの差がこの秒数以下ならスキップ          |
+| タスクキー     | 型                                         | 既定値          | 説明                                                                         |
+| -------------- | ------------------------------------------ | --------------- | ---------------------------------------------------------------------------- |
+| `type`         | `img_conv` / `copy` / `doc_conv` / `scorm` | 必須            | タスクの種類                                                                 |
+| `src`, `dst`   | パス                                       | 必須            | 監視対象ディレクトリ / 出力ディレクトリ (`dst` は存在しなければ作成されます) |
+| `ext`          | 文字列                                     | `pdf`           | `img_conv` のみ。eps, pdf, png, jpg, jpeg, gif, bmp, tiff                    |
+| `gray`, `crop` | 真偽値                                     | `false`, `true` | `img_conv` のみ                                                              |
+| `exts`         | リスト                                     | `["bib"]`       | `copy` のみ。コピー対象の拡張子                                              |
+| `diff_sec`     | 整数                                       | `10`            | `copy` のみ。src/dst のタイムスタンプの差がこの秒数以下ならスキップ          |
 
-- `doc_conv` のキーについては、[モード: doc_conv](#モード-doc_conv) を参照してください。
+- `doc_conv` のキーについては [モード: doc_conv](#モード-doc_conv)、`scorm` のキーについては [モード: scorm](#モード-scorm) を参照してください。
 - `mode` を `type` の代わりに使用できます (CLI のモードと同じ意味)。
 - `copy` タスクでは、`ext` を `exts` の代わりに使用できます (文字列またはリスト)。
 
@@ -169,7 +150,7 @@ JSON 文字列は、シェルがダブルクォートを変換せずに渡せる
 #### CLI 指示 (`--mode`)
 
 ```bash
-ml_writing_helper --mode [img_conv|copy|doc_conv] [サブパラメータ...] [--root [ルートパス]]
+ml_writing_helper --mode [img_conv|copy|doc_conv|scorm] [サブパラメータ...] [--root [ルートパス]]
 
 # fig_src/ -> fig_gen/ をグレースケールの .pdf として
 ml_writing_helper --mode img_conv --ext pdf --gray
@@ -276,8 +257,59 @@ doc_conv の必要条件 (使用する分のみ):
 - Slidev: `npm install -g @slidev/cli` (または `npx` が使用されます)
 - Chrome / Chromium (`.html` → PDF)
 
+##### モード: scorm
+
+このモードは、Markdown で書いた小テスト（単一選択式）を、LMS（Moodle など）にコース教材として登録できる SCORM 1.2 パッケージ（`.zip`）へ変換します。
+受講者が回答すると、得点（`cmi.core.score.raw`）・完了状態・各問の回答（`cmi.interactions.*`）を SCORM 1.2 API で LMS へ送信します。
+
+| オプション   | 既定値               | 説明                                                                                                                                |
+| ------------ | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `--src PATH` | `.`                  | 小テストの Markdown ファイル、またはフォルダー（直下の `--pattern` に合うファイルが対象）。1 回のみ                                 |
+| `--dst PATH` | `--src` のフォルダー | 出力フォルダー（存在しなければ作成）。`<ファイル名>_scorm12.zip` で出力。`--src` がファイルのときは `.zip` のパスも指定可。1 回のみ |
+| `--pattern`  | `*.md`               | `--src` がフォルダーのときの変換対象ファイル名。繰り返し指定可（例: `"*_quiz.md"`）                                                 |
+| `--monitor`  | オフ                 | 終了せずに監視を続け、小テストのファイルが更新されるたびにパッケージを作り直す（Ctrl+C で停止）                                     |
+
+```bash
+# 1 ファイル -> quiz_scorm12.zip（1 回だけ実行して終了）
+ml_writing_helper --mode scorm --src quiz.md --dst quiz_scorm12.zip
+
+# quiz/*_quiz.md -> scorm_out/<ファイル名>_scorm12.zip。更新されるたびに作り直す
+ml_writing_helper --mode scorm --src quiz --dst scorm_out --pattern "*_quiz.md" --monitor
+```
+
+json タスクのキー（`"type": "scorm"`）: `src`（必須）、`dst`（既定: `src` のフォルダー）、`pattern`（文字列 / リスト、既定 `"*.md"`）、`diff_sec`（整数、既定 `10`）。
+
+```json
+{"monitor": true, "tasks": [{"type": "scorm", "src": "quiz", "dst": "scorm_out", "pattern": "*_quiz.md"}]}
+```
+
+小テストの書き方:
+
+- `# タイトル`（任意。最初の問題より前）: 小テストのタイトル。無ければファイル名を使います。
+- `## 問題の見出し`: 問題の開始。その下の行（選択肢まで）が問題文です（`**太字**`、`*斜体*`、`` `コード` `` に対応）。
+- `- [ ] A. 選択肢`: 英大文字のラベル付き選択肢。正解は `[x]` にします。
+- 1 問につき選択肢は 2 つ以上、正解は 1 つだけ必要です。1 問の中でラベルは重複できません。
+
+```markdown
+# Python 基礎
+
+## 変数とは？
+値を **保存** する仕組みです。
+- [ ] A. 関数
+- [x] B. 名前付きの領域
+
+## 型とは？
+- [x] A. データの種類
+- [ ] B. ファイル
+```
+
+- 書式に合わないファイルはエラーをログに出してスキップします（他のファイルは変換されます）。
+- 起動時は、小テストがパッケージより `--diff-sec` 秒を超えて新しいときだけ作り直します。監視中（`--monitor`）は、小テストの方が新しければ作り直します。
+
 
 ### 単一ファイル変換 (レガシーサブコマンド)
+
+これらのレガシーサブコマンドは引き続き使えますが、`--help` には表示されません。`--mode` を使ってください。
 
 - `ml_writing_helper convert src_path dst_dir to_fmt [--gray] [--no-crop]`
 - サブコマンド名は省略可能: `ml_writing_helper src_path dst_dir to_fmt` (かつての `convert4ml` と同じ)

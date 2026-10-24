@@ -12,18 +12,17 @@ dependencies = [
     "watchdog>=2.1.9",
     "pdf2image>=1.16.0",
     "typed-classproperties",
+    "simple-parsing",
 ]
 name = "ml_writing_helper"
-version = "0.10.0"
+version = "0.11.0"
 description = "Helper tool to insert created diagrams to markup language such as LaTeX, Markdown and HTML and so on."
 authors = [{ name = "Hirotsugu Minowa" }]
 requires-python = ">=3.12"
 
 [project.optional-dependencies]
 # doc_conv: mermaid / PlantUML diagrams in PDF (then run `playwright install chromium`)
-doc = [
-    "playwright>=1.40.0",
-]
+doc = ["playwright>=1.40.0"]
 dev = [
     "click",
     "build",
@@ -47,9 +46,7 @@ where = ["src"]
 include = ["ml_writing_helper*"]
 
 [tool.nuitka]
-follow-import-to = [
-    "debtcollector",
-]
+follow-import-to = ["debtcollector"]
 nofollow-import-to = [
     "numpy",
     "scipy",

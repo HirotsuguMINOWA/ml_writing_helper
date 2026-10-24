@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from ml_writing_helper.config import ConfigError, DocConvTaskConfig, parse_config
+from ml_writing_helper.config import ConfigError, DocConvTaskConfig, ScormTaskConfig, parse_config
 from ml_writing_helper.converter.doc_converter import DocConverter, normalize_input_patterns
 from ml_writing_helper.converter.scorm12 import Scorm12Error, build_scorm12_package, parse_quiz
 from ml_writing_helper.main import _parse_cli_args, _watch_config_from_cli
@@ -75,7 +75,7 @@ def test_scorm12_package_and_cli(tmp_path: Path) -> None:
     )
     from ml_writing_helper.main import main
 
-    assert main(["scorm", str(source), "--output", str(output)]) == 0
+    assert main(["--mode", "scorm", "--src", str(source), "--dst", str(output)]) == 0
     with zipfile.ZipFile(output) as package:
         assert package.namelist() == ["imsmanifest.xml", "index.html"]
         manifest = ET.fromstring(package.read("imsmanifest.xml"))
@@ -141,3 +141,50 @@ def test_docx_output(tmp_path: Path) -> None:
     md.write_text("# Hello\n", encoding="utf-8")
     assert DocConverter(tmp_path, tmp_path, output_formats=["docx"]).convert(md)
     assert (tmp_path / "a.docx").stat().st_size > 0
+
+
+_QUIZ_MD = "# Q\n\n## 問1\n問い\n- [x] A. はい\n- [ ] B. いいえ\n"
+
+
+def test_scorm_mode_dir_defaults_and_rebuild(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from ml_writing_helper.task_runner.scorm_runner import ScormTask
+
+    quiz_dir = tmp_path / "quiz"
+    quiz_dir.mkdir()
+    md = quiz_dir / "q1.md"
+    md.write_text(_QUIZ_MD, encoding="utf-8")
+    (quiz_dir / "notes.txt").write_text("x", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    task = _watch_config_from_cli(_parse_cli_args(["--mode", "scorm", "--src", "quiz", "--dst", "out"])).tasks[0]
+    assert isinstance(task, ScormTaskConfig)
+    assert task.patterns == ("*.md",) and task.dst == (tmp_path / "out").resolve()
+
+    runner = ScormTask(task.src, task.dst, patterns=task.patterns)
+    runner.run_all_target_files_in_target_dir()
+    out = task.dst / "q1_scorm12.zip"
+    assert out.exists() and sorted(p.name for p in task.dst.iterdir()) == ["q1_scorm12.zip"]
+    # monitoring: a newer source is rebuilt
+    old = out.stat().st_mtime
+    os.utime(md, (old + 5, old + 5))
+    runner.run(md)
+    assert out.stat().st_mtime > old
+
+
+def test_scorm_mode_errors(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    (tmp_path / "quiz").mkdir()
+    monkeypatch.chdir(tmp_path)
+    for argv in (
+            ["--mode", "scorm", "--src", "quiz", "--dst", "a.zip"],
+            ["--mode", "scorm", "--src", "missing.md"],
+            ["--mode", "scorm", "--ext", "pdf"],
+            ["--mode", "copy", "--src", "quiz", "--dst", "b", "--pattern", "*.md"],
+    ):
+        with pytest.raises(ConfigError):
+            _ = _watch_config_from_cli(_parse_cli_args(argv))
+
+
+def test_parse_config_scorm(tmp_path: Path) -> None:
+    (tmp_path / "q.md").write_text(_QUIZ_MD, encoding="utf-8")
+    task = parse_config({"mode": "scorm", "src": "q.md"}, base_dir=tmp_path).tasks[0]
+    assert isinstance(task, ScormTaskConfig)
+    assert task.dst == tmp_path.resolve()

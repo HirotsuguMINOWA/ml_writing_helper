@@ -13,6 +13,7 @@ class TaskType(StrEnum):
     copy = auto()
     img_conv = auto()
     doc_conv = auto()
+    scorm = auto()
 
 
 class ImgConvType(StrEnum):
