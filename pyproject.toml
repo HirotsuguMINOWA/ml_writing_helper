@@ -6,6 +6,7 @@ backend-path = ["."]
 [project]
 dependencies = [
     "pdfCropMargins",
+    "PyMuPDF>=1.19.6,<2.0",
     "debtcollector",
     "loguru>=0.5.3",
     "Pillow>=8.2.0",
