@@ -1,54 +1,64 @@
 {
-  "version": "2.0.0",
-  "tasks": [
-    {
-      "label": "PyInstaller: Build",
-      "type": "shell",
-      "command": "pyinstaller",
-      "args": [
-        "--onefile",
-        "--console",
-        "--name=ml_writing_helper",
-        "src/ml_writing_helper/main.py"
-      ],
-      "group": {
-        "kind": "build",
-        "isDefault": true
-      },
-      "problemMatcher": [],
-      "presentation": {
-        "reveal": "always",
-        "focus": false,
-        "panel": "shared",
-        "showReuseMessage": false,
-        "clear": true
-      },
-      "options": {
-        "cwd": "${workspaceFolder}"
-      }
-    },
-    {
-      "label": "PyInstaller: Clean",
-      "type": "shell",
-      "command": "rm",
-      "args": [
-        "-rf",
-        "build",
-        "dist",
-        "*.spec"
-      ],
-      "group": {
-        "kind": "none",
-        "isDefault": false
-      },
-      "problemMatcher": [],
-      "presentation": {
-        "reveal": "always",
-        "focus": false,
-        "panel": "shared",
-        "showReuseMessage": false,
-        "clear": true
-      }
-    }
-  ]
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "pipx Install ML_Writing_Helper",
+            "type": "shell",
+            "command": "pipx",
+            "args": [
+                "install",
+                "--force",
+                "."
+            ]
+        },
+        {
+            "label": "PyInstaller: Build",
+            "type": "shell",
+            "command": "pyinstaller",
+            "args": [
+                "--onefile",
+                "--console",
+                "--name=ml_writing_helper",
+                "src/ml_writing_helper/main.py"
+            ],
+            //   "group": {
+            //     "kind": "build",
+            //     "isDefault": true
+            //   },
+            //   "problemMatcher": [],
+            //   "presentation": {
+            //     "reveal": "always",
+            //     "focus": false,
+            //     "panel": "shared",
+            //     "showReuseMessage": false,
+            //     "clear": true
+            //   },
+            "options": {
+                "cwd": "${workspaceFolder}"
+            }
+        },
+        {
+            "label": "PyInstaller: Clean",
+            "type": "shell",
+            "command": "rm",
+            "args": [
+                "-rf",
+                "build",
+                "dist",
+                "*.spec"
+            ],
+            //   "group": {
+            //     "kind": "none",
+            //     "isDefault": false
+            //   },
+            //   "problemMatcher": [],
+            //   "presentation": {
+            //     "reveal": "always",
+            //     "focus": false,
+            //     "panel": "shared",
+            //     "showReuseMessage": false,
+            //     "clear": true
+            //   }
+        }
+    ]
 }
