@@ -345,15 +345,15 @@ class SlideAndImgConverter:
                 return
 
             if dst_pl.suffix == ".eps":
-                if dst_im.mode in ("RGBA", "LA"):
-                    """ 透過画像を解除? """
+                if dst_im.mode not in ("L", "RGB", "CMYK"):
+                    """ 透過画像・パレット画像(P等)を解除? """
                     # https://pillow.readthedocs.io/en/stable/handbook/image-file-formats.html?highlight=eps#eps
                     logger.warning(
                         f'[Try conversion] Current figure mode "{dst_im.mode}" cannot be directly saved to .eps and should be converted (e.g. to "RGB")')
-                    dst_im = cls.remove_transparency(dst_im)
+                    dst_im = cls.remove_transparency(dst_im.convert("RGBA"))
                     # dst_im = dst_im[:, :, 0:2]
                     dst_im = dst_im.convert("RGB")
-                if dst_im.mode in ("RGBA", "LA"):
+                if dst_im.mode not in ("L", "RGB", "CMYK"):
                     logger.error(
                         f'Failed: Current img mode "{dst_im.mode}" cannot be directly saved to .eps and tried to be converted (e.g. to "RGB")')
                 else:
