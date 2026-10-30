@@ -39,7 +39,7 @@ class ImgConvTaskStruct(ABCTaskRunner):
             dst_dir_path=dst_dir_path,
             diff_sec=diff_sec,
             dst_suffixes=tuple([dst_suffix]),
-            src_suffixes=[str(x) for x in tuple(ImgConvInputType)],  # [".pptx", ".ppt", ".png", ".jpeg", ".jpg", ".gif"],
+            src_suffixes=[str(x) for x in tuple(ImgConvInputType)],  # [".pptx", ".ppt", ".png", ".jpeg", ".jpg", ".gif", ".pu", ".puml"],
         )
         self._dst_suffix: Final[ImgConvOutputType] = ImgConvOutputType(dst_suffix)
         self._gray: Final[bool] = gray
@@ -197,7 +197,7 @@ class ImgConvTaskStruct(ABCTaskRunner):
                 """PlantUML
                 """
                 logger.debug("Start converting: plantUML")
-                SlideAndImgConverter.plantuml2img(src_pl=src_pl, dst_pl=dst_pl)
+                _ = SlideAndImgConverter.plantuml2img(src_pl=src_pl, dst_pl=dst_pl, gray=gray)
             elif src_pl.name.endswith("_mermaid") and src_pl.suffix.lower() == ".md" or src_pl.suffix.lower() == ".mmd":
                 logger.info(f"Mermaid conversion: {src_pl}")
                 SlideAndImgConverter.conv_mermaid_with_crop(

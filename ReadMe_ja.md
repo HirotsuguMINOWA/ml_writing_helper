@@ -12,6 +12,7 @@
 
 1. 画像挿入のサポート
     1. PowerPoint または LibreOffice で作成した .pptx/.ppt ファイルを、.eps、.pdf、.png などの画像ファイルに変換できます。
+    1. PlantUML ファイル (.pu/.puml) も画像ファイルに変換できます。
 1. 切り抜き (トリミング)
     1. 上記の変換時に、外枠の余白 (白い余白) を除去できます。
 1. 特定フォルダーの監視と、内部ファイルが変更されたときのコピー
@@ -39,6 +40,7 @@ python -m build --wheel
 このパッケージを使用する前に、以下のソフトウェアをインストールしてください。
 
 1. LibreOffice
+1. PlantUML (.pu/.puml を変換する場合のみ。例: `brew install plantuml`)
 
 ## CLI
 
@@ -178,7 +180,9 @@ ml_writing_helper --mode doc_conv --src docs --dst docs_out --ext pdf --ext html
 
 ##### モード: img_conv
 
-このモードは、src パスの画像 (例: .pptx, .png) を、指定の形式 (例: .eps, .pdf) で dst パスへ変換します。
+このモードは、src パスの画像 (例: .pptx, .png, .puml) を、指定の形式 (例: .eps, .pdf) で dst パスへ変換します。
+
+- PlantUML (.pu/.puml): `plantuml` コマンドが必要です。png/pdf/eps は PlantUML が直接出力し (pdf/eps はベクター形式を維持)、jpg/jpeg/gif/bmp/tiff および `--gray` 指定時は PNG を経由して変換します。切り抜きは行いません (PlantUML の出力には外側の余白がないため)。1 ファイルに複数の図がある場合は最初の図のみ出力します。
 
 | オプション  | 既定値    | 説明                                                  |
 | ----------- | --------- | ----------------------------------------------------- |

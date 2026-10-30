@@ -1,5 +1,7 @@
 import shlex
 import shutil
+import subprocess
+import tempfile
 from enum import StrEnum
 from pathlib import Path
 from subprocess import check_output, STDOUT
@@ -20,6 +22,7 @@ class SlideAndImgConverter:
     imagic_fmt_conv_out: tuple[str, ...] = (".png", ".jpg", ".jpeg", ".png", ".eps", ".svg")
 
     _ext_pluntuml: tuple[str, ...] = (".pu", ".puml")
+    _cmd_plantuml: str = "plantuml"
 
     plantuml_fmt_out: tuple[str, ...] = (".png", ".svg", ".pdf", ".eps", ".html", ".txt", ".tex")
     mermaid_fmt_in: tuple[str, ...] = (".svg", ".png", ".pdf")
@@ -75,50 +78,57 @@ class SlideAndImgConverter:
         pages[0].save(dst_pl.as_posix(), format=fmt)
 
     @classmethod
-    def plantuml2img(cls, src_pl: Path, dst_pl: Path, need_pre_proc: bool = False) -> None:
-        """PlantUML
+    def plantuml2img(cls, src_pl: Path, dst_pl: Path, need_pre_proc: bool = False, gray: bool = False) -> Path | None:
+        """PlantUML(.pu/.puml)を画像へ変換
 
+        - png/svg/pdf/eps はplantumlで直接出力する(vectorを維持)
+        - 上記以外(jpg, gif, bmp, tiff等)又はgray指定時は、一旦pngで出力してからPillowで変換する
+        - 出力は一時フォルダで生成してからdst_plへ配置する(-oのPATHに空白等が含まれても問題ないようにlistでコマンドを渡す)
+        - 1ファイルに複数図(@startuml...@enduml)がある場合、最初の図のみ出力する
         :param src_pl:
         :param dst_pl:
         :param need_pre_proc:
-        :return:
+        :param gray: conv to gray
+        :return: Output file's path. None if failed
         """
         logger.debug("Start converting plantuml")
         if need_pre_proc:
             src_pl, dst_pl = Util.preprocess(src_pl, dst_pl)
-        # to abs. path
+        src_pl = src_pl.resolve()
         dst_pl = dst_pl.resolve()
-        cls._cmd_plantuml = "plantuml"
-        # FIXME: dst_plにfullPATHであるかのチェックをする必要がある
-        path_cmd = shutil.which(cls._cmd_plantuml)
-        if path_cmd is None:
-            logger.error(
-                "%s not found. Can't convert from PlantUML" % cls._cmd_plantuml
-            )
-            return
-        if dst_pl.suffix not in cls.plantuml_fmt_out:
-            logger.error("Indicated Formatは未対応 in converting with plantuml")
-            return
-        # FIXME: dst_pathがない場合、再帰的に生成する様に要修正
-        # cmd = "{cmd_pu} -o {dst_abs_dir_only} -t{fmt} {src}".format(
-        #     cmd_pu=cls._cmd_plantuml,
-        #     src=src_pl.as_posix(),
-        #     dst_abs_dir_only=dst_pl.parent,
-        #     fmt=dst_pl.suffix[1:]
-        # )
-        """注意
-        - `-o`: 絶対PATHなら問題なさそうだが、相対PATHでは、srcファイルからの相対PATHとなる模様。よって、dst_plを絶対PATHに変更する必要がある
-        """
-        cmd = f"{cls._cmd_plantuml} -o {dst_pl.parent} -t{dst_pl.suffix[1:]} {src_pl.as_posix()}"
-        res = cls._run_cmd(cmd=cmd, short_msg="Converting with %s" % cls._cmd_plantuml)
-        # Move generated file to dst_pl
-        pl_out = dst_pl.parent.joinpath(src_pl.stem + dst_pl.suffix)
-        shutil.move(pl_out, dst_pl)
-        """Show output msg"""
-        if res is None or res == "":
-            logger.info("Completed. ")
-        else:
-            logger.info("Finished with msg: %s" % res)
+        cmd_path = shutil.which(cls._cmd_plantuml)
+        if cmd_path is None:
+            logger.error(f"{cls._cmd_plantuml} not found. Can't convert from PlantUML (e.g. `brew install plantuml`)")
+            return None
+        dst_fmt = dst_pl.suffix.lower()
+        is_direct = dst_fmt in cls.plantuml_fmt_out and not gray
+        render_fmt = dst_fmt if is_direct else ".png"
+        with tempfile.TemporaryDirectory(prefix="ml_writing_helper-puml-") as tmp:
+            tmp_pl = Path(tmp)
+            cmd = [cmd_path, "-charset", "UTF-8", "-o", tmp_pl.as_posix(), f"-t{render_fmt[1:]}", src_pl.as_posix()]
+            logger.info(f"CMD(Converting with {cls._cmd_plantuml}):{' '.join(cmd)}")
+            # !include の相対PATHがsrcファイル基準で解決されるようcwdを指定
+            res = subprocess.run(cmd, capture_output=True, text=True, cwd=src_pl.parent)
+            if res.returncode != 0:
+                logger.error(f"PlantUML conversion failed({src_pl.name}): {(res.stderr or res.stdout).strip()}")
+                return None
+            rendered = tmp_pl.joinpath(src_pl.stem + render_fmt)
+            if not rendered.exists():
+                outputs = sorted(tmp_pl.glob(f"*{render_fmt}"))
+                if not outputs:
+                    logger.error(f"PlantUML output not found: {src_pl.name}")
+                    return None
+                rendered = outputs[0]
+            if len(list(tmp_pl.glob(f"*{render_fmt}"))) > 1:
+                logger.warning(f"{src_pl.name} contains multiple diagrams. Only the first one is output.")
+            if is_direct:
+                _ = shutil.move(rendered, dst_pl)
+            else:
+                with Image.open(rendered) as im:
+                    out_im = cls.remove_transparency(im.convert("RGBA")).convert("L" if gray else "RGB")
+                    out_im.save(dst_pl.as_posix())
+        logger.info(f"Converted {src_pl} to {dst_pl}")
+        return dst_pl
 
     # @classmethod
     #     :param src_pl:
@@ -701,6 +711,8 @@ class ImgConvInputType(StrEnum):
     pptx = "pptx"
     ppt = "ppt"
     gif = "gif"  # TODO: GIFは可？
+    pu = "pu"  # PlantUML
+    puml = "puml"  # PlantUML
 
 
 class ImgConvOutputType(StrEnum):

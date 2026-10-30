@@ -12,6 +12,7 @@ This package is a helper tool for writing documents and papers using Markup Lang
 
 1. Image insertion support 
    1. This can convert .pptx/.ppt files created by PowerPoint or LibreOffice into image files such as .eps, .pdf, .png and so on.
+   1. This can convert PlantUML files (.pu/.puml) into image files as well.
 1. Cropping
    1. This can remove outline white space in the above conversion.
 1. Monitoring specific folders and copy if inside files are changed
@@ -39,6 +40,7 @@ python -m build --wheel
 Please install the following software before using this package.
 
 1. LibreOffice
+1. PlantUML (only for converting .pu/.puml, e.g. `brew install plantuml`)
 
 ## CLI
 
@@ -180,7 +182,9 @@ Available in every mode (e.g. `ml_writing_helper --mode copy --src a --dst b --l
 
 ##### Mode: img_conv
 
-This mode converts src path's images (e.g.: .pptx, .png) into dest path with format (e.g.: .eps, .pdf)
+This mode converts src path's images (e.g.: .pptx, .png, .puml) into dest path with format (e.g.: .eps, .pdf)
+
+- PlantUML (.pu/.puml): needs the `plantuml` command. png/pdf/eps are output directly by PlantUML (pdf/eps keep vector), while jpg/jpeg/gif/bmp/tiff and `--gray` go through a PNG rendering. Cropping is not applied (PlantUML output has no outer margin). If one file has multiple diagrams, only the first one is output.
 
 | Option      | Default   | Description                                             |
 | ----------- | --------- | ------------------------------------------------------- |
