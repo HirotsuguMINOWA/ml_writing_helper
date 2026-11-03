@@ -1,3 +1,6 @@
+*rules*
+
+
 # Nuitka
 build_nuitka_output/*
 nuitka-crash-report*
