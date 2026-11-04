@@ -253,6 +253,7 @@ json task keys (`"type": "doc_conv"`):
   - browser HTML / playwright PDF: KaTeX
   - pandoc HTML: MathJax (`--mathjax` is passed to pandoc automatically; viewing needs an internet connection)
   - pandoc PDF: LaTeX / pandoc DOCX: Word equations
+- Local images referenced from Markdown (`![](img.png)` / `<img src="img.png">`, relative to the .md file) are shown even though the output is written to a different folder: HTML output rewrites them to paths relative to the output file, and playwright PDF embeds them as data URIs. Images referenced from HTML output must therefore stay where they are.
 - Files in dst are not converted again when dst is inside src. Hidden files/folders and `node_modules` are skipped.
 - While watching, a file is converted when it is newer than its output.
 - If a tool is missing, a warning is shown and pandoc is used instead where possible.

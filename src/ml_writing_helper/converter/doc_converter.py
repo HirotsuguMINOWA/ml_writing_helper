@@ -10,14 +10,19 @@ Markdown/HTML を PDF/HTML/DOCX へ変換する処理（md2pdf.py から移植�
     pandoc(+lualatex), plantuml, marp (または npx), slidev (または npx), Chrome/Chromium,
     playwright (pip install playwright && playwright install chromium)
 """
+import base64
 import json
+import mimetypes
+import os
 import platform
 import re
 import shutil
 import subprocess
 import tempfile
+import urllib.parse
 from collections.abc import Sequence
 from functools import cache
+from html import unescape as html_unescape
 from pathlib import Path
 from typing import Final
 
@@ -61,6 +66,63 @@ DEFAULT_CHROME_CANDIDATES: Final[tuple[Path, ...]] = (
     Path("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"),
     Path("/Applications/Chromium.app/Contents/MacOS/Chromium"),
 )
+
+
+# Markdown 画像 ![alt](path "title") と HTML の <img src="path">
+MD_IMAGE_RE: Final[re.Pattern[str]] = re.compile(r'(!\[[^\]]*\]\(\s*)(<[^>\n]+>|[^)\s]+)')
+HTML_IMG_SRC_RE: Final[re.Pattern[str]] = re.compile(r'(<img\b[^>]*?\bsrc\s*=\s*)(["\'])(.*?)\2', re.IGNORECASE)
+# 画像パス書き換えの対象外にするコード部分（フェンスコードブロック・インラインコード）
+CODE_SPAN_RE: Final[re.Pattern[str]] = re.compile(r"(^ {0,3}(`{3,}|~{3,}).*?^ {0,3}\2[ \t]*$|`[^`\n]+`)", re.DOTALL | re.MULTILINE)
+URL_SCHEME_RE: Final[re.Pattern[str]] = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.-]*:|^//|^#")
+
+
+def _local_image_file(ref: str, src_dir: Path) -> Path | None:
+    """画像参照がローカルに存在するファイルを指していればその絶対パスを返す。"""
+    if not ref or URL_SCHEME_RE.match(ref):
+        return None
+    path_part = urllib.parse.unquote(ref.split("#", 1)[0].split("?", 1)[0])
+    candidate = Path(path_part)
+    if not candidate.is_absolute():
+        candidate = src_dir / candidate
+    return candidate.resolve() if candidate.is_file() else None
+
+
+def rewrite_local_image_refs(md_text: str, src_dir: Path, output_dir: Path | None = None) -> str:
+    """Markdown 中のローカル画像参照を、出力先から辿れる形に書き換える。
+
+    - output_dir を与えた場合: output_dir からの相対パス（URL エンコード済み）にする（HTML 出力用）
+    - output_dir が None の場合: data URI として埋め込む（base URL を持たないブラウザ描画 → PDF 用）
+    コードブロック・インラインコード内、および URL / 存在しないファイルは書き換えない。
+    """
+
+    def new_ref(ref: str) -> str | None:
+        image = _local_image_file(ref, src_dir)
+        if image is None:
+            return None
+        if output_dir is None:
+            mime = mimetypes.guess_type(image.name)[0] or "application/octet-stream"
+            return f"data:{mime};base64,{base64.b64encode(image.read_bytes()).decode('ascii')}"
+        rel = os.path.relpath(image, output_dir.resolve())
+        return urllib.parse.quote(Path(rel).as_posix(), safe="/")
+
+    def replace_md(m: re.Match[str]) -> str:
+        ref = m.group(2)
+        bracketed = ref.startswith("<") and ref.endswith(">")
+        replaced = new_ref(ref[1:-1] if bracketed else ref)
+        return m.group(0) if replaced is None else m.group(1) + replaced
+
+    def replace_html(m: re.Match[str]) -> str:
+        replaced = new_ref(html_unescape(m.group(3)))
+        return m.group(0) if replaced is None else f"{m.group(1)}{m.group(2)}{replaced}{m.group(2)}"
+
+    parts = CODE_SPAN_RE.split(md_text)
+    # split はキャプチャグループも返すので、(本文, コード全体, フェンス記号) の3つ組で並ぶ
+    out: list[str] = []
+    for idx in range(0, len(parts), 3):
+        out.append(HTML_IMG_SRC_RE.sub(replace_html, MD_IMAGE_RE.sub(replace_md, parts[idx])))
+        if idx + 1 < len(parts):
+            out.append(parts[idx + 1])
+    return "".join(out)
 
 
 def has_diagram_blocks(text: str) -> bool:
@@ -380,6 +442,7 @@ class DocConverter:
         elif fmt == "html":
             if _plantuml_available():
                 markdown_text = self._replace_plantuml_with_svg(markdown_text)
+            markdown_text = rewrite_local_image_refs(markdown_text, md_file.parent, output_file.parent)
             cmd.extend(["-t", "html5", "--standalone", "--mathjax", "--metadata", f"pagetitle={md_file.stem}"])
 
         cmd.extend(["-o", str(output_file)])
@@ -419,7 +482,8 @@ class DocConverter:
 
     def convert_to_html(self, md_file: Path, output_file: Path) -> bool:
         """MD → ブラウザ向け HTML（mermaid.js 等は CDN から読み込む）"""
-        html = self.build_browser_html(md_file.read_text(encoding="utf-8"))
+        md_text = rewrite_local_image_refs(md_file.read_text(encoding="utf-8"), md_file.parent, output_file.parent)
+        html = self.build_browser_html(md_text)
         output_file.write_text(html, encoding="utf-8")
         logger.info(f"[html-template] {md_file} -> {output_file}")
         return True
@@ -431,7 +495,9 @@ class DocConverter:
             return self.convert_with_pandoc(md_file, output_file, "pdf")
         from playwright.sync_api import sync_playwright
 
-        html = self.build_browser_html(md_file.read_text(encoding="utf-8"))
+        # set_content() のページには base URL が無く相対パスの画像を読めないため、data URI で埋め込む
+        md_text = rewrite_local_image_refs(md_file.read_text(encoding="utf-8"), md_file.parent)
+        html = self.build_browser_html(md_text)
         with sync_playwright() as p:
             browser = p.chromium.launch()
             try:
@@ -484,16 +550,21 @@ class DocConverter:
             logger.warning(f"marp unavailable; falling back to pandoc: {md_file}")
             return self.convert_with_pandoc(md_file, output_file, fmt)
         header_text = self._load_marp_header_text()
+        original_text = md_file.read_text(encoding="utf-8")
+        marp_text = self._inject_marp_header(original_text, header_text) if header_text else original_text
+        if fmt == "html":
+            # HTML は出力先フォルダに置かれるため、画像パスを出力先からの相対パスに直す
+            marp_text = rewrite_local_image_refs(marp_text, md_file.parent, output_file.parent)
         temp_md: Path | None = None
         marp_input = md_file
         try:
-            if header_text:
+            if marp_text != original_text:
                 # 相対パスの画像を解決できるよう、元ファイルと同じフォルダに一時ファイルを作る
                 with tempfile.NamedTemporaryFile(
                         mode="w", encoding="utf-8", suffix=".md", prefix=f".{md_file.stem}.marp.",
                         dir=str(md_file.parent), delete=False,
                 ) as f:
-                    f.write(self._inject_marp_header(md_file.read_text(encoding="utf-8"), header_text))
+                    f.write(marp_text)
                     temp_md = marp_input = Path(f.name)
             cmd = [*marp, *(["--pdf"] if fmt == "pdf" else []), "--allow-local-files",
                    marp_input.name, "-o", str(output_file.resolve())]

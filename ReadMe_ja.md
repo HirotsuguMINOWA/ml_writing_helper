@@ -252,6 +252,7 @@ json タスクのキー (`"type": "doc_conv"`):
   - ブラウザ HTML / playwright PDF: KaTeX
   - pandoc HTML: MathJax (`--mathjax` は自動で pandoc に渡されます。表示にはインターネット接続が必要です)
   - pandoc PDF: LaTeX / pandoc DOCX: Word の数式
+- Markdown から参照するローカル画像 (`![](img.png)` / `<img src="img.png">`、.md ファイルからの相対パス) は、出力先が別フォルダでも表示されます。HTML 出力では出力ファイルからの相対パスに書き換え、playwright PDF では data URI として埋め込みます。そのため HTML 出力から参照される画像は元の場所に置いたままにしてください。
 - dst が src の内部にある場合、dst 内のファイルは再変換されません。隠しファイル/フォルダーと `node_modules` はスキップされます。
 - 監視中、ファイルがその出力より新しいときにのみ変換されます。
 - ツールが不足している場合は、警告が表示され、可能な限り pandoc が代わりに使用されます。
