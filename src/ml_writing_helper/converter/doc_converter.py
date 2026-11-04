@@ -380,7 +380,7 @@ class DocConverter:
         elif fmt == "html":
             if _plantuml_available():
                 markdown_text = self._replace_plantuml_with_svg(markdown_text)
-            cmd.extend(["-t", "html5", "--standalone", "--metadata", f"pagetitle={md_file.stem}"])
+            cmd.extend(["-t", "html5", "--standalone", "--mathjax", "--metadata", f"pagetitle={md_file.stem}"])
 
         cmd.extend(["-o", str(output_file)])
         if not _run(cmd, cwd=md_file.parent, label="pandoc", stdin=markdown_text):
@@ -556,7 +556,6 @@ _BROWSER_HTML_TEMPLATE: Final[str] = r"""<!DOCTYPE html>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11/styles/github.min.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
 <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
 <style>
   body { font-family: "Hiragino Kaku Gothic ProN", sans-serif;
          max-width: 900px; margin: 0 auto; padding: 2em; }
@@ -574,9 +573,55 @@ _BROWSER_HTML_TEMPLATE: Final[str] = r"""<!DOCTYPE html>
 <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/highlight.js@11/lib/highlight.min.js"></script>
 <script>
+  // 数式は marked の Markdown 解釈（_ → <em>、\\ → \ など）より先に切り出し、KaTeX で直接描画する。
+  // marked はコードブロック / インラインコードを先に処理するため、コード内の $ は数式扱いされない。
+  function escapeHtml(s) {
+    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+  function renderMath(tex, displayMode) {
+    try {
+      if (typeof katex !== 'undefined') {
+        return katex.renderToString(tex, { displayMode: displayMode, throwOnError: false });
+      }
+    } catch(e) {
+      console.error('KaTeX rendering error:', e);
+    }
+    return displayMode ? '$$' + escapeHtml(tex) + '$$' : '$' + escapeHtml(tex) + '$';
+  }
+  function firstIndex(src, re) {
+    var i = src.search(re);
+    return i < 0 ? undefined : i;
+  }
+  var mathBlock = {
+    name: 'mathBlock',
+    level: 'block',
+    start: function(src) { return firstIndex(src, /\$\$|\\\[/); },
+    tokenizer: function(src) {
+      var m = /^ {0,3}(?:\$\$([\s\S]+?)\$\$|\\\[([\s\S]+?)\\\])[ \t]*(?:\n+|$)/.exec(src);
+      if (m) return { type: 'mathBlock', raw: m[0], text: (m[1] !== undefined ? m[1] : m[2]).trim() };
+    },
+    renderer: function(token) { return '<div class="math-display">' + renderMath(token.text, true) + '</div>\n'; }
+  };
+  var mathInline = {
+    name: 'mathInline',
+    level: 'inline',
+    start: function(src) { return firstIndex(src, /\$|\\\(/); },
+    tokenizer: function(src) {
+      var m = /^\$\$([\s\S]+?)\$\$/.exec(src);
+      if (m) return { type: 'mathInline', raw: m[0], text: m[1].trim(), display: true };
+      m = /^\\\(([\s\S]+?)\\\)/.exec(src);
+      if (m) return { type: 'mathInline', raw: m[0], text: m[1].trim(), display: false };
+      // $5 と $10 のような金額を誤検出しないよう、$ の内側に空白がなく、閉じ $ の直後が数字でないものに限る
+      m = /^\$(?!\s)((?:\\.|[^\\$\n])+?)(?<!\s)\$(?!\d)/.exec(src);
+      if (m) return { type: 'mathInline', raw: m[0], text: m[1], display: false };
+    },
+    renderer: function(token) { return renderMath(token.text, token.display); }
+  };
+
   // mermaid コードブロックを <div class="mermaid"> に変換するカスタムレンダラー
   marked.use({
     gfm: true,
+    extensions: [mathBlock, mathInline],
     renderer: {
       code({ text, lang }) {
         if (lang === 'mermaid') {
@@ -589,45 +634,12 @@ _BROWSER_HTML_TEMPLATE: Final[str] = r"""<!DOCTYPE html>
 
   const md = __MD_JSON__;
   const content = document.getElementById('content');
-
-  // コードブロック内の $ を KaTeX に誤認識されないよう、一時的にプレースホルダに置き換えて marked.parse する。
-  var U2500 = String.fromCharCode(0x2500);
-  var PH_START = U2500 + 'CODEBLOCKSTART' + U2500;
-  var PH_END = U2500 + 'CODEBLOCKEND' + U2500;
-  var savedBlocks = [];
-  var mdForParse = md.replace(/```([\s\S]*?)```/g, function(m) {
-    savedBlocks.push(m);
-    return PH_START + (savedBlocks.length - 1) + PH_END;
-  });
-
-  content.innerHTML = marked.parse(mdForParse);
-
-  var BS = '\\';
-  var codeRe = new RegExp(PH_START + '(' + BS + 'd+)' + PH_END, 'g');
-  content.innerHTML = content.innerHTML.replace(codeRe, function(_, idx) {
-    return marked.parse(savedBlocks[parseInt(idx, 10)]);
-  });
+  content.innerHTML = marked.parse(md);
 
   try {
     document.querySelectorAll('pre code').forEach(function(el) { hljs.highlightElement(el); });
   } catch(e) {
     console.error('hljs highlighting error:', e);
-  }
-
-  try {
-    if (typeof renderMathInElement === 'function') {
-      renderMathInElement(content, {
-        delimiters: [
-          { left: '$$', right: '$$', display: true },
-          { left: '$', right: '$', display: false },
-          { left: BS + '[', right: BS + ']', display: true },
-          { left: BS + '(', right: BS + ')', display: false }
-        ],
-        throwOnError: false
-      });
-    }
-  } catch(e) {
-    console.error('KaTeX rendering error:', e);
   }
 
   // スクリプト読み込みエラーや mermaid 描画エラー時でも必ず data-ready をセット

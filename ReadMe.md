@@ -249,6 +249,10 @@ json task keys (`"type": "doc_conv"`):
 | `.html` (when `--pattern "*.html"`)                | Chrome headless print | copied as is | pandoc |
 
 - "browser HTML" embeds marked.js / mermaid.js / highlight.js / KaTeX from CDN, so viewing it needs an internet connection.
+- Math is rendered by default with every engine; no option is needed. `$...$` / `\(...\)` are inline math and `$$...$$` / `\[...\]` are display math (amounts such as `$5` and `$` inside code are left as text).
+  - browser HTML / playwright PDF: KaTeX
+  - pandoc HTML: MathJax (`--mathjax` is passed to pandoc automatically; viewing needs an internet connection)
+  - pandoc PDF: LaTeX / pandoc DOCX: Word equations
 - Files in dst are not converted again when dst is inside src. Hidden files/folders and `node_modules` are skipped.
 - While watching, a file is converted when it is newer than its output.
 - If a tool is missing, a warning is shown and pandoc is used instead where possible.

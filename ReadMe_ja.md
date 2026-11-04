@@ -248,6 +248,10 @@ json タスクのキー (`"type": "doc_conv"`):
 | `.html` (`--pattern "*.html"` の場合)             | Chrome headless 印刷 | そのままコピー | pandoc |
 
 - 「ブラウザ HTML」は marked.js / mermaid.js / highlight.js / KaTeX を CDN から埋め込むため、表示にはインターネット接続が必要です。
+- 数式はどのエンジンでもデフォルトでレンダリングされ、オプション指定は不要です。`$...$` / `\(...\)` はインライン数式、`$$...$$` / `\[...\]` はディスプレイ数式です (`$5` のような金額やコード内の `$` は文字のまま残ります)。
+  - ブラウザ HTML / playwright PDF: KaTeX
+  - pandoc HTML: MathJax (`--mathjax` は自動で pandoc に渡されます。表示にはインターネット接続が必要です)
+  - pandoc PDF: LaTeX / pandoc DOCX: Word の数式
 - dst が src の内部にある場合、dst 内のファイルは再変換されません。隠しファイル/フォルダーと `node_modules` はスキップされます。
 - 監視中、ファイルがその出力より新しいときにのみ変換されます。
 - ツールが不足している場合は、警告が表示され、可能な限り pandoc が代わりに使用されます。
