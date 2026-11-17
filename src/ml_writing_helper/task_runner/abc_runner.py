@@ -78,15 +78,13 @@ class ABCTaskRunner(ABC, FileSystemEventHandler):
 
             # ** Check base_self.dest_dir_path path
             if not self._dest_dir_path.exists():
-                logger.info("右記PATH存在しません、作成しますか?:%s" % self._dest_dir_path)
-
-                res = ""
-                while res not in ("y", "n", "Y", "N"):
-                    res = input("make dir?(y/n)")
-                if res in ("y", "Y"):
-                    self._dest_dir_path.mkdir(parents=True, exist_ok=True)
-                else:
-                    raise Exception("[Error] dst_pathが存在しないので終了しました")
+                # 実行前に dst の存在を強制する（対話的な y/n プロンプトでは止まれない）
+                from ml_writing_helper.config import ConfigError
+                raise ConfigError(
+                    [f"「dst」の{'ファイル' if self._dest_dir_path.suffix else 'フォルダ'}が見つかりません\n探した場所: {self._dest_dir_path}"],
+                    title="src / dst のパスに問題があります",
+                    hint="実行前に「dst」のパスが存在していることを確認してください（copy は dst が事前に存在する必要があります）",
+                )
             logger.info("Set exporting Path:%s" % self._dest_dir_path)
 
             # ! set into scheduling

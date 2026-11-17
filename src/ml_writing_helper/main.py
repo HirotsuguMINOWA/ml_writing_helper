@@ -64,6 +64,7 @@ from ml_writing_helper.config import (
     load_config_arg,
     resolve_path,
     strip_dot,
+    validate_task_paths,
 )
 
 try:
@@ -1281,6 +1282,12 @@ def _watch_config_from_cli(args: argparse.Namespace) -> WatchConfig:
             tasks.append(CopyTaskConfig(src=src, dst=resolve_path(dst_dir, root), exts=copy_exts, diff_sec=args.diff_sec))
         if errors:
             raise ConfigError(errors, title=_PARAM_ERROR, hint=f"相対パスは --root（{root}）を基準に探します")
+
+    for task in tasks:
+        for problem in validate_task_paths(task):
+            errors.append(problem)
+    if errors:
+        raise ConfigError(errors, title=_PARAM_ERROR, hint=f"相対パスは --root（{root}）を基準に探します")
 
     return WatchConfig(
         tasks=tasks, observer=args.observer, sleep_sec=args.sleep_sec, log_level=args.log_level, monitor=args.monitor

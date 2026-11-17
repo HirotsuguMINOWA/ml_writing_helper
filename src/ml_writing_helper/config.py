@@ -208,6 +208,29 @@ def _dir_problem(label: str, given: str, resolved: Path) -> str | None:
     return f"{label}{reason}\n指定値: {_show(given)}\n探した場所: {resolved}"
 
 
+def _src_exists_problem(label: str, given: str, resolved: Path) -> str | None:
+    if resolved.exists():
+        return None
+    reason = "ファイルが見つかりません" if resolved.suffix else "フォルダが見つかりません"
+    return f"{label}{reason}\n指定値: {_show(given)}\n探した場所: {resolved}"
+
+
+def validate_task_paths(task: TaskConfig) -> list[str]:
+    """Paths that must exist before running a task. Returns a list of problems (empty is OK).
+
+    「src」は常に存在しないといけません（無いならその場で止まる）。
+    「dst」は copy のみ事前に存在が必要です。他の mode は処理のときに自動的にフォルダを作るので存在しなくても構いません。
+    """
+    problems: list[str] = []
+    if not task.src.exists():
+        reason = "ファイルが見つかりません" if task.src.suffix else "フォルダが見つかりません"
+        problems.append(f"「src」の{reason}\n指定値: {_show(str(task.src))}\n探した場所: {task.src}")
+    if isinstance(task, CopyTaskConfig) and not task.dst.exists():
+        reason = "ファイルが見つかりません" if task.dst.suffix else "フォルダが見つかりません"
+        problems.append(f"「dst」の{reason}\n指定値: {_show(str(task.dst))}\n探した場所: {task.dst}")
+    return problems
+
+
 def _parse_task(
         t: Any,
         where: str,
@@ -484,6 +507,15 @@ def parse_config(
 
     if errors:
         raise ConfigError(errors)
+    for i, task in enumerate(tasks):
+        for problem in validate_task_paths(task):
+            errors.append(f"{i + 1}番目のタスク: {problem}")
+    if errors:
+        raise ConfigError(
+            errors,
+            title="src / dst のパスに問題があります",
+            hint="「src」は実行前に存在していないといけません。存在しない場合は正しいパスを指定してください",
+        )
     return WatchConfig(
         tasks=tasks, observer=observer, sleep_sec=float(sleep_sec), log_level=log_level.upper(), monitor=monitor
     )
