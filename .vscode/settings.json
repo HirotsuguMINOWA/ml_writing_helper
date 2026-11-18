@@ -6,17 +6,18 @@
     ],
     "python.analysis.typeCheckingMode": "off",
     "workbench.colorCustomizations": {
-        "activityBar.background": "#4C0A64",
-        "titleBar.activeBackground": "#6A0E8C",
-        "titleBar.activeForeground": "#FDFAFE",
-        "titleBar.inactiveBackground": "#4C0A64",
-        "titleBar.inactiveForeground": "#FDFAFE",
-        "statusBar.background": "#4C0A64",
-        "statusBar.foreground": "#FDFAFE",
-        "statusBar.debuggingBackground": "#4C0A64",
-        "statusBar.debuggingForeground": "#FDFAFE",
-        "statusBar.noFolderBackground": "#4C0A64",
-        "statusBar.noFolderForeground": "#FDFAFE"
+        "activityBar.background": "#4D4D0F",
+        "titleBar.activeBackground": "#6C6C15",
+        "titleBar.activeForeground": "#FBFBEA",
+        "titleBar.inactiveBackground": "#4D4D0F",
+        "titleBar.inactiveForeground": "#FBFBEA",
+        "statusBar.background": "#4D4D0F",
+        "statusBar.foreground": "#FBFBEA",
+        "statusBar.debuggingBackground": "#4D4D0F",
+        "statusBar.debuggingForeground": "#FBFBEA",
+        "statusBar.noFolderBackground": "#4D4D0F",
+        "statusBar.noFolderForeground": "#FBFBEA"
     },
-    "window.title": "ML Writing Helper"
+    "window.title": "ML Writing Helper",
+    "windowColors.baseColor": "#6b6b15"
 }
