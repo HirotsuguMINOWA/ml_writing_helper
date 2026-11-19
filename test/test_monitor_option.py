@@ -1,11 +1,16 @@
 from __future__ import annotations
 
 import shutil
+import urllib.error
 from pathlib import Path
 
 import pytest
+from loguru import logger
 
+from ml_writing_helper import dst_sync, link_checker
 from ml_writing_helper import main as main_mod
+from ml_writing_helper.link_checker import check_links
+from ml_writing_helper.task_runner.copy_runner import CopyTask
 from ml_writing_helper.config import (
     ConfigError,
     CopyTaskConfig,
@@ -84,6 +89,108 @@ def test_cli_monitor_alone_is_error() -> None:
         _ = _check_watch_args(args)
 
 
+def _touch(path: Path, text: str = "x") -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    _ = path.write_text(text, encoding="utf-8")
+
+
+def _fake_stdin(monkeypatch: pytest.MonkeyPatch, answer: str | None) -> None:
+    """answer が None なら端末でない stdin、文字列なら端末として確認プロンプトにその答えを返す。"""
+
+    class _Stdin:
+        def isatty(self) -> bool:
+            return answer is not None
+
+    monkeypatch.setattr(dst_sync.sys, "stdin", _Stdin())
+    monkeypatch.setattr("builtins.input", lambda _prompt="": answer or "")
+
+
+def test_copy_sync_dst_deletes_only_dst_files_missing_in_src(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    src, dst = tmp_path / "src", tmp_path / "dst"
+    _touch(src / "a.bib")
+    _touch(src / "sub" / "b.bib")
+    _touch(dst / "a.bib", "old")
+    _touch(dst / "old.bib")
+    _touch(dst / "sub" / "old.bib")
+    _fake_stdin(monkeypatch, "y")
+
+    CopyTask(src_dir_path=src, dst_dir_path=dst, src_suffixes=["bib"], sync_dst=True).run_all_target_files_in_target_dir()
+
+    assert (dst / "a.bib").exists() and (dst / "sub" / "b.bib").exists()
+    assert not (dst / "old.bib").exists()
+    assert not (dst / "sub" / "old.bib").exists()
+    assert (src / "a.bib").exists() and (src / "sub" / "b.bib").exists()
+
+
+def test_copy_sync_dst_keeps_extras_without_terminal(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    src, dst = tmp_path / "src", tmp_path / "dst"
+    _touch(src / "a.bib")
+    _touch(dst / "old.bib")
+    _fake_stdin(monkeypatch, None)
+
+    CopyTask(src_dir_path=src, dst_dir_path=dst, src_suffixes=["bib"], sync_dst=True).run_all_target_files_in_target_dir()
+
+    assert (dst / "old.bib").exists()
+
+
+def test_sync_dst_refuses_same_src_and_dst(tmp_path: Path) -> None:
+    (tmp_path / "docs").mkdir()
+    with pytest.raises(ConfigError):
+        _ = parse_config({"mode": "copy", "src": "docs", "dst": "docs", "sync_dst": True}, base_dir=tmp_path)
+
+
+def test_check_status_returns_final_status_after_redirect(monkeypatch: pytest.MonkeyPatch) -> None:
+    class _Response:
+        status = 200
+
+        def __enter__(self) -> "_Response":
+            return self
+
+        def __exit__(self, *_args: object) -> bool:
+            return False
+
+    monkeypatch.setattr(link_checker.urllib.request, "urlopen", lambda req, timeout: _Response())
+    assert link_checker.check_status("https://example.com/moved") == 200
+
+
+def test_check_links_warns_only_for_non_200(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    doc = tmp_path / "a.md"
+    _ = doc.write_text("[ok](https://ok.example/)\n[ng](https://ng.example/)\n", encoding="utf-8")
+
+    class _Response:
+        status = 200
+
+        def __enter__(self) -> "_Response":
+            return self
+
+        def __exit__(self, *_args: object) -> bool:
+            return False
+
+    def fake_urlopen(req: object, timeout: float) -> _Response:
+        if "ng.example" in req.full_url:  # type: ignore[attr-defined]
+            raise urllib.error.HTTPError(req.full_url, 404, "Not Found", None, None)  # type: ignore[attr-defined]
+        return _Response()
+
+    monkeypatch.setattr(link_checker.urllib.request, "urlopen", fake_urlopen)
+    warnings: list[str] = []
+    handler_id = logger.add(lambda m: warnings.append(m.record["message"]), level="WARNING")
+    try:
+        check_links(doc)
+    finally:
+        logger.remove(handler_id)
+
+    assert len(warnings) == 1
+    assert "https://ng.example/" in warnings[0] and "404" in warnings[0]
+
+
+def test_cli_sync_dst_rejected_for_img_conv(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    (tmp_path / "docs").mkdir()
+    monkeypatch.chdir(tmp_path)
+    args = _parse_cli_args(["--mode", "img_conv", "--src", "docs", "--ext", "pdf", "--sync-dst"])
+    with pytest.raises(ConfigError):
+        _ = _watch_config_from_cli(args)
+
+
 @pytest.mark.skipif(shutil.which("pandoc") is None, reason="pandoc is not installed")
 def test_without_monitor_runs_once_and_exits(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     (tmp_path / "docs").mkdir()
@@ -158,6 +265,17 @@ def test_parse_config_doc_conv_missing_dst_ok(tmp_path: Path) -> None:
     (tmp_path / "docs").mkdir()
     config = parse_config({"mode": "doc_conv", "src": "docs"}, base_dir=tmp_path)
     assert isinstance(config.tasks[0], DocConvTaskConfig)
+
+
+def test_parse_config_sync_dst_and_check_link_keys(tmp_path: Path) -> None:
+    (tmp_path / "src").mkdir()
+    (tmp_path / "dst").mkdir()
+    copy_task = parse_config(
+        {"mode": "copy", "src": "src", "dst": "dst", "sync_dst": True, "check_link": True}, base_dir=tmp_path
+    ).tasks[0]
+    assert (copy_task.sync_dst, copy_task.check_link) == (True, True)
+    doc_task = parse_config({"mode": "doc_conv", "src": "src", "check_link": True}, base_dir=tmp_path).tasks[0]
+    assert (doc_task.sync_dst, doc_task.check_link) == (False, True)
 
 
 def test_cli_mode_copy_missing_src_stops(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

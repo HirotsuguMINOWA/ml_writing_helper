@@ -40,6 +40,7 @@ from ml_writing_helper.converter.doc_converter import (
     normalize_input_patterns,
 )
 from ml_writing_helper.converter.slide_img_converter import ImgConvOutputType
+from ml_writing_helper.dst_sync import sync_dst_problem
 
 CONFIG_FILENAME: Final[str] = "ml_writing_helper.json"
 OUTPUT_FORMATS: Final[list[str]] = [str(x) for x in ImgConvOutputType]
@@ -97,6 +98,8 @@ class CopyTaskConfig:
     dst: Path
     exts: tuple[str, ...] = DEFAULT_COPY_EXTS
     diff_sec: int = DEFAULT_DIFF_SEC
+    sync_dst: bool = False  # 起動時に dst から src に対応しないファイルを削除する（確認あり）
+    check_link: bool = False  # .md / .html のリンク先を確認する
 
 
 @dataclass(frozen=True)
@@ -110,6 +113,8 @@ class DocConvTaskConfig:
     marp_headers: tuple[Path, ...] = ()
     copy_exts: tuple[str, ...] = ()
     diff_sec: int = DEFAULT_DIFF_SEC
+    sync_dst: bool = False  # 起動時に dst から src に対応しないファイルを削除する（確認あり）
+    check_link: bool = False  # .md / .html のリンク先を確認する
 
 
 @dataclass(frozen=True)
@@ -174,6 +179,14 @@ def _is_number(v: Any) -> bool:
     return isinstance(v, (int, float)) and not isinstance(v, bool)
 
 
+def _bool_option(t: dict[str, Any], key: str, where: str, errors: list[str]) -> bool:
+    v = t.get(key, False)
+    if not isinstance(v, bool):
+        errors.append(f"{where}: 「{key}」には true か false を指定してください（指定値: {_show(v)}）")
+        return False
+    return v
+
+
 def _show(v: Any) -> str:
     """Show a user-given value as it looks in JSON."""
     return json.dumps(v, ensure_ascii=False)
@@ -186,9 +199,9 @@ def _choices(values: Sequence[str]) -> str:
 _TOP_KEYS: Final[tuple[str, ...]] = ("root", "observer", "sleep_sec", "log_level", "monitor", "tasks")
 _TASK_KEYS: Final[dict[str, tuple[str, ...]]] = {
     "img_conv": ("type", "mode", "src", "dst", "ext", "gray", "crop"),
-    "copy": ("type", "mode", "src", "dst", "exts", "ext", "diff_sec"),
+    "copy": ("type", "mode", "src", "dst", "exts", "ext", "diff_sec", "sync_dst", "check_link"),
     "doc_conv": ("type", "mode", "src", "dst", "ext", "engine", "pattern", "header", "marp_header", "copy_exts",
-                 "diff_sec"),
+                 "diff_sec", "sync_dst", "check_link"),
     "scorm": ("type", "mode", "src", "dst", "pattern", "diff_sec"),
 }
 _TASK_KEYS_ANY: Final[tuple[str, ...]] = tuple(dict.fromkeys(k for keys in _TASK_KEYS.values() for k in keys))
@@ -228,6 +241,10 @@ def validate_task_paths(task: TaskConfig) -> list[str]:
     if isinstance(task, CopyTaskConfig) and not task.dst.exists():
         reason = "ファイルが見つかりません" if task.dst.suffix else "フォルダが見つかりません"
         problems.append(f"「dst」の{reason}\n指定値: {_show(str(task.dst))}\n探した場所: {task.dst}")
+    if isinstance(task, (CopyTaskConfig, DocConvTaskConfig)) and task.sync_dst:
+        problem = sync_dst_problem(task.src, task.dst)
+        if problem:
+            problems.append(problem)
     return problems
 
 
@@ -311,10 +328,13 @@ def _parse_task(
     diff_sec = t.get("diff_sec", DEFAULT_DIFF_SEC)
     if not isinstance(diff_sec, int) or isinstance(diff_sec, bool) or diff_sec < 0:
         errors.append(f"{where}: 「diff_sec」には 0 以上の整数（秒）を指定してください（指定値: {_show(diff_sec)}）")
+    sync_dst = _bool_option(t, "sync_dst", where, errors)
+    check_link = _bool_option(t, "check_link", where, errors)
     if len(errors) > n_errors:
         return None
     return CopyTaskConfig(
-        src=paths["src"], dst=paths["dst"], exts=tuple(strip_dot(e) for e in exts), diff_sec=diff_sec
+        src=paths["src"], dst=paths["dst"], exts=tuple(strip_dot(e) for e in exts), diff_sec=diff_sec,
+        sync_dst=sync_dst, check_link=check_link,
     )
 
 
@@ -375,6 +395,8 @@ def _parse_doc_conv_task(
     diff_sec = t.get("diff_sec", DEFAULT_DIFF_SEC)
     if not isinstance(diff_sec, int) or isinstance(diff_sec, bool) or diff_sec < 0:
         errors.append(f"{where}: 「diff_sec」には 0 以上の整数（秒）を指定してください（指定値: {_show(diff_sec)}）")
+    sync_dst = _bool_option(t, "sync_dst", where, errors)
+    check_link = _bool_option(t, "check_link", where, errors)
     if len(errors) > n_errors:
         return None
     return DocConvTaskConfig(
@@ -387,6 +409,8 @@ def _parse_doc_conv_task(
         marp_headers=tuple(header_paths.get("marp_header", [])),
         copy_exts=tuple(strip_dot(e) for e in copy_exts or []),
         diff_sec=diff_sec,
+        sync_dst=sync_dst,
+        check_link=check_link,
     )
 
 

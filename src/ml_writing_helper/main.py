@@ -738,13 +738,17 @@ class Monitor(FileSystemEventHandler):
             src_dir: str | Path,
             dst_dir: str | Path,
             src_suffixes: list[str],
-            diff_sec: int = 10
+            diff_sec: int = 10,
+            sync_dst: bool = False,
+            check_link: bool = False,
     ) -> None:
         ins: CopyTask = CopyTask(
             src_dir_path=src_dir,
             dst_dir_path=dst_dir,
             diff_sec=diff_sec,
-            src_suffixes=src_suffixes
+            src_suffixes=src_suffixes,
+            sync_dst=sync_dst,
+            check_link=check_link,
         )
         self._tasks.append(ins)
         # to_fmt_in = Util.validated_fmt(to_fmt=to_fmt, src_pl=src_pl)
@@ -791,6 +795,8 @@ class Monitor(FileSystemEventHandler):
             marp_headers: Sequence[str | Path] = (),
             copy_exts: Sequence[str] = (),
             diff_sec: int = 10,
+            sync_dst: bool = False,
+            check_link: bool = False,
     ) -> None:
         """Markdown/HTML を PDF/HTML/DOCX へ変換するタスク。dst_dir 省略時は src_dir へ出力する。"""
         src_pl = self._get_internal_deal_path(path=src_dir)
@@ -807,6 +813,8 @@ class Monitor(FileSystemEventHandler):
                 marp_header_files=marp_headers,
                 copy_exts=copy_exts,
                 diff_sec=diff_sec,
+                sync_dst=sync_dst,
+                check_link=check_link,
             )
         )
 
@@ -965,12 +973,14 @@ DEFAULT_MONITOR_HINT: Final[str] = "without --watch, all tasks run once and the 
 # options usable only with --mode (dest names)
 WATCH_MODE_OPTIONS: Final[tuple[str, ...]] = (
     "src", "dst", "ext", "gray", "no_crop", "engine", "pattern", "header",
+    "sync_dst", "check_link",
     "root", "observer", "sleep_sec", "diff_sec", "log_level",
 )
 WATCH_EPILOG: Final[str] = f"""examples:
   {PROG_NAME} --mode img_conv --ext pdf --gray          # convert once and exit
   {PROG_NAME} --mode img_conv --ext pdf --watch         # keep watching for changes
   {PROG_NAME} --mode copy --src ~/Documents/BibTexExported --dst bib
+  {PROG_NAME} --mode copy --src docs --dst out --sync-dst --check-link   # mirror docs/ into out/ and check md links
   {PROG_NAME} --mode doc_conv --src docs --dst docs_out --ext pdf --ext html
   {PROG_NAME} --mode scorm --src quiz.md --dst quiz_scorm12.zip
   {PROG_NAME} --mode scorm --src quiz --dst scorm_out --watch     # rebuild when a quiz .md changes
@@ -1057,8 +1067,8 @@ def _add_watch_args(parser: argparse.ArgumentParser) -> None:
     task = parser.add_argument_group(
         "--mode parameters",
         "img_conv: --src/--dst/--ext once each, --gray, --no-crop. "
-        "copy: --src/--dst/--ext repeatable (--src and --dst required). "
-        "doc_conv: --src/--dst once each, --ext/--pattern/--header repeatable, --engine. "
+        "copy: --src/--dst/--ext repeatable (--src and --dst required), --sync-dst, --check-link. "
+        "doc_conv: --src/--dst once each, --ext/--pattern/--header repeatable, --engine, --sync-dst, --check-link. "
         "scorm: --src (Markdown quiz file or dir)/--dst once each, --pattern repeatable",
     )
     _ = task.add_argument(
@@ -1080,6 +1090,15 @@ def _add_watch_args(parser: argparse.ArgumentParser) -> None:
     )
     _ = task.add_argument("--gray", action="store_true", help="img_conv: convert to grayscale")
     _ = task.add_argument("--no-crop", action="store_true", help="img_conv: disable cropping")
+    _ = task.add_argument(
+        "--sync-dst", action="store_true",
+        help="copy/doc_conv: make --dst match the --src folder layout, deleting --dst files with no --src counterpart. "
+             "Asks Y/N on a terminal and skips deletion otherwise. Runs once at startup",
+    )
+    _ = task.add_argument(
+        "--check-link", action="store_true",
+        help="copy/doc_conv: warn when an http(s) link in a .md/.html file under --src does not return status 200",
+    )
     _ = task.add_argument(
         "--engine", choices=DOC_ENGINES,
         help=f"doc_conv: conversion engine (default: {DEFAULT_DOC_ENGINE}; "
@@ -1233,6 +1252,11 @@ def _watch_config_from_cli(args: argparse.Namespace) -> WatchConfig:
         errors.append("--pattern は --mode doc_conv / scorm でだけ使えます")
     if args.mode != "img_conv":
         errors.extend(f"{_opt(flag)} は --mode img_conv でだけ使えます" for flag in ("gray", "no_crop") if getattr(args, flag))
+    if args.mode not in ("copy", "doc_conv"):
+        errors.extend(
+            f"{_opt(flag)} は --mode copy / doc_conv でだけ使えます"
+            for flag in ("sync_dst", "check_link") if getattr(args, flag)
+        )
 
     if args.mode == "doc_conv":
         tasks.append(_doc_conv_config_from_cli(args, root, srcs, dsts, exts, errors))
@@ -1279,7 +1303,12 @@ def _watch_config_from_cli(args: argparse.Namespace) -> WatchConfig:
             src = resolve_path(src_dir, root)
             if not src.is_dir():
                 errors.append(f"--src のフォルダが見つかりません\n指定値: \"{src_dir}\"\n探した場所: {src}")
-            tasks.append(CopyTaskConfig(src=src, dst=resolve_path(dst_dir, root), exts=copy_exts, diff_sec=args.diff_sec))
+            tasks.append(
+                CopyTaskConfig(
+                    src=src, dst=resolve_path(dst_dir, root), exts=copy_exts, diff_sec=args.diff_sec,
+                    sync_dst=args.sync_dst, check_link=args.check_link,
+                )
+            )
         if errors:
             raise ConfigError(errors, title=_PARAM_ERROR, hint=f"相対パスは --root（{root}）を基準に探します")
 
@@ -1333,6 +1362,8 @@ def _doc_conv_config_from_cli(
         patterns=patterns,
         headers=headers,
         diff_sec=args.diff_sec,
+        sync_dst=args.sync_dst,
+        check_link=args.check_link,
     )
 
 
@@ -1479,6 +1510,8 @@ def _run_watch_config(config: WatchConfig, monitor: bool = False) -> int:
                 marp_headers=task.marp_headers,
                 copy_exts=task.copy_exts,
                 diff_sec=task.diff_sec,
+                sync_dst=task.sync_dst,
+                check_link=task.check_link,
             )
         elif isinstance(task, ScormTaskConfig):
             logger.info(f"SCORM 1.2: {task.src} -> {task.dst} ({', '.join(task.patterns)})")
@@ -1492,6 +1525,8 @@ def _run_watch_config(config: WatchConfig, monitor: bool = False) -> int:
                 dst_dir=task.dst,
                 src_suffixes=list(task.exts),
                 diff_sec=task.diff_sec,
+                sync_dst=task.sync_dst,
+                check_link=task.check_link,
             )
     keep_watching = monitor or config.monitor
     if not keep_watching:

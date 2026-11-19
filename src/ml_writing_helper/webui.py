@@ -263,7 +263,8 @@ function loadInitial(c) {
     } else if (type === "copy") {
       const e = t.exts ?? t.ext ?? ["bib"];
       tasks.push({type, src: t.src || "", dst: t.dst || "", exts: Array.isArray(e) ? e.map(String) : [String(e)],
-                  diff_sec: Number.isInteger(t.diff_sec) ? t.diff_sec : 10});
+                  diff_sec: Number.isInteger(t.diff_sec) ? t.diff_sec : 10,
+                  sync_dst: t.sync_dst === true, check_link: t.check_link === true});
     } else if (type === "doc_conv") {
       // header / marp_header などフォームに無い項目もそのまま残す
       const list = (v, d) => v === undefined ? d : (Array.isArray(v) ? v.map(String) : [String(v)]);

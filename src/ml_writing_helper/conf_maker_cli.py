@@ -132,7 +132,7 @@ def _ask_doc_conv_task(w: _Wizard, root: Path, prev: dict[str, Any]) -> dict[str
         ", ".join(_as_list(prev.get("pattern", list(DEFAULT_INPUT_PATTERNS)))),
     )
     # header などウィザードで聞かない項目は既存の値を残す
-    kept = {k: prev[k] for k in ("header", "marp_header", "copy_exts", "diff_sec") if k in prev}
+    kept = {k: prev[k] for k in ("header", "marp_header", "copy_exts", "diff_sec", "sync_dst", "check_link") if k in prev}
     task: dict[str, Any] = {"type": "doc_conv", "src": src}
     if dst != src:
         task["dst"] = dst
@@ -174,6 +174,8 @@ def _ask_task(w: _Wizard, root: Path, prev: dict[str, Any] | None) -> dict[str, 
             str(prev.get("diff_sec", DEFAULT_DIFF_SEC)) if same else str(DEFAULT_DIFF_SEC),
             _check_number(positive=False, integer=True),
         )),
+        # ウィザードで聞かない項目は既存の値を残す
+        **({k: prev[k] for k in ("sync_dst", "check_link") if k in prev} if same else {}),
     }
 
 

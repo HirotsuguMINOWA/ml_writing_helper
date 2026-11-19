@@ -128,6 +128,8 @@ Multiple tasks can be defined in one file. Relative paths are resolved from `roo
 | `gray`, `crop` | bool                                       | `false`, `true` | `img_conv` only                                                               |
 | `exts`         | list                                       | `["bib"]`       | `copy` only. Extensions to copy                                               |
 | `diff_sec`     | int                                        | `10`            | `copy` only. Skip when src/dst timestamps differ by this many seconds or less |
+| `sync_dst`     | bool                                       | `false`         | `copy` / `doc_conv` only. Same as `--sync-dst` (see [Sync and link check](#sync-and-link-check-copy--doc_conv)) |
+| `check_link`   | bool                                       | `false`         | `copy` / `doc_conv` only. Same as `--check-link` (see [Sync and link check](#sync-and-link-check-copy--doc_conv)) |
 
 - For `doc_conv` keys, see [Mode: doc_conv](#mode-doc_conv). For `scorm` keys, see [Mode: scorm](#mode-scorm).
 - `mode` can be used instead of `type` (same meaning as the CLI mode).
@@ -196,13 +198,17 @@ This mode converts src path's images (e.g.: .pptx, .png, .puml) into dest path w
 
 ##### Mode: copy
 
-This mode copies the files of src path into the dest path
+This mode copies the files of src path into the dest path. The subfolder structure of src is kept under dst (e.g. `docs/a/x.bib` → `out/a/x.bib`).
 
-| Option      | Default    | Description                                                                                                   |
-| ----------- | ---------- | ------------------------------------------------------------------------------------------------------------- |
-| `--src SRC` | (required) | Copy changed files from SRC. Repeatable                                                                       |
-| `--dst DST` | (required) | Copy changed files to DST. Repeatable: paired with `--src` in order, or a single `--dst` receives all `--src` |
-| `--ext EXT` | `bib`      | Extension to copy. Repeatable                                                                                 |
+| Option        | Default    | Description                                                                                                   |
+| ------------- | ---------- | ------------------------------------------------------------------------------------------------------------- |
+| `--src SRC`   | (required) | Copy changed files from SRC. Repeatable                                                                       |
+| `--dst DST`   | (required) | Copy changed files to DST. Repeatable: paired with `--src` in order, or a single `--dst` receives all `--src` |
+| `--ext EXT`   | `bib`      | Extension to copy. Repeatable                                                                                 |
+| `--sync-dst`  | off        | Make DST match the SRC folder layout and delete DST files that have no SRC counterpart (see below)            |
+| `--check-link`| off        | Warn about http(s) links in `.md` / `.html` files under SRC that do not return status 200 (see below)         |
+
+- Behavior change: earlier versions copied every file flat into DST (`docs/a/x.bib` → `out/x.bib`). Files are now placed at the same relative path as in SRC, even without `--sync-dst`.
 
 When `--src` and `--dst` are given multiple times, they are matched as follows:
 
@@ -223,6 +229,8 @@ The folder structure under src is reproduced in dst.
 | `--engine`     | `auto`          | `auto` / `pandoc` / `playwright` / `marp` / `slidev` (see below)                               |
 | `--pattern`    | `*.md`          | File names to convert. `*` matches any characters. Repeatable (e.g. `"*_marp.md"`, `"*.html"`) |
 | `--header TEX` | Japanese header | TeX header file passed to pandoc for PDF. Repeatable                                           |
+| `--sync-dst`   | off             | Make DST match the SRC folder layout and delete DST files that have no SRC counterpart (see below) |
+| `--check-link` | off             | Warn about http(s) links in `.md` / `.html` files under SRC that do not return status 200 (see below) |
 
 json task keys (`"type": "doc_conv"`):
 
@@ -237,6 +245,8 @@ json task keys (`"type": "doc_conv"`):
 | `marp_header` | path / list   | none            | YAML fragment file(s) added to the Marp frontmatter                                          |
 | `copy_exts`   | list          | none            | Extensions copied to dst as they are (e.g. `["png", "jpg"]` for images referenced from HTML) |
 | `diff_sec`    | int           | `10`            | At startup, convert only when src is newer than the output by more than this many seconds    |
+| `sync_dst`    | bool          | `false`         | Same as `--sync-dst` (see [Sync and link check](#sync-and-link-check-copy--doc_conv)) |
+| `check_link`  | bool          | `false`         | Same as `--check-link` (see [Sync and link check](#sync-and-link-check-copy--doc_conv)) |
 
 `engine: auto` chooses the converter for each file:
 
@@ -257,6 +267,22 @@ json task keys (`"type": "doc_conv"`):
 - Files in dst are not converted again when dst is inside src. Hidden files/folders and `node_modules` are skipped.
 - While watching, a file is converted when it is newer than its output.
 - If a tool is missing, a warning is shown and pandoc is used instead where possible.
+
+##### Sync and link check (copy / doc_conv)
+
+`--sync-dst` and `--check-link` work with `--mode copy` and `--mode doc_conv`, in the json file (`sync_dst` / `check_link`), and in `--json '{...}'`. Using them with other modes is an error.
+
+- `--sync-dst`: makes DST match the SRC folder layout.
+  - DST files whose relative path does not exist under SRC are deleted, and folders left empty are removed.
+  - Runs once at startup, not on every watch event.
+  - On a terminal, the list is shown and you are asked `[y/N]` (default: No). When not on a terminal (cron, CI, piped input), nothing is deleted and a warning is shown.
+  - Every file under SRC is kept, whatever `--ext` / `--pattern` says. Hidden files/folders, `node_modules` and `__pycache__` are ignored on both sides, so they are never deleted.
+  - Refused with an error when DST is the same folder as SRC, SRC is inside DST, or DST is a file.
+- `--check-link`: checks the http(s) links in `.md` and `.html` files under SRC (links inside code blocks are included).
+  - Redirects are followed, and the final status is judged. Any status other than 200 (including errors and timeouts) is shown as `[check-link] <file>: <url> → <status>` with a warning.
+  - Warnings only: the command still exits with 0.
+  - Checked for each file at startup and again whenever the file changes in `--watch`.
+- When both are given, `--sync-dst` runs first and then `--check-link`.
 
 Requirements for doc_conv (only what you use):
 

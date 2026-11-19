@@ -16,7 +16,9 @@ from ml_writing_helper.converter.doc_converter import (
     SUPPORTED_INPUT_SUFFIXES,
     DocConverter,
 )
+from ml_writing_helper.dst_sync import prune_dst
 from ml_writing_helper.enum_cls import TaskType
+from ml_writing_helper.link_checker import check_links
 from ml_writing_helper.task_runner.abc_runner import ABCTaskRunner
 
 # 起動時の走査で中に入らないフォルダ（"." で始まるフォルダも入らない）
@@ -44,6 +46,8 @@ class DocConvTask(ABCTaskRunner):
             copy_exts: Sequence[str] = (),
             diff_sec: int = 10,
             wait_sec: int = 2,
+            sync_dst: bool = False,
+            check_link: bool = False,
     ):
         super().__init__(
             src_dir_path=src_dir_path,
@@ -63,6 +67,8 @@ class DocConvTask(ABCTaskRunner):
             marp_header_files=marp_header_files,
         )
         self._copy_exts: Final[tuple[str, ...]] = tuple(e.lower().lstrip(".") for e in copy_exts)
+        self._sync_dst: Final[bool] = sync_dst
+        self._check_link: Final[bool] = check_link
 
     @cached_classproperty
     def task_type(cls) -> TaskType:
@@ -100,6 +106,8 @@ class DocConvTask(ABCTaskRunner):
         diff_sec = self._diff_sec if startup else 0
         try:
             if self._converter.is_input_file(path):
+                if self._check_link:
+                    check_links(path)
                 outputs = [d for d in self._converter.dst_paths(path) if d.resolve() != path.resolve()]
                 if not any(self._outdated(path, d, diff_sec) for d in outputs):
                     logger.debug(f"Up-to-date: {path}")
@@ -122,9 +130,21 @@ class DocConvTask(ABCTaskRunner):
 
     @override
     def run_all_target_files_in_target_dir(self) -> None:
-        """src 以下（サブフォルダを含む）の全ての対象ファイルを、必要なら変換する。"""
-        for path in sorted(self._iter_files(self._src_dir_path)):
+        """src 以下（サブフォルダを含む）の全ての対象ファイルを、必要なら変換する。--sync-dst では先に dst を整理する。"""
+        src_files = sorted(self._iter_files(self._src_dir_path))
+        if self._sync_dst:
+            prune_dst(self._dest_dir_path, self._expected_dst_paths(src_files))
+        for path in src_files:
             self.run(path, startup=True)
+
+    def _expected_dst_paths(self, src_files: Sequence[Path]) -> list[Path]:
+        """dst に残すパス。src の各ファイルと同じ相対位置と、変換で作られる出力先。"""
+        expected: list[Path] = []
+        for path in src_files:
+            expected.append(self._converter.dst_path(path))
+            if self._converter.is_input_file(path):
+                expected.extend(self._converter.dst_paths(path))
+        return expected
 
     def _iter_files(self, folder: Path):
         try:
@@ -173,5 +193,7 @@ class DocConvTask(ABCTaskRunner):
                 c.header_files,
                 c.marp_header_files,
                 self._copy_exts,
+                self._sync_dst,
+                self._check_link,
             )
         )
