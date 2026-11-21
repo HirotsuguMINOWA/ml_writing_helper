@@ -33,6 +33,10 @@ This package is a helper tool for writing documents and papers using Markup Lang
 python -m build --wheel
 ```
 
+GitHub Actions builds Python 3.12 and 3.13 wheels for Linux x86_64, Windows
+AMD64, and macOS x86_64 and arm64. The macOS wheels are built on separate
+native Intel and Apple Silicon runners.
+
 ## Setup
 
 ### Requirements

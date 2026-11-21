@@ -33,6 +33,10 @@
 python -m build --wheel
 ```
 
+GitHub Actions では、Python 3.12 および 3.13 向けに Linux x86_64、Windows
+AMD64、macOS x86_64 および arm64 の wheel をビルドします。macOS の wheel は、
+Intel と Apple Silicon のネイティブランナーで個別にビルドします。
+
 ## セットアップ
 
 ### 必要条件
