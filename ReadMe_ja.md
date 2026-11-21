@@ -224,7 +224,7 @@ src 配下のフォルダ構造は dst にも再現されます。
 | -------------- | -------------- | ---------------------------------------------------------------------------------------------- |
 | `--src DIR`    | `.`            | ドキュメントのソースディレクトリ (サブフォルダー込み)。1 回のみ                                |
 | `--dst DIR`    | `--src` と同じ | 出力ディレクトリ (存在しなければ作成)。1 回のみ                                                |
-| `--ext FMT`    | `pdf`          | 出力形式: pdf, html, docx。繰り返し指定可 (例: `--ext pdf --ext html`)                         |
+| `--ext FMT`    | `pdf`          | 出力形式: pdf, html, docx, epub。繰り返し指定可 (例: `--ext pdf --ext html`)                   |
 | `--engine`     | `auto`         | `auto` / `pandoc` / `playwright` / `marp` / `slidev` (下記参照)                                |
 | `--pattern`    | `*.md`         | 変換対象のファイル名。`*` は任意の文字にマッチ。繰り返し指定可 (例: `"*_marp.md"`, `"*.html"`) |
 | `--header TEX` | 日本語ヘッダー | PDF 変換のため pandoc に渡す TeX ヘッダーファイル。繰り返し指定可                              |
@@ -237,7 +237,7 @@ json タスクのキー (`"type": "doc_conv"`):
 | ------------- | --------------- | -------------- | --------------------------------------------------------------------------------- |
 | `src`         | パス            | 必須           | 監視対象ディレクトリ (サブフォルダー込み)                                         |
 | `dst`         | パス            | `src` と同じ   | 出力ディレクトリ                                                                  |
-| `ext`         | 文字列 / リスト | `"pdf"`        | pdf, html, docx                                                                   |
+| `ext`         | 文字列 / リスト | `"pdf"`        | pdf, html, docx, epub                                                             |
 | `engine`      | 文字列          | `"auto"`       | auto, pandoc, playwright, marp, slidev                                            |
 | `pattern`     | 文字列 / リスト | `"*.md"`       | 変換対象のファイル名                                                              |
 | `header`      | パス / リスト   | 日本語ヘッダー | pandoc PDF 用の TeX ヘッダーファイル                                              |
@@ -249,15 +249,16 @@ json タスクのキー (`"type": "doc_conv"`):
 
 `engine: auto` は、ファイルごとにコンバーターを選択します:
 
-| ファイル                                          | pdf                  | html           | docx   |
-| ------------------------------------------------- | -------------------- | -------------- | ------ |
-| Marp (frontmatter に `marp: true`)                | marp                 | marp           | pandoc |
-| Slidev (frontmatter に `theme:` / `layout:` など) | slidev               | ブラウザ HTML  | pandoc |
-| ` ```mermaid ` / ` ```plantuml ` ブロックを含む   | playwright           | ブラウザ HTML  | pandoc |
-| その他                                            | pandoc (lualatex)    | ブラウザ HTML  | pandoc |
-| `.html` (`--pattern "*.html"` の場合)             | Chrome headless 印刷 | そのままコピー | pandoc |
+| ファイル                                          | pdf                  | html           | docx   | epub   |
+| ------------------------------------------------- | -------------------- | -------------- | ------ | ------ |
+| Marp (frontmatter に `marp: true`)                | marp                 | marp           | pandoc | pandoc |
+| Slidev (frontmatter に `theme:` / `layout:` など) | slidev               | ブラウザ HTML  | pandoc | pandoc |
+| ` ```mermaid ` / ` ```plantuml ` ブロックを含む   | playwright           | ブラウザ HTML  | pandoc | pandoc |
+| その他                                            | pandoc (lualatex)    | ブラウザ HTML  | pandoc | pandoc |
+| `.html` (`--pattern "*.html"` の場合)             | Chrome headless 印刷 | そのままコピー | pandoc | pandoc |
 
 - 「ブラウザ HTML」は marked.js / mermaid.js / highlight.js / KaTeX を CDN から埋め込むため、表示にはインターネット接続が必要です。
+- EPUB は常に pandoc (`epub3`) で変換されます。Mermaid / PlantUML ブロックは EPUB ではレンダリングされず、コードブロックのまま残ります。言語はデフォルトで `ja` になります。この値は `--metadata lang=ja` として渡されるため、文書の frontmatter に書かれた `lang` は上書きされます。
 - 数式はどのエンジンでもデフォルトでレンダリングされ、オプション指定は不要です。`$...$` / `\(...\)` はインライン数式、`$$...$$` / `\[...\]` はディスプレイ数式です (`$5` のような金額やコード内の `$` は文字のまま残ります)。
   - ブラウザ HTML / playwright PDF: KaTeX
   - pandoc HTML: MathJax (`--mathjax` は自動で pandoc に渡されます。表示にはインターネット接続が必要です)

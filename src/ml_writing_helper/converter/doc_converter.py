@@ -1,9 +1,10 @@
 """
-Markdown/HTML を PDF/HTML/DOCX へ変換する処理（md2pdf.py から移植）
+Markdown/HTML を PDF/HTML/DOCX/EPUB へ変換する処理（md2pdf.py から移植）
 
 - .md は中身を見て marp / slidev / pandoc / playwright を使い分ける
   - mermaid / plantuml ブロックを含む .md を PDF にする場合は playwright（headless Chromium）で描画する
-- .html 入力は Chrome/Chromium の headless print で PDF、pandoc で DOCX にする
+- .html 入力は Chrome/Chromium の headless print で PDF、pandoc で DOCX / EPUB にする
+- EPUB は常に pandoc（epub3）で変換する
 - 出力先は src ルートからの相対フォルダ構成を dst ルートに再現する
 
 外部ツール（無いものはその変換だけ使えない）:
@@ -28,7 +29,7 @@ from typing import Final
 
 from loguru import logger
 
-DOC_OUTPUT_FORMATS: Final[tuple[str, ...]] = ("pdf", "html", "docx")
+DOC_OUTPUT_FORMATS: Final[tuple[str, ...]] = ("pdf", "html", "docx", "epub")
 DOC_ENGINES: Final[tuple[str, ...]] = ("auto", "pandoc", "playwright", "marp", "slidev")
 DEFAULT_DOC_OUTPUT_FORMATS: Final[tuple[str, ...]] = ("pdf",)
 DEFAULT_DOC_ENGINE: Final[str] = "auto"
@@ -133,6 +134,29 @@ def sanitize_markdown_for_pandoc(markdown_text: str) -> tuple[str, bool]:
     """Replace Unicode sequences that are known to crash LuaLaTeX emoji shaping."""
     sanitized = markdown_text.translate(PANDOC_TEXT_REPLACEMENTS)
     return sanitized, sanitized != markdown_text
+
+
+MATH_SPAN_RE: Final[re.Pattern[str]] = re.compile(r"\$\$.+?\$\$|\\\[.+?\\\]|\\\(.+?\\\)|\$[^$\n]+?\$", re.DOTALL)
+TEX_LEGACY_FONT_RE: Final[re.Pattern[str]] = re.compile(r"\{\\(rm|bf|it|sf|tt|cal)\s+([^{}]*)\}")
+TEX_LEGACY_FONT_TO_CMD: Final[dict[str, str]] = {
+    "rm": "mathrm",
+    "bf": "mathbf",
+    "it": "mathit",
+    "sf": "mathsf",
+    "tt": "mathtt",
+    "cal": "mathcal",
+}
+
+
+def normalize_tex_legacy_fonts(markdown_text: str) -> str:
+    """数式内の旧式フォント命令（例: `{\\rm arg}`）を `\\mathrm{arg}` に直す。pandoc は旧式命令を解釈できず数式が生の TeX のまま残るため。"""
+
+    def convert_span(match: re.Match[str]) -> str:
+        return TEX_LEGACY_FONT_RE.sub(
+            lambda m: f"\\{TEX_LEGACY_FONT_TO_CMD[m.group(1)]}{{{m.group(2)}}}", match.group(0)
+        )
+
+    return MATH_SPAN_RE.sub(convert_span, markdown_text)
 
 
 def normalize_input_patterns(input_patterns: Sequence[str | re.Pattern[str]] | None) -> list[re.Pattern[str]]:
@@ -268,7 +292,19 @@ def _pandoc_pdf_args() -> list[str]:
     return args
 
 
-def _run(cmd: Sequence[str], cwd: Path, label: str, stdin: str | None = None, timeout: float | None = None) -> bool:
+def _pandoc_epub_args() -> list[str]:
+    # 本文に言語指定が無いと EPUB の dc:language が既定値（英語）になるため、日本語を既定にする
+    return ["-t", "epub3", "--metadata", "lang=ja"]
+
+
+def _run(
+    cmd: Sequence[str],
+    cwd: Path,
+    label: str,
+    stdin: str | None = None,
+    timeout: float | None = None,
+    warn_stderr: bool = False,
+) -> bool:
     logger.debug(f"Running {label}: {list(cmd)} (cwd={cwd})")
     result = subprocess.run(
         list(cmd), input=stdin, capture_output=True, text=True, encoding="utf-8", cwd=str(cwd), timeout=timeout
@@ -279,7 +315,7 @@ def _run(cmd: Sequence[str], cwd: Path, label: str, stdin: str | None = None, ti
         logger.error(f"{label} failed (exit {result.returncode}):\n{result.stderr}")
         return False
     if result.stderr:
-        logger.debug(result.stderr)
+        (logger.warning if warn_stderr else logger.debug)(result.stderr)
     return True
 
 
@@ -380,8 +416,8 @@ class DocConverter:
                 shutil.copy2(src_file, output_file)
                 logger.info(f"[html-copy] {src_file} -> {output_file}")
                 return True
-            if fmt == "docx":
-                return self.convert_html_to_docx(src_file, output_file)
+            if fmt in ("docx", "epub"):
+                return self.convert_html_with_pandoc(src_file, output_file, fmt)
             return self.convert_html_to_pdf(src_file, output_file)
 
         if suffix != ".md":
@@ -391,10 +427,10 @@ class DocConverter:
         engine = self.engine
         if engine == "auto":
             engine = self._auto_engine(src_file, fmt)
-        elif (engine == "marp" and fmt == "docx") or (engine == "slidev" and fmt != "pdf"):
+        elif (engine == "marp" and fmt in ("docx", "epub")) or (engine == "slidev" and fmt != "pdf"):
             logger.warning(f"{engine} engine does not support {fmt}; falling back to pandoc")
             engine = "pandoc"
-        elif engine == "playwright" and fmt == "docx":
+        elif engine == "playwright" and fmt in ("docx", "epub"):
             engine = "pandoc"
 
         if engine == "marp":
@@ -444,9 +480,14 @@ class DocConverter:
                 markdown_text = self._replace_plantuml_with_svg(markdown_text)
             markdown_text = rewrite_local_image_refs(markdown_text, md_file.parent, output_file.parent)
             cmd.extend(["-t", "html5", "--standalone", "--mathjax", "--metadata", f"pagetitle={md_file.stem}"])
+        elif fmt == "epub":
+            # \(...\) と \[...\] を数式として読ませる（既定の markdown では数式にならず、そのまま残る）
+            cmd[1:1] = ["-f", "markdown+tex_math_single_backslash"]
+            markdown_text = normalize_tex_legacy_fonts(markdown_text)
+            cmd.extend(_pandoc_epub_args())
 
         cmd.extend(["-o", str(output_file)])
-        if not _run(cmd, cwd=md_file.parent, label="pandoc", stdin=markdown_text):
+        if not _run(cmd, cwd=md_file.parent, label="pandoc", stdin=markdown_text, warn_stderr=fmt == "epub"):
             return False
         logger.info(f"[pandoc] {md_file} -> {output_file}")
         return True
@@ -591,14 +632,17 @@ class DocConverter:
     # HTML 入力
     # -------------------------------------------------------
     @staticmethod
-    def convert_html_to_docx(html_file: Path, output_file: Path) -> bool:
+    def convert_html_with_pandoc(html_file: Path, output_file: Path, fmt: str) -> bool:
         pandoc = _pandoc_bin()
         if pandoc is None:
             return False
-        cmd = [pandoc, str(html_file), "--resource-path", str(html_file.parent), "-o", str(output_file)]
-        if not _run(cmd, cwd=html_file.parent, label="pandoc (html -> docx)"):
+        cmd = [pandoc, str(html_file), "--resource-path", str(html_file.parent)]
+        if fmt == "epub":
+            cmd.extend(_pandoc_epub_args())
+        cmd.extend(["-o", str(output_file)])
+        if not _run(cmd, cwd=html_file.parent, label=f"pandoc (html -> {fmt})"):
             return False
-        logger.info(f"[html-docx] {html_file} -> {output_file}")
+        logger.info(f"[html-{fmt}] {html_file} -> {output_file}")
         return True
 
     @staticmethod

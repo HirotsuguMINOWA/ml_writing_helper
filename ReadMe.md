@@ -225,7 +225,7 @@ The folder structure under src is reproduced in dst.
 | -------------- | --------------- | ---------------------------------------------------------------------------------------------- |
 | `--src DIR`    | `.`             | Document source dir (subfolders included). Once only                                           |
 | `--dst DIR`    | same as `--src` | Output dir (created if missing). Once only                                                     |
-| `--ext FMT`    | `pdf`           | Output format: pdf, html, docx. Repeatable (e.g. `--ext pdf --ext html`)                       |
+| `--ext FMT`    | `pdf`           | Output format: pdf, html, docx, epub. Repeatable (e.g. `--ext pdf --ext html`)                 |
 | `--engine`     | `auto`          | `auto` / `pandoc` / `playwright` / `marp` / `slidev` (see below)                               |
 | `--pattern`    | `*.md`          | File names to convert. `*` matches any characters. Repeatable (e.g. `"*_marp.md"`, `"*.html"`) |
 | `--header TEX` | Japanese header | TeX header file passed to pandoc for PDF. Repeatable                                           |
@@ -238,7 +238,7 @@ json task keys (`"type": "doc_conv"`):
 | ------------- | ------------- | --------------- | -------------------------------------------------------------------------------------------- |
 | `src`         | path          | required        | Watched dir (subfolders included)                                                            |
 | `dst`         | path          | same as `src`   | Output dir                                                                                   |
-| `ext`         | string / list | `"pdf"`         | pdf, html, docx                                                                              |
+| `ext`         | string / list | `"pdf"`         | pdf, html, docx, epub                                                                        |
 | `engine`      | string        | `"auto"`        | auto, pandoc, playwright, marp, slidev                                                       |
 | `pattern`     | string / list | `"*.md"`        | File names to convert                                                                        |
 | `header`      | path / list   | Japanese header | TeX header file(s) for pandoc PDF                                                            |
@@ -250,15 +250,16 @@ json task keys (`"type": "doc_conv"`):
 
 `engine: auto` chooses the converter for each file:
 
-| File                                               | pdf                   | html         | docx   |
-| -------------------------------------------------- | --------------------- | ------------ | ------ |
-| Marp (`marp: true` in frontmatter)                 | marp                  | marp         | pandoc |
-| Slidev (frontmatter with `theme:` / `layout:` ...) | slidev                | browser HTML | pandoc |
-| contains ` ```mermaid ` / ` ```plantuml ` blocks   | playwright            | browser HTML | pandoc |
-| others                                             | pandoc (lualatex)     | browser HTML | pandoc |
-| `.html` (when `--pattern "*.html"`)                | Chrome headless print | copied as is | pandoc |
+| File                                               | pdf                   | html         | docx   | epub   |
+| -------------------------------------------------- | --------------------- | ------------ | ------ | ------ |
+| Marp (`marp: true` in frontmatter)                 | marp                  | marp         | pandoc | pandoc |
+| Slidev (frontmatter with `theme:` / `layout:` ...) | slidev                | browser HTML | pandoc | pandoc |
+| contains ` ```mermaid ` / ` ```plantuml ` blocks   | playwright            | browser HTML | pandoc | pandoc |
+| others                                             | pandoc (lualatex)     | browser HTML | pandoc | pandoc |
+| `.html` (when `--pattern "*.html"`)                | Chrome headless print | copied as is | pandoc | pandoc |
 
 - "browser HTML" embeds marked.js / mermaid.js / highlight.js / KaTeX from CDN, so viewing it needs an internet connection.
+- EPUB is always converted by pandoc (`epub3`). Mermaid / PlantUML blocks are not rendered in EPUB and remain as code blocks. The language defaults to `ja`; a `lang` set in the document's frontmatter is overridden by this default, because it is passed as `--metadata lang=ja`.
 - Math is rendered by default with every engine; no option is needed. `$...$` / `\(...\)` are inline math and `$$...$$` / `\[...\]` are display math (amounts such as `$5` and `$` inside code are left as text).
   - browser HTML / playwright PDF: KaTeX
   - pandoc HTML: MathJax (`--mathjax` is passed to pandoc automatically; viewing needs an internet connection)

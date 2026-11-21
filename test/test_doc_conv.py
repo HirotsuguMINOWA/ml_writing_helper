@@ -143,6 +143,31 @@ def test_docx_output(tmp_path: Path) -> None:
     assert (tmp_path / "a.docx").stat().st_size > 0
 
 
+@needs_pandoc
+def test_epub_output_from_md_and_html(tmp_path: Path) -> None:
+    (tmp_path / "a.md").write_text("# 見出し\n\n本文です。\n", encoding="utf-8")
+    (tmp_path / "b.html").write_text("<h1>HTML</h1><p>本文</p>", encoding="utf-8")
+    conv = DocConverter(tmp_path, tmp_path / "out", output_formats=["epub"], input_patterns=["*.md", "*.html"])
+    assert conv.convert(tmp_path / "a.md")
+    assert conv.convert(tmp_path / "b.html")
+    for name in ("a.epub", "b.epub"):
+        with zipfile.ZipFile(tmp_path / "out" / name) as z:
+            assert z.read("mimetype") == b"application/epub+zip"
+
+
+@needs_pandoc
+def test_epub_renders_math_as_mathml(tmp_path: Path) -> None:
+    (tmp_path / "m.md").write_text(
+        "式 \\(a+b\\) と\n\n\\[\\sum_{i=1}^n i\\]\n\n$x^2$ と $5 の金額\n\n$\\mathop{\\rm arg\\,min}$\n", encoding="utf-8"
+    )
+    conv = DocConverter(tmp_path, tmp_path / "out", output_formats=["epub"])
+    assert conv.convert(tmp_path / "m.md")
+    with zipfile.ZipFile(tmp_path / "out" / "m.epub") as z:
+        body = "".join(z.read(n).decode("utf-8") for n in z.namelist() if n.endswith(".xhtml"))
+    assert body.count("<math ") == 4
+    assert "\\(" not in body and "\\[" not in body and "\\rm" not in body
+
+
 _QUIZ_MD = "# Q\n\n## 問1\n問い\n- [x] A. はい\n- [ ] B. いいえ\n"
 
 
