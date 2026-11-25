@@ -12,6 +12,7 @@ from ml_writing_helper.config import ConfigError, DocConvTaskConfig, ScormTaskCo
 from ml_writing_helper.converter.doc_converter import DocConverter, normalize_input_patterns
 from ml_writing_helper.converter.scorm12 import Scorm12Error, build_scorm12_package, parse_quiz
 from ml_writing_helper.main import _parse_cli_args, _watch_config_from_cli
+from ml_writing_helper.markdown_emphasis_checker import find_unclosed_markdown_emphasis
 from ml_writing_helper.task_runner.doc_conv_runner import DocConvTask
 
 needs_pandoc = pytest.mark.skipif(shutil.which("pandoc") is None, reason="pandoc is not installed")
@@ -54,6 +55,33 @@ def test_cli_doc_conv(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     assert isinstance(task, DocConvTaskConfig)
     assert task.formats == ("pdf", "html")
     assert task.dst == (tmp_path / "out").resolve()
+
+
+def test_markdown_emphasis_unclosed_check(tmp_path: Path) -> None:
+    assert find_unclosed_markdown_emphasis("**closed** and __closed__") == []
+    assert find_unclosed_markdown_emphasis("**unclosed\n__unclosed__") == [(1, "**")]
+
+
+def test_cli_doc_conv_check_miss_bracket(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    (tmp_path / "docs").mkdir()
+    monkeypatch.chdir(tmp_path)
+    args = _parse_cli_args([
+        "watch", "--mode", "doc_conv", "--src", "docs",
+        "--check-miss-bracket",
+    ])
+    task = _watch_config_from_cli(args).tasks[0]
+    assert isinstance(task, DocConvTaskConfig)
+    assert task.check_miss_bracket is True
+
+
+def test_parse_config_doc_conv_check_miss_bracket(tmp_path: Path) -> None:
+    (tmp_path / "docs").mkdir()
+    task = parse_config(
+        {"mode": "doc_conv", "src": "docs", "check_miss_brancket": True},
+        base_dir=tmp_path,
+    ).tasks[0]
+    assert isinstance(task, DocConvTaskConfig)
+    assert task.check_miss_bracket is True
 
 
 def test_cli_doc_conv_multiple_dst(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

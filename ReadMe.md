@@ -238,6 +238,7 @@ The folder structure under src is reproduced in dst.
 | `--header TEX` | Japanese header | TeX header file passed to pandoc for PDF. Repeatable                                           |
 | `--sync-dst`   | off             | Make DST match the SRC folder layout and delete DST files that have no SRC counterpart (see below) |
 | `--check-link` | off             | Warn about http(s) links in `.md` / `.html` files under SRC that do not return status 200 (see below) |
+| `--check-miss-bracket` | off | Warn when generated PDF / HTML / DOCX / EPUB output retains an odd number of Markdown `**` or `__` emphasis markers on a line (closed-emphasis notation `**text**` / `__text__`) |
 
 json task keys (`"type": "doc_conv"`):
 
@@ -254,6 +255,7 @@ json task keys (`"type": "doc_conv"`):
 | `diff_sec`    | int           | `10`            | At startup, convert only when src is newer than the output by more than this many seconds    |
 | `sync_dst`    | bool          | `false`         | Same as `--sync-dst` (see [Sync and link check](#sync-and-link-check-copy--doc_conv)) |
 | `check_link`  | bool          | `false`         | Same as `--check-link` (see [Sync and link check](#sync-and-link-check-copy--doc_conv)) |
+| `check_miss_bracket` | bool | `false` | Same as `--check-miss-bracket`; the misspelled JSON key `check_miss_brancket` is also accepted |
 
 `engine: auto` chooses the converter for each file:
 

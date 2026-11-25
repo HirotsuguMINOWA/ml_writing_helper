@@ -797,6 +797,7 @@ class Monitor(FileSystemEventHandler):
             diff_sec: int = 10,
             sync_dst: bool = False,
             check_link: bool = False,
+            check_miss_bracket: bool = False,
     ) -> None:
         """Markdown/HTML を PDF/HTML/DOCX へ変換するタスク。dst_dir 省略時は src_dir へ出力する。"""
         src_pl = self._get_internal_deal_path(path=src_dir)
@@ -823,6 +824,7 @@ class Monitor(FileSystemEventHandler):
                     diff_sec=diff_sec,
                     sync_dst=sync_dst,
                     check_link=check_link,
+                    check_miss_bracket=check_miss_bracket,
                 )
             )
 
@@ -1109,6 +1111,10 @@ def _add_watch_args(parser: argparse.ArgumentParser) -> None:
         help="copy/doc_conv: warn when an http(s) link in a .md/.html file under --src does not return status 200",
     )
     _ = task.add_argument(
+        "--check-miss-bracket", "--check-miss-bracket", dest="check_miss_bracket", action="store_true",
+        help="doc_conv: warn when an output still contains unclosed Markdown ** or __ emphasis markers",
+    )
+    _ = task.add_argument(
         "--engine", choices=DOC_ENGINES,
         help=f"doc_conv: conversion engine (default: {DEFAULT_DOC_ENGINE}; "
              "auto uses marp/slidev by frontmatter and playwright for mermaid/plantuml)",
@@ -1254,7 +1260,7 @@ def _watch_config_from_cli(args: argparse.Namespace) -> WatchConfig:
     errors: list[str] = []
     tasks: list[TaskConfig] = []
 
-    doc_only = ("engine", "header")
+    doc_only = ("engine", "header", "check_miss_bracket")
     if args.mode != "doc_conv":
         errors.extend(f"{_opt(flag)} は --mode doc_conv でだけ使えます" for flag in doc_only if getattr(args, flag))
     if args.mode not in ("doc_conv", "scorm") and args.pattern:
@@ -1374,6 +1380,7 @@ def _doc_conv_config_from_cli(
         diff_sec=args.diff_sec,
         sync_dst=args.sync_dst,
         check_link=args.check_link,
+        check_miss_bracket=args.check_miss_bracket,
     )
 
 
@@ -1523,6 +1530,7 @@ def _run_watch_config(config: WatchConfig, monitor: bool = False) -> int:
                 diff_sec=task.diff_sec,
                 sync_dst=task.sync_dst,
                 check_link=task.check_link,
+                check_miss_bracket=task.check_miss_bracket,
             )
         elif isinstance(task, ScormTaskConfig):
             logger.info(f"SCORM 1.2: {task.src} -> {task.dst} ({', '.join(task.patterns)})")

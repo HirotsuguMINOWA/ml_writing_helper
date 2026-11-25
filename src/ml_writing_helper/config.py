@@ -115,6 +115,7 @@ class DocConvTaskConfig:
     diff_sec: int = DEFAULT_DIFF_SEC
     sync_dst: bool = False  # 起動時に dst から src に対応しないファイルを削除する（確認あり）
     check_link: bool = False  # .md / .html のリンク先を確認する
+    check_miss_bracket: bool = False  # 出力に Markdown の ** / __ 強調表記の閉じ忘れがないか確認する
     dsts: tuple[Path, ...] = ()
 
     def destination_dirs(self) -> tuple[Path, ...]:
@@ -416,6 +417,10 @@ def _parse_doc_conv_task(
         errors.append(f"{where}: 「diff_sec」には 0 以上の整数（秒）を指定してください（指定値: {_show(diff_sec)}）")
     sync_dst = _bool_option(t, "sync_dst", where, errors)
     check_link = _bool_option(t, "check_link", where, errors)
+    if "check_miss_bracket" not in t and "check_miss_brancket" in t:
+        t = dict(t)
+        t["check_miss_bracket"] = t["check_miss_brancket"]
+    check_miss_bracket = _bool_option(t, "check_miss_bracket", where, errors)
     if len(errors) > n_errors:
         return None
     destinations_value = paths.get("dsts")
@@ -437,6 +442,7 @@ def _parse_doc_conv_task(
         diff_sec=diff_sec,
         sync_dst=sync_dst,
         check_link=check_link,
+        check_miss_bracket=check_miss_bracket,
     )
 
 

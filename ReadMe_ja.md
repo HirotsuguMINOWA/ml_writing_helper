@@ -237,6 +237,7 @@ src 配下のフォルダ構造は dst にも再現されます。
 | `--header TEX` | 日本語ヘッダー | PDF 変換のため pandoc に渡す TeX ヘッダーファイル。繰り返し指定可                              |
 | `--sync-dst`   | オフ           | DST を SRC のフォルダー構成と一致させ、SRC に対応するファイルがない DST のファイルを削除 (下記参照) |
 | `--check-link` | オフ           | SRC 配下の `.md` / `.html` 内の http(s) リンクを確認し、ステータス 200 以外を警告 (下記参照)       |
+| `--check-miss-bracket` | オフ | 生成した PDF / HTML / DOCX / EPUB に、Markdown の `**` または `__` 強調表記の閉じ忘れが残っていないか警告 |
 
 json タスクのキー (`"type": "doc_conv"`):
 
@@ -253,6 +254,7 @@ json タスクのキー (`"type": "doc_conv"`):
 | `diff_sec`    | 整数            | `10`           | 起動時、src が出力よりこの秒数分以上新しい場合のみ変換                            |
 | `sync_dst`    | 真偽値          | `false`        | `--sync-dst` と同じ (「[同期とリンクチェック](#同期とリンクチェック-copy--doc_conv)」参照)     |
 | `check_link`  | 真偽値          | `false`        | `--check-link` と同じ (「[同期とリンクチェック](#同期とリンクチェック-copy--doc_conv)」参照)   |
+| `check_miss_bracket` | 真偽値 | `false` | `--check-miss-bracket` と同じ。誤記の JSON キー `check_miss_brancket` も使用可 |
 
 `engine: auto` は、ファイルごとにコンバーターを選択します:
 

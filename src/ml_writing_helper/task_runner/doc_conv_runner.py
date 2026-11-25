@@ -19,6 +19,7 @@ from ml_writing_helper.converter.doc_converter import (
 from ml_writing_helper.dst_sync import prune_dst
 from ml_writing_helper.enum_cls import TaskType
 from ml_writing_helper.link_checker import check_links
+from ml_writing_helper.markdown_emphasis_checker import check_output_markdown_emphasis
 from ml_writing_helper.task_runner.abc_runner import ABCTaskRunner
 
 # 起動時の走査で中に入らないフォルダ（"." で始まるフォルダも入らない）
@@ -48,6 +49,7 @@ class DocConvTask(ABCTaskRunner):
             wait_sec: int = 2,
             sync_dst: bool = False,
             check_link: bool = False,
+            check_miss_bracket: bool = False,
     ):
         super().__init__(
             src_dir_path=src_dir_path,
@@ -69,6 +71,7 @@ class DocConvTask(ABCTaskRunner):
         self._copy_exts: Final[tuple[str, ...]] = tuple(e.lower().lstrip(".") for e in copy_exts)
         self._sync_dst: Final[bool] = sync_dst
         self._check_link: Final[bool] = check_link
+        self._check_miss_bracket: Final[bool] = check_miss_bracket
 
     @cached_classproperty
     def task_type(cls) -> TaskType:
@@ -111,9 +114,17 @@ class DocConvTask(ABCTaskRunner):
                 outputs = [d for d in self._converter.dst_paths(path) if d.resolve() != path.resolve()]
                 if not any(self._outdated(path, d, diff_sec) for d in outputs):
                     logger.debug(f"Up-to-date: {path}")
+                    if self._check_miss_bracket:
+                        for output in outputs:
+                            if output.is_file():
+                                check_output_markdown_emphasis(output)
                     return
                 logger.info(f"Doc Conversion: {path} → {', '.join(d.as_posix() for d in outputs)}")
                 _ = self._converter.convert(path)
+                if self._check_miss_bracket:
+                    for output in outputs:
+                        if output.is_file():
+                            check_output_markdown_emphasis(output)
             elif self._is_copy_target(path):
                 dst = self.dst_file_path(update_file_path=path)
                 if dst.resolve() == path.resolve() or not self._outdated(path, dst, diff_sec):
@@ -195,5 +206,6 @@ class DocConvTask(ABCTaskRunner):
                 self._copy_exts,
                 self._sync_dst,
                 self._check_link,
+                self._check_miss_bracket,
             )
         )
