@@ -10,6 +10,7 @@ Markdown/HTML を PDF/HTML/DOCX/EPUB へ変換する処理（md2pdf.py から移
 外部ツール（無いものはその変換だけ使えない）:
     pandoc(+lualatex), plantuml, marp (または npx), slidev (または npx), Chrome/Chromium,
     playwright (pip install playwright && playwright install chromium)
+    pipx inject ml_writing_helper playwright
 """
 import base64
 import json
@@ -256,7 +257,8 @@ def playwright_available() -> bool:
     except ImportError:
         logger.warning(
             "playwright not installed. mermaid/plantuml diagrams in PDF are unavailable.\n"
-            "  Fix: pip install playwright && playwright install chromium"
+            "  Fix: pip install playwright && playwright install chromium\n"
+            " If you use pipx/uvx, please run 'pipx inject ml_writing_helper playwright'"
         )
         return False
     try:
