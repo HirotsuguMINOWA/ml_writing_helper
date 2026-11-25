@@ -115,6 +115,12 @@ class DocConvTaskConfig:
     diff_sec: int = DEFAULT_DIFF_SEC
     sync_dst: bool = False  # 起動時に dst から src に対応しないファイルを削除する（確認あり）
     check_link: bool = False  # .md / .html のリンク先を確認する
+    dsts: tuple[Path, ...] = ()
+
+    def destination_dirs(self) -> tuple[Path, ...]:
+        """All document output directories, preserving the legacy ``dst`` field."""
+        destinations = self.dsts or (self.dst,)
+        return tuple(dict.fromkeys(destinations))
 
 
 @dataclass(frozen=True)
@@ -241,10 +247,15 @@ def validate_task_paths(task: TaskConfig) -> list[str]:
     if isinstance(task, CopyTaskConfig) and not task.dst.exists():
         reason = "ファイルが見つかりません" if task.dst.suffix else "フォルダが見つかりません"
         problems.append(f"「dst」の{reason}\n指定値: {_show(str(task.dst))}\n探した場所: {task.dst}")
-    if isinstance(task, (CopyTaskConfig, DocConvTaskConfig)) and task.sync_dst:
+    if isinstance(task, CopyTaskConfig) and task.sync_dst:
         problem = sync_dst_problem(task.src, task.dst)
         if problem:
             problems.append(problem)
+    if isinstance(task, DocConvTaskConfig) and task.sync_dst:
+        for dst in task.destination_dirs():
+            problem = sync_dst_problem(task.src, dst)
+            if problem:
+                problems.append(problem)
     return problems
 
 
@@ -281,6 +292,14 @@ def _parse_task(
         v = t.get(key)
         if v is None and key == "dst" and task_type in ("doc_conv", "scorm"):
             continue  # doc_conv / scorm の dst は省略可（src と同じフォルダへ出力）
+        if key == "dst" and task_type == "doc_conv" and isinstance(v, list):
+            dst_values = _str_list(v)
+            if dst_values is None or not dst_values:
+                errors.append(f"{where}: 「{key}」（出力先のフォルダー）はパスの文字列または文字列のリストで指定してください（指定値: {_show(v)}）")
+            else:
+                paths["dst"] = resolve_path(dst_values[0], root)
+                paths["dsts"] = tuple(resolve_path(value, root) for value in dst_values)  # type: ignore[assignment]
+            continue
         if v is None:
             errors.append(f"{where}: 「{key}」（{labels[key]}）を指定してください")
         elif not isinstance(v, str) or not v.strip():
@@ -399,9 +418,16 @@ def _parse_doc_conv_task(
     check_link = _bool_option(t, "check_link", where, errors)
     if len(errors) > n_errors:
         return None
+    destinations_value = paths.get("dsts")
+    destinations = (
+        tuple(destinations_value)
+        if isinstance(destinations_value, tuple)
+        else (paths.get("dst", paths["src"]),)
+    )
     return DocConvTaskConfig(
         src=paths["src"],
-        dst=paths.get("dst", paths["src"]),
+        dst=destinations[0],
+        dsts=destinations,
         formats=tuple(dict.fromkeys(strip_dot(f) for f in formats or [])),
         engine=engine,
         patterns=tuple(patterns or []),

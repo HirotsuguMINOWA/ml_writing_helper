@@ -787,7 +787,7 @@ class Monitor(FileSystemEventHandler):
     def set_doc_conv(
             self,
             src_dir: str | Path,
-            dst_dir: str | Path | None = None,
+            dst_dir: str | Path | Sequence[str | Path] | None = None,
             formats: Sequence[str] = ("pdf",),
             engine: str = DEFAULT_DOC_ENGINE,
             patterns: Sequence[str] | None = None,
@@ -800,23 +800,31 @@ class Monitor(FileSystemEventHandler):
     ) -> None:
         """Markdown/HTML を PDF/HTML/DOCX へ変換するタスク。dst_dir 省略時は src_dir へ出力する。"""
         src_pl = self._get_internal_deal_path(path=src_dir)
-        dst_pl = src_pl if dst_dir is None else self._get_internal_deal_path(path=dst_dir)
-        dst_pl.mkdir(parents=True, exist_ok=True)
-        self._tasks.append(
-            DocConvTask(
-                src_dir_path=src_pl,
-                dst_dir_path=dst_pl,
-                output_formats=formats,
-                engine=engine,
-                input_patterns=patterns,
-                header_files=headers,
-                marp_header_files=marp_headers,
-                copy_exts=copy_exts,
-                diff_sec=diff_sec,
-                sync_dst=sync_dst,
-                check_link=check_link,
+        if dst_dir is None:
+            dst_dirs: tuple[Path, ...] = (src_pl,)
+        elif isinstance(dst_dir, (str, Path)):
+            dst_dirs = (self._get_internal_deal_path(path=dst_dir),)
+        else:
+            dst_dirs = tuple(dict.fromkeys(self._get_internal_deal_path(path=p) for p in dst_dir))
+        if not dst_dirs:
+            dst_dirs = (src_pl,)
+        for dst_pl in dst_dirs:
+            dst_pl.mkdir(parents=True, exist_ok=True)
+            self._tasks.append(
+                DocConvTask(
+                    src_dir_path=src_pl,
+                    dst_dir_path=dst_pl,
+                    output_formats=formats,
+                    engine=engine,
+                    input_patterns=patterns,
+                    header_files=headers,
+                    marp_header_files=marp_headers,
+                    copy_exts=copy_exts,
+                    diff_sec=diff_sec,
+                    sync_dst=sync_dst,
+                    check_link=check_link,
+                )
             )
-        )
 
     def set_scorm(
             self,
@@ -1079,6 +1087,7 @@ def _add_watch_args(parser: argparse.ArgumentParser) -> None:
     _ = task.add_argument(
         "--dst", action="append", metavar="DIR",
         help="output dir, created if missing (img_conv default: fig_gen, doc_conv/scorm default: same as --src). "
+             "doc_conv: repeatable to write to multiple destinations. "
              "copy: paired with --src in order, or a single --dst receives all --src. "
              "scorm: a .zip path is also accepted when --src is a file",
     )
@@ -1332,9 +1341,8 @@ def _doc_conv_config_from_cli(
         errors: list[str],
 ) -> DocConvTaskConfig:
     """Build the doc_conv task of `--mode doc_conv`. Raises ConfigError."""
-    for name, values in (("--src", srcs), ("--dst", dsts)):
-        if len(values) > 1:
-            errors.append(f"--mode doc_conv では {name} は1つだけ指定できます（{len(values)}個指定されています）")
+    if len(srcs) > 1:
+        errors.append(f"--mode doc_conv では --src は1つだけ指定できます（{len(srcs)}個指定されています）")
     formats = tuple(dict.fromkeys(exts or ["pdf"]))
     bad = [f for f in formats if f not in DOC_OUTPUT_FORMATS]
     if bad:
@@ -1354,9 +1362,11 @@ def _doc_conv_config_from_cli(
             errors.append(f"--header のファイルが見つかりません\n指定値: \"{raw}\"\n探した場所: {h}")
     if errors:
         raise ConfigError(errors, title=_PARAM_ERROR, hint=f"相対パスは --root（{root}）を基準に探します")
+    destination_dirs = tuple(dict.fromkeys(resolve_path(value, root) for value in dsts)) if dsts else (src,)
     return DocConvTaskConfig(
         src=src,
-        dst=resolve_path(dsts[0], root) if dsts else src,
+        dst=destination_dirs[0],
+        dsts=destination_dirs,
         formats=formats,
         engine=args.engine or DEFAULT_DOC_ENGINE,
         patterns=patterns,
@@ -1499,10 +1509,11 @@ def _run_watch_config(config: WatchConfig, monitor: bool = False) -> int:
                 mk_dst_dir=True,
             )
         elif isinstance(task, DocConvTaskConfig):
-            logger.info(f"Document conversion: {task.src} -> {task.dst} ({', '.join(task.formats)}, engine={task.engine})")
+            destinations = ", ".join(str(path) for path in task.destination_dirs())
+            logger.info(f"Document conversion: {task.src} -> {destinations} ({', '.join(task.formats)}, engine={task.engine})")
             monitor_ins.set_doc_conv(
                 src_dir=task.src,
-                dst_dir=task.dst,
+                dst_dir=task.destination_dirs(),
                 formats=task.formats,
                 engine=task.engine,
                 patterns=task.patterns,

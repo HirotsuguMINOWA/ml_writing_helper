@@ -56,6 +56,34 @@ def test_cli_doc_conv(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     assert task.dst == (tmp_path / "out").resolve()
 
 
+def test_cli_doc_conv_multiple_dst(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    (tmp_path / "docs").mkdir()
+    monkeypatch.chdir(tmp_path)
+    args = _parse_cli_args([
+        "watch", "--mode", "doc_conv", "--src", "docs",
+        "--dst", "out1", "--dst", "out2", "--ext", "pdf",
+    ])
+    task = _watch_config_from_cli(args).tasks[0]
+    assert isinstance(task, DocConvTaskConfig)
+    assert task.destination_dirs() == (
+        (tmp_path / "out1").resolve(),
+        (tmp_path / "out2").resolve(),
+    )
+
+
+def test_parse_config_doc_conv_multiple_dst(tmp_path: Path) -> None:
+    (tmp_path / "docs").mkdir()
+    task = parse_config(
+        {"mode": "doc_conv", "src": "docs", "dst": ["out1", "out2"], "ext": ["pdf", "html"]},
+        base_dir=tmp_path,
+    ).tasks[0]
+    assert isinstance(task, DocConvTaskConfig)
+    assert task.destination_dirs() == (
+        (tmp_path / "out1").resolve(),
+        (tmp_path / "out2").resolve(),
+    )
+
+
 def test_cli_doc_conv_only_options(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     (tmp_path / "fig_src").mkdir()
     monkeypatch.chdir(tmp_path)

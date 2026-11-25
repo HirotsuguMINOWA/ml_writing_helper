@@ -168,6 +168,9 @@ ml_writing_helper --mode copy --src ~/Documents/BibTexExported --dst bib
 
 # docs/**/*.md -> docs_out/**/*.pdf と .html
 ml_writing_helper --mode doc_conv --src docs --dst docs_out --ext pdf --ext html
+
+# 複数の出力ディレクトリへ書き出す
+ml_writing_helper --mode doc_conv --src docs --dst docs_out --dst backup/docs --ext pdf
 ```
 
 ##### 共通パラメータ
@@ -227,7 +230,7 @@ src 配下のフォルダ構造は dst にも再現されます。
 | オプション     | 既定値         | 説明                                                                                           |
 | -------------- | -------------- | ---------------------------------------------------------------------------------------------- |
 | `--src DIR`    | `.`            | ドキュメントのソースディレクトリ (サブフォルダー込み)。1 回のみ                                |
-| `--dst DIR`    | `--src` と同じ | 出力ディレクトリ (存在しなければ作成)。1 回のみ                                                |
+| `--dst DIR`    | `--src` と同じ | 出力ディレクトリ (存在しなければ作成)。繰り返し指定すると、すべての出力先へ同じ変換結果を書きます |
 | `--ext FMT`    | `pdf`          | 出力形式: pdf, html, docx, epub。繰り返し指定可 (例: `--ext pdf --ext html`)                   |
 | `--engine`     | `auto`         | `auto` / `pandoc` / `playwright` / `marp` / `slidev` (下記参照)                                |
 | `--pattern`    | `*.md`         | 変換対象のファイル名。`*` は任意の文字にマッチ。繰り返し指定可 (例: `"*_marp.md"`, `"*.html"`) |
@@ -240,7 +243,7 @@ json タスクのキー (`"type": "doc_conv"`):
 | タスクキー    | 型              | 既定値         | 説明                                                                              |
 | ------------- | --------------- | -------------- | --------------------------------------------------------------------------------- |
 | `src`         | パス            | 必須           | 監視対象ディレクトリ (サブフォルダー込み)                                         |
-| `dst`         | パス            | `src` と同じ   | 出力ディレクトリ                                                                  |
+| `dst`         | パス / リスト   | `src` と同じ   | 1 つまたは複数の出力ディレクトリ。リスト指定なら変換結果をすべての出力先へ書きます      |
 | `ext`         | 文字列 / リスト | `"pdf"`        | pdf, html, docx, epub                                                             |
 | `engine`      | 文字列          | `"auto"`       | auto, pandoc, playwright, marp, slidev                                            |
 | `pattern`     | 文字列 / リスト | `"*.md"`       | 変換対象のファイル名                                                              |

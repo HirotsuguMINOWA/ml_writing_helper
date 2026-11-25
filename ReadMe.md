@@ -169,6 +169,9 @@ ml_writing_helper --mode copy --src ~/Documents/BibTexExported --dst bib
 # docs/**/*.md -> docs_out/**/*.pdf and .html
 ml_writing_helper --mode doc_conv --src docs --dst docs_out --ext pdf --ext html
 
+# write to multiple output directories
+ml_writing_helper --mode doc_conv --src docs --dst docs_out --dst backup/docs --ext pdf
+
 # quiz.md -> quiz_scorm12.zip (SCORM 1.2)
 ml_writing_helper --mode scorm --src quiz.md --dst quiz_scorm12.zip
 ```
@@ -228,7 +231,7 @@ The folder structure under src is reproduced in dst.
 | Option         | Default         | Description                                                                                    |
 | -------------- | --------------- | ---------------------------------------------------------------------------------------------- |
 | `--src DIR`    | `.`             | Document source dir (subfolders included). Once only                                           |
-| `--dst DIR`    | same as `--src` | Output dir (created if missing). Once only                                                     |
+| `--dst DIR`    | same as `--src` | Output dir (created if missing). Repeatable; all destinations receive the same conversion      |
 | `--ext FMT`    | `pdf`           | Output format: pdf, html, docx, epub. Repeatable (e.g. `--ext pdf --ext html`)                 |
 | `--engine`     | `auto`          | `auto` / `pandoc` / `playwright` / `marp` / `slidev` (see below)                               |
 | `--pattern`    | `*.md`          | File names to convert. `*` matches any characters. Repeatable (e.g. `"*_marp.md"`, `"*.html"`) |
@@ -241,7 +244,7 @@ json task keys (`"type": "doc_conv"`):
 | Task key      | Type          | Default         | Description                                                                                  |
 | ------------- | ------------- | --------------- | -------------------------------------------------------------------------------------------- |
 | `src`         | path          | required        | Watched dir (subfolders included)                                                            |
-| `dst`         | path          | same as `src`   | Output dir                                                                                   |
+| `dst`         | path / list   | same as `src`   | One or more output dirs; a list writes the same converted files to every destination          |
 | `ext`         | string / list | `"pdf"`         | pdf, html, docx, epub                                                                        |
 | `engine`      | string        | `"auto"`        | auto, pandoc, playwright, marp, slidev                                                       |
 | `pattern`     | string / list | `"*.md"`        | File names to convert                                                                        |
