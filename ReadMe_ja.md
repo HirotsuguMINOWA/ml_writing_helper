@@ -265,6 +265,8 @@ json タスクのキー (`"type": "doc_conv"`):
 | `.html` (`--pattern "*.html"` の場合)             | Chrome headless 印刷 | そのままコピー | pandoc | pandoc |
 
 - 「ブラウザ HTML」は marked.js / mermaid.js / highlight.js / KaTeX を CDN から埋め込むため、表示にはインターネット接続が必要です。
+- Markdown 内の Mermaid / PlantUML ブロックは、`engine: pandoc` を指定した場合もブラウザ描画経路へ送られます。Mermaid.js の表示にはインターネット接続が必要です。PlantUML は `plantuml` コマンドが利用できればローカルで描画し、`@startuml diagram_name` のような図名付きブロックにも対応します。
+- 図ブロックを含む PDF は、利用可能なら Playwright で描画し、Playwright が利用できない場合は Chrome/Chromium の HTML 印刷をフォールバックとして使用します。
 - EPUB は常に pandoc (`epub3`) で変換されます。Mermaid / PlantUML ブロックは EPUB ではレンダリングされず、コードブロックのまま残ります。言語はデフォルトで `ja` になります。この値は `--metadata lang=ja` として渡されるため、文書の frontmatter に書かれた `lang` は上書きされます。
 - 数式はどのエンジンでもデフォルトでレンダリングされ、オプション指定は不要です。`$...$` / `\(...\)` はインライン数式、`$$...$$` / `\[...\]` はディスプレイ数式です (`$5` のような金額やコード内の `$` は文字のまま残ります)。
   - ブラウザ HTML / playwright PDF: KaTeX

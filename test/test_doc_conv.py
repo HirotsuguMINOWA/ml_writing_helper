@@ -128,6 +128,56 @@ def test_browser_html_keeps_mermaid_block(tmp_path: Path) -> None:
     html = conv.build_browser_html("# T\n\n```mermaid\ngraph TD; A-->B\n```\n</script>")
     assert "graph TD; A-->B" in html
     assert "<\\/script>" in html  # md 中の </script> で script タグが閉じないこと
+    assert "escapeHtml(text)" in html
+
+
+def test_plantuml_named_diagram_uses_pipe_svg(monkeypatch: pytest.MonkeyPatch) -> None:
+    import subprocess
+
+    calls: list[list[str]] = []
+
+    def fake_run(cmd: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        calls.append(cmd)
+        assert kwargs["input"].startswith("@startuml fig_named")
+        assert cmd == ["plantuml", "-pipe", "-tsvg"]
+        return subprocess.CompletedProcess(cmd, 0, stdout='<svg data-test="ok"></svg>', stderr="")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    converted = DocConverter._replace_plantuml_with_svg(
+        "```plantuml\n@startuml fig_named\nAlice -> Bob: hello\n@enduml\n```"
+    )
+    assert 'data-test="ok"' in converted
+    assert calls == [["plantuml", "-pipe", "-tsvg"]]
+
+
+def test_pandoc_html_engine_routes_diagrams_to_browser_html(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    md = tmp_path / "diagram.md"
+    md.write_text("# T\n\n```mermaid\ngraph TD; A-->B\n```\n", encoding="utf-8")
+    out = tmp_path / "diagram.html"
+    conv = DocConverter(tmp_path, tmp_path, output_formats=["html"], engine="pandoc")
+
+    calls: list[tuple[Path, Path]] = []
+    monkeypatch.setattr(conv, "convert_to_html", lambda src, dst: calls.append((src, dst)) or True)
+    assert conv._convert_one(md, out, "html")
+    assert calls == [(md, out)]
+
+
+def test_pandoc_pdf_engine_routes_diagrams_to_chrome(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    md = tmp_path / "diagram.md"
+    md.write_text("# T\n\n```plantuml\n@startuml\nAlice -> Bob: hello\n@enduml\n```\n", encoding="utf-8")
+    out = tmp_path / "diagram.pdf"
+    conv = DocConverter(tmp_path, tmp_path, output_formats=["pdf"], engine="pandoc")
+
+    import ml_writing_helper.converter.doc_converter as doc_converter
+    monkeypatch.setattr(doc_converter, "playwright_available", lambda: False)
+    calls: list[tuple[Path, Path]] = []
+    monkeypatch.setattr(
+        conv,
+        "convert_diagrams_with_chrome",
+        lambda src, dst: calls.append((src, dst)) or True,
+    )
+    assert conv._convert_one(md, out, "pdf")
+    assert calls == [(md, out)]
 
 
 @needs_pandoc

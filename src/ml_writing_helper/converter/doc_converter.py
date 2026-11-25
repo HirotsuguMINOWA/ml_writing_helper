@@ -60,8 +60,8 @@ PANDOC_TEXT_REPLACEMENTS: Final[dict[int, str]] = {
     ord("🟢"): "[GREEN]",
 }
 
-MERMAID_BLOCK_RE: Final[re.Pattern[str]] = re.compile(r"```mermaid\n(.*?)```", re.DOTALL)
-PLANTUML_BLOCK_RE: Final[re.Pattern[str]] = re.compile(r"```plantuml\n(.*?)```", re.DOTALL)
+MERMAID_BLOCK_RE: Final[re.Pattern[str]] = re.compile(r"```[ \t]*mermaid[ \t]*\r?\n(.*?)```", re.DOTALL | re.IGNORECASE)
+PLANTUML_BLOCK_RE: Final[re.Pattern[str]] = re.compile(r"```[ \t]*plantuml[ \t]*\r?\n(.*?)```", re.DOTALL | re.IGNORECASE)
 
 DEFAULT_CHROME_CANDIDATES: Final[tuple[Path, ...]] = (
     Path("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"),
@@ -437,6 +437,14 @@ class DocConverter:
             return self.convert_with_marp(src_file, output_file, fmt)
         if engine == "slidev":
             return self.convert_with_slidev(src_file, output_file)
+        if fmt in ("pdf", "html") and has_diagram_blocks(src_file.read_text(encoding="utf-8")):
+            if fmt == "html":
+                # Mermaid / PlantUML は pandoc のコードブロック出力ではなくブラウザで描画する。
+                return self.convert_to_html(src_file, output_file)
+            if engine == "pandoc" and playwright_available():
+                return self.convert_with_playwright(src_file, output_file)
+            if engine == "pandoc":
+                return self.convert_diagrams_with_chrome(src_file, output_file)
         if engine == "playwright":
             if fmt == "html":
                 return self.convert_to_html(src_file, output_file)
@@ -500,15 +508,25 @@ class DocConverter:
         """plantuml コードブロックを inline SVG に置換する"""
 
         def replace(m: re.Match[str]) -> str:
-            with tempfile.TemporaryDirectory(prefix="ml_writing_helper-puml-") as tmp:
-                puml_path = Path(tmp) / "diagram.puml"
-                puml_path.write_text("@startuml\n" + m.group(1) + "\n@enduml", encoding="utf-8")
-                try:
-                    subprocess.run(["plantuml", "-tsvg", str(puml_path)], capture_output=True, check=True)
-                    svg = puml_path.with_suffix(".svg").read_text(encoding="utf-8")
-                except Exception as e:
-                    logger.warning(f"PlantUML conversion failed: {e}")
-                    return m.group(0)
+            plantuml_text = m.group(1).strip()
+            if not re.search(r"(?im)^@enduml\s*$", plantuml_text):
+                plantuml_text += "\n@enduml"
+            try:
+                result = subprocess.run(
+                    ["plantuml", "-pipe", "-tsvg"],
+                    input=plantuml_text,
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                    timeout=60,
+                )
+                svg = result.stdout
+                if "<svg" not in svg:
+                    detail = result.stderr.strip() or "PlantUML produced no SVG"
+                    raise RuntimeError(detail)
+            except Exception as e:
+                logger.warning(f"PlantUML conversion failed: {e}")
+                return m.group(0)
             svg = re.sub(r"<\?xml[^>]+\?>", "", svg).strip()
             return f'\n\n<div class="plantuml-diagram">{svg}</div>\n\n'
 
@@ -532,8 +550,8 @@ class DocConverter:
     def convert_with_playwright(self, md_file: Path, output_file: Path) -> bool:
         """Playwright で MD（mermaid/plantuml 含む）→ PDF 変換"""
         if not playwright_available():
-            logger.warning(f"playwright unavailable; falling back to pandoc: {md_file}")
-            return self.convert_with_pandoc(md_file, output_file, "pdf")
+            logger.warning(f"playwright unavailable; falling back to Chrome HTML rendering: {md_file}")
+            return self.convert_diagrams_with_chrome(md_file, output_file)
         from playwright.sync_api import sync_playwright
 
         # set_content() のページには base URL が無く相対パスの画像を読めないため、data URI で埋め込む
@@ -551,6 +569,24 @@ class DocConverter:
                 browser.close()
         logger.info(f"[playwright] {md_file} -> {output_file}")
         return True
+
+    def convert_diagrams_with_chrome(self, md_file: Path, output_file: Path) -> bool:
+        """Playwright が無い環境でも、ブラウザHTMLとChromeで図を含むPDFへ変換する。"""
+        md_text = rewrite_local_image_refs(md_file.read_text(encoding="utf-8"), md_file.parent)
+        html = self.build_browser_html(md_text)
+        temp_html: Path | None = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                    mode="w", encoding="utf-8", suffix=".html",
+                    prefix=f".{md_file.stem}.diagram.",
+                    dir=str(md_file.parent), delete=False,
+            ) as f:
+                f.write(html)
+                temp_html = Path(f.name)
+            return self.convert_html_to_pdf(temp_html, output_file)
+        finally:
+            if temp_html is not None:
+                temp_html.unlink(missing_ok=True)
 
     # -------------------------------------------------------
     # marp / slidev
@@ -655,6 +691,7 @@ class DocConverter:
             cmd = [
                 chrome, "--headless", "--disable-gpu", "--no-first-run", "--no-default-browser-check",
                 f"--user-data-dir={user_data_dir}", "--allow-file-access-from-files",
+                "--virtual-time-budget=30000",
                 "--print-to-pdf-no-header", f"--print-to-pdf={output_file.resolve()}",
                 html_file.resolve().as_uri(),
             ]
@@ -740,7 +777,7 @@ _BROWSER_HTML_TEMPLATE: Final[str] = r"""<!DOCTYPE html>
     renderer: {
       code({ text, lang }) {
         if (lang === 'mermaid') {
-          return '<div class="mermaid">' + text + '</div>';
+          return '<div class="mermaid">' + escapeHtml(text) + '</div>';
         }
         return false;
       }

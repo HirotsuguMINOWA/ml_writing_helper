@@ -266,6 +266,8 @@ json task keys (`"type": "doc_conv"`):
 | `.html` (when `--pattern "*.html"`)                | Chrome headless print | copied as is | pandoc | pandoc |
 
 - "browser HTML" embeds marked.js / mermaid.js / highlight.js / KaTeX from CDN, so viewing it needs an internet connection.
+- Mermaid and PlantUML blocks in Markdown are rendered through the browser output path even when `engine: pandoc` is selected. Mermaid.js needs an internet connection; PlantUML is rendered locally with the `plantuml` command when available, including named diagrams such as `@startuml diagram_name`.
+- PDF output with diagram blocks uses Playwright when available, and Chrome/Chromium HTML printing when Playwright is unavailable.
 - EPUB is always converted by pandoc (`epub3`). Mermaid / PlantUML blocks are not rendered in EPUB and remain as code blocks. The language defaults to `ja`; a `lang` set in the document's frontmatter is overridden by this default, because it is passed as `--metadata lang=ja`.
 - Math is rendered by default with every engine; no option is needed. `$...$` / `\(...\)` are inline math and `$$...$$` / `\[...\]` are display math (amounts such as `$5` and `$` inside code are left as text).
   - browser HTML / playwright PDF: KaTeX
