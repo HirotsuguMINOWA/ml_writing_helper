@@ -112,7 +112,7 @@ class DocConvTask(ABCTaskRunner):
                 if not any(self._outdated(path, d, diff_sec) for d in outputs):
                     logger.debug(f"Up-to-date: {path}")
                     return
-                logger.info(f"文書変換: {path} → {', '.join(d.as_posix() for d in outputs)}")
+                logger.info(f"Doc Conversion: {path} → {', '.join(d.as_posix() for d in outputs)}")
                 _ = self._converter.convert(path)
             elif self._is_copy_target(path):
                 dst = self.dst_file_path(update_file_path=path)
